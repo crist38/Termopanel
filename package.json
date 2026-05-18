@@ -19,12 +19,14 @@
     "@types/node": "^25.9.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "clsx": "^2.1.1",
     "firebase": "^12.13.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.16.0",
     "next": "^16.2.6",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "tailwind-merge": "^3.6.0",
     "transbank-sdk": "^6.1.1",
     "typescript": "^6.0.3"
   }
