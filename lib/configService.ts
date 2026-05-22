@@ -22,8 +22,8 @@ export async function getTermopanelConfig(): Promise<TermopanelConfig> {
     if (docSnap.exists()) {
       return docSnap.data() as TermopanelConfig;
     } else {
-      // Inicializar con valores por defecto si no existe
-      await setDoc(docRef, DEFAULT_CONFIG);
+      // En lugar de intentar escribir y causar un error de permisos, 
+      // solo devolvemos los valores en memoria por defecto si el documento aún no existe.
       return DEFAULT_CONFIG;
     }
   } catch (error) {

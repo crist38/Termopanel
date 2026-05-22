@@ -8,9 +8,10 @@ import { db, auth } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Save, Printer, Plus, Trash2, ArrowLeft, LayoutDashboard, Settings } from 'lucide-react';
+import { Save, Printer, Plus, Trash2, ArrowLeft, LayoutDashboard, Settings, Cloud } from 'lucide-react';
 import { ADMIN_EMAILS } from '@/lib/constants';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { guardarCotizacionEnOdoo } from '@/app/actions/odoo';
 
 
 function CotizadorTermopanelContent() {
@@ -43,6 +44,7 @@ function CotizadorTermopanelContent() {
   const searchParams = useSearchParams();
   const editId = searchParams.get('editId');
   const [isSaving, setIsSaving] = useState(false);
+  const [isSyncingOdoo, setIsSyncingOdoo] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
@@ -248,6 +250,35 @@ function CotizadorTermopanelContent() {
     }
   };
 
+  const handleSyncOdoo = async () => {
+    if (!clientName) {
+      alert("Por favor ingrese el nombre del cliente para sincronizar con Odoo");
+      return;
+    }
+    setIsSyncingOdoo(true);
+    try {
+      const odooRes = await guardarCotizacionEnOdoo({
+        clientName,
+        clientAddress,
+        observations,
+        budgetNumber,
+        items,
+        totalNeto
+      });
+
+      if (odooRes.exito) {
+        alert(`¡Cotización enviada a Odoo exitosamente! (ID: ${odooRes.cotizacionId})`);
+      } else {
+        alert(`Error desde Odoo: ${odooRes.error}`);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Error de conexión con el servidor");
+    } finally {
+      setIsSyncingOdoo(false);
+    }
+  };
+
   const handleExportPDF = () => {
     const doc = new jsPDF();
 
@@ -343,6 +374,15 @@ function CotizadorTermopanelContent() {
           >
             <Save size={16} />
             {isSaving ? 'Guardando...' : 'Guardar'}
+          </button>
+          <button
+            onClick={handleSyncOdoo}
+            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            disabled={isSyncingOdoo || items.length === 0}
+            title="Sincronizar directamente con Odoo ERP"
+          >
+            <Cloud size={16} />
+            {isSyncingOdoo ? 'Sincronizando...' : 'Enviar a Odoo'}
           </button>
           <button
             onClick={handleExportPDF}
