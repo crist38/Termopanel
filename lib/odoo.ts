@@ -70,7 +70,7 @@ export class OdooClient {
     }
 
     this.uid = result;
-    return this.uid;
+    return result as number;
   }
 
   /**
