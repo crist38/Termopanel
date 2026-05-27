@@ -46,11 +46,20 @@ function CotizadorTermopanelContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncingOdoo, setIsSyncingOdoo] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (!u) {
+        router.replace('/login');
+      } else {
+        setUser(u);
+        setCheckingAuth(false);
+      }
+    });
     return () => unsub();
-  }, []);
+  }, [router]);
 
   // Cargar configuración de precios
   useEffect(() => {
@@ -267,7 +276,7 @@ function CotizadorTermopanelContent() {
       });
 
       if (odooRes.exito) {
-        alert(`¡Cotización enviada a Odoo exitosamente! (ID: ${odooRes.cotizacionId})`);
+        alert(`¡Orden de venta confirmada en Odoo! Se generó la orden de fabricación. (ID: ${odooRes.cotizacionId})`);
       } else {
         alert(`Error desde Odoo: ${odooRes.error}`);
       }
@@ -279,12 +288,26 @@ function CotizadorTermopanelContent() {
     }
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     const doc = new jsPDF();
+
+    try {
+      const res = await fetch('/logo.png');
+      const blob = await res.blob();
+      const logoBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      doc.addImage(logoBase64, 'PNG', 14, 10, 30, 30);
+    } catch (e) {
+      console.error("Error al cargar el logo en el PDF", e);
+    }
 
     // Encabezado
     doc.setFontSize(20);
-    doc.text("Presupuesto Termopaneles", 14, 22);
+    doc.text("Presupuesto Termopaneles", 50, 25);
 
     doc.setFontSize(10);
     doc.text(`N° Presupuesto: ${budgetNumber}`, 150, 22);
@@ -292,13 +315,13 @@ function CotizadorTermopanelContent() {
 
     // Información del Cliente
     doc.setFontSize(12);
-    doc.text("Información del Cliente", 14, 40);
+    doc.text("Información del Cliente", 14, 45);
     doc.setFontSize(10);
-    doc.text(`Nombre: ${clientName}`, 14, 48);
-    doc.text(`Dirección: ${clientAddress}`, 14, 54);
+    doc.text(`Nombre: ${clientName}`, 14, 53);
+    doc.text(`Dirección: ${clientAddress}`, 14, 59);
 
     // Encabezado de Tabla
-    let yPos = 70;
+    let yPos = 75;
     doc.setFillColor(240, 240, 240);
     doc.rect(14, yPos - 5, 182, 8, 'F');
     doc.setFont("helvetica", "bold");
@@ -355,8 +378,12 @@ function CotizadorTermopanelContent() {
     doc.save(`Presupuesto_Termopaneles_${budgetNumber}.pdf`);
   };
 
-  if (isLoadingConfig) {
-    return <div className="flex h-screen items-center justify-center text-slate-500">Cargando configuración...</div>;
+  if (checkingAuth || isLoadingConfig) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   return (
@@ -392,15 +419,6 @@ function CotizadorTermopanelContent() {
             <Printer size={16} />
             Imprimir PDF
           </button>
-          {user && (
-            <button
-              onClick={() => window.location.href = ADMIN_EMAILS.includes(user.email || '') ? '/admin' : '/admin/config'}
-              className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              {ADMIN_EMAILS.includes(user.email || '') ? <LayoutDashboard size={16} /> : <Settings size={16} />}
-              {ADMIN_EMAILS.includes(user.email || '') ? 'Panel Admin' : 'Ajustes Precios'}
-            </button>
-          )}
           <a href="/admin/config" className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
             <Settings size={16} />
             Configuración
