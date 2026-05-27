@@ -25,25 +25,53 @@ export async function guardarCotizacionEnOdoo(data: {
     });
 
     // 2. Preparar las líneas de la cotización
-    const lineas = data.items.map((item) => {
-      const desc = `Termopanel ${item.ancho}x${item.alto}mm
-Cristal 1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm
-Cristal 2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm
-Separador: ${item.separador.espesor}mm ${item.separador.color}`;
+    // Odoo requiere un product_id válido en cada línea para poder confirmar pedidos.
+    // Se usa un producto genérico de tipo "service" configurado en la variable de entorno.
+    const defaultProductId = process.env.ODOO_DEFAULT_PRODUCT_ID
+      ? parseInt(process.env.ODOO_DEFAULT_PRODUCT_ID)
+      : undefined;
 
+    const lineas = data.items.map((item) => {
+      const extras = [];
+      if (item.gas) extras.push('Gas Argón');
+      if (item.micropersiana) extras.push('Micropersiana');
+      if (item.palillaje) extras.push('Palillaje');
+
+      const desc = [
+        `Cantidad: ${item.cantidad} unidad${item.cantidad !== 1 ? 'es' : ''}`,
+        `Termopanel ${item.ancho} x ${item.alto} mm`,
+        `Cristal 1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+        `Cristal 2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+        `Separador: ${item.separador.espesor}mm color ${item.separador.color}`,
+        ...(extras.length > 0 ? [`Extras: ${extras.join(', ')}`] : []),
+      ].join(' | ');
+
+      // Dimensiones en metros para los campos visuales x_studio
+      const anchoM = item.ancho / 1000;
+      const altoM  = item.alto  / 1000;
+
+      // Usamos UOM = Units (id:1) → cantidad en piezas, precio por pieza
+      // Odoo calculará: total = precioUnitario × cantidad  ← igual que la app
       return {
+        product_id: defaultProductId,
         name: desc,
-        product_uom_qty: item.cantidad,
-        price_unit: item.precioUnitario
+        product_uom_qty: item.cantidad,        // Número de piezas
+        price_unit: item.precioUnitario,       // Precio por pieza (igual que la app)
+        x_studio_ancho_m: anchoM,              // Solo informativo
+        x_studio_alto_m: altoM,               // Solo informativo
       };
     });
 
-    // Si hay observaciones, agregamos una línea de nota al final (opcional pero útil)
-    if (data.observations) {
+    // Si hay dirección u observaciones, se agrega como línea de NOTA (sin cantidad ni precio)
+    const notaParts = [];
+    if (data.clientAddress) notaParts.push(`Dirección: ${data.clientAddress}`);
+    if (data.observations) notaParts.push(`Obs: ${data.observations}`);
+    if (notaParts.length > 0) {
       lineas.push({
-        name: `Observaciones / Dirección: ${data.clientAddress} - ${data.observations}`,
+        name: notaParts.join(' | '),
         product_uom_qty: 0,
-        price_unit: 0
+        price_unit: 0,
+        is_note: true, // Se renderiza como texto sin afectar el total
       });
     }
 
