@@ -1,7 +1,7 @@
 'use server'
 
 import { odooCustomers } from '@/lib/odoo-customers';
-import { odooSales } from '@/lib/odoo-sales';
+import { odooSales, SaleOrderLineInput } from '@/lib/odoo-sales';
 
 export async function guardarCotizacionEnOdoo(data: {
   clientName: string;
@@ -31,7 +31,7 @@ export async function guardarCotizacionEnOdoo(data: {
       ? parseInt(process.env.ODOO_DEFAULT_PRODUCT_ID)
       : undefined;
 
-    const lineas = data.items.map((item) => {
+    const lineas: SaleOrderLineInput[] = data.items.map((item) => {
       const extras = [];
       if (item.gas) extras.push('Gas Argón');
       if (item.micropersiana) extras.push('Micropersiana');
