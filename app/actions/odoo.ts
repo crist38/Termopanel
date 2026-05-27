@@ -27,9 +27,10 @@ export async function guardarCotizacionEnOdoo(data: {
     // 2. Preparar las líneas de la cotización
     // Odoo requiere un product_id válido en cada línea para poder confirmar pedidos.
     // Se usa un producto genérico de tipo "service" configurado en la variable de entorno.
-    const defaultProductId = process.env.ODOO_DEFAULT_PRODUCT_ID
-      ? parseInt(process.env.ODOO_DEFAULT_PRODUCT_ID)
-      : undefined;
+    if (!process.env.ODOO_DEFAULT_PRODUCT_ID) {
+      return { exito: false, error: 'Variable de entorno ODOO_DEFAULT_PRODUCT_ID no configurada en el servidor.' };
+    }
+    const defaultProductId = parseInt(process.env.ODOO_DEFAULT_PRODUCT_ID);
 
     const lineas: SaleOrderLineInput[] = data.items.map((item) => {
       const extras = [];
