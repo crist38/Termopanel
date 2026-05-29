@@ -1,7 +1,7 @@
 'use server'
 
 import { odooCustomers } from '@/lib/odoo-customers';
-import { odooSales, SaleOrderLineInput } from '@/lib/odoo-sales';
+import { odooSales, SaleOrderLineInput, TermopanelItemData } from '@/lib/odoo-sales';
 
 export async function guardarCotizacionEnOdoo(data: {
   clientName: string;
@@ -76,8 +76,21 @@ export async function guardarCotizacionEnOdoo(data: {
       });
     }
 
-    // 3. Crear cotización en Odoo
-    const cotizacionId = await odooSales.createQuote(clienteId, lineas);
+    // 3. Preparar datos brutos de los items para las órdenes de trabajo por taller
+    const rawItems: TermopanelItemData[] = data.items.map((item) => ({
+      cantidad: item.cantidad,
+      ancho: item.ancho,
+      alto: item.alto,
+      cristal1: { tipo: item.cristal1.tipo, espesor: item.cristal1.espesor },
+      cristal2: { tipo: item.cristal2.tipo, espesor: item.cristal2.espesor },
+      separador: { espesor: item.separador.espesor, color: item.separador.color },
+      gas: item.gas,
+      micropersiana: item.micropersiana,
+      palillaje: item.palillaje,
+    }));
+
+    // 4. Crear cotización en Odoo (genera 2 OFs por línea: Corte Vidrio + Termopaneles)
+    const cotizacionId = await odooSales.createQuote(clienteId, lineas, rawItems);
 
     return { exito: true, cotizacionId };
   } catch (error: any) {

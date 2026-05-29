@@ -8,7 +8,7 @@ import { db, auth } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Save, Printer, Plus, Trash2, ArrowLeft, LayoutDashboard, Settings, Cloud } from 'lucide-react';
+import { Save, Printer, Plus, Trash2, ArrowLeft, LayoutDashboard, Settings, Cloud, ClipboardList } from 'lucide-react';
 import { ADMIN_EMAILS } from '@/lib/constants';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { guardarCotizacionEnOdoo } from '@/app/actions/odoo';
@@ -378,6 +378,236 @@ function CotizadorTermopanelContent() {
     doc.save(`Presupuesto_Termopaneles_${budgetNumber}.pdf`);
   };
 
+  const handleExportWorkOrders = async () => {
+    if (items.length === 0) return;
+    const pdf = new jsPDF();
+
+    // Cargar logo
+    let logoBase64: string | null = null;
+    try {
+      const res = await fetch('/logo.png');
+      const blob = await res.blob();
+      logoBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      console.error("Error al cargar el logo en el PDF", e);
+    }
+
+    // ======================================================
+    // PÁGINA 1: TALLER CORTE VIDRIO
+    // ======================================================
+    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 25, 25);
+
+    pdf.setFontSize(18);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("ORDEN DE TRABAJO", 45, 20);
+    pdf.setFontSize(13);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text("Taller Corte Vidrio", 45, 28);
+    pdf.setTextColor(0, 0, 0);
+
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(`N° Presupuesto: ${budgetNumber}`, 155, 18);
+    pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
+    pdf.text(`Cliente: ${clientName}`, 155, 30);
+
+    // Línea separadora
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(14, 38, 196, 38);
+
+    // Encabezado tabla Corte Vidrio
+    let yPos = 48;
+    pdf.setFillColor(51, 65, 85); // slate-700
+    pdf.rect(14, yPos - 6, 182, 9, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    pdf.text("#", 17, yPos);
+    pdf.text("Cant.", 25, yPos);
+    pdf.text("Ancho (mm)", 45, yPos);
+    pdf.text("Alto (mm)", 75, yPos);
+    pdf.text("Cristal 1", 105, yPos);
+    pdf.text("Cristal 2", 150, yPos);
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFont("helvetica", "normal");
+
+    yPos += 8;
+
+    items.forEach((item, index) => {
+      if (yPos > 275) {
+        pdf.addPage();
+        yPos = 20;
+        // Repetir encabezado
+        pdf.setFillColor(51, 65, 85);
+        pdf.rect(14, yPos - 6, 182, 9, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9);
+        pdf.text("#", 17, yPos);
+        pdf.text("Cant.", 25, yPos);
+        pdf.text("Ancho (mm)", 45, yPos);
+        pdf.text("Alto (mm)", 75, yPos);
+        pdf.text("Cristal 1", 105, yPos);
+        pdf.text("Cristal 2", 150, yPos);
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFont("helvetica", "normal");
+        yPos += 8;
+      }
+
+      // Fila alternada
+      if (index % 2 === 0) {
+        pdf.setFillColor(248, 250, 252); // slate-50
+        pdf.rect(14, yPos - 5, 182, 8, 'F');
+      }
+
+      pdf.setFontSize(9);
+      pdf.text(`${index + 1}`, 17, yPos);
+      pdf.text(`${item.cantidad}`, 25, yPos);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(`${item.ancho}`, 45, yPos);
+      pdf.text(`${item.alto}`, 75, yPos);
+      pdf.setFont("helvetica", "normal");
+      pdf.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 105, yPos);
+      pdf.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 150, yPos);
+
+      yPos += 8;
+    });
+
+    // Línea de cierre
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(14, yPos, 196, yPos);
+
+    // Nota al pie
+    yPos += 10;
+    pdf.setFontSize(8);
+    pdf.setTextColor(120, 120, 120);
+    pdf.text("* Las medidas de los cristales corresponden al termopanel completo. Ajustar descuentos según separador.", 14, yPos);
+    if (observations) {
+      yPos += 8;
+      pdf.setFontSize(9);
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Observaciones:", 14, yPos);
+      pdf.setFont("helvetica", "normal");
+      const splitObs = pdf.splitTextToSize(observations, 180);
+      pdf.text(splitObs, 14, yPos + 5);
+    }
+
+    // ======================================================
+    // PÁGINA 2: TALLER TERMOPANELES
+    // ======================================================
+    pdf.addPage();
+
+    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 25, 25);
+
+    pdf.setFontSize(18);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(0, 0, 0);
+    pdf.text("ORDEN DE TRABAJO", 45, 20);
+    pdf.setFontSize(13);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text("Taller Termopaneles", 45, 28);
+    pdf.setTextColor(0, 0, 0);
+
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(`N° Presupuesto: ${budgetNumber}`, 155, 18);
+    pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
+    pdf.text(`Cliente: ${clientName}`, 155, 30);
+
+    // Línea separadora
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(14, 38, 196, 38);
+
+    // Encabezado tabla Termopaneles
+    yPos = 48;
+    pdf.setFillColor(15, 118, 110); // teal-700
+    pdf.rect(14, yPos - 6, 182, 9, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    pdf.text("#", 17, yPos);
+    pdf.text("Cant.", 24, yPos);
+    pdf.text("Ancho", 38, yPos);
+    pdf.text("Alto", 56, yPos);
+    pdf.text("Cristal 1", 72, yPos);
+    pdf.text("Cristal 2", 112, yPos);
+    pdf.text("Sep. (mm)", 150, yPos);
+    pdf.text("Color Sep.", 175, yPos);
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFont("helvetica", "normal");
+
+    yPos += 8;
+
+    items.forEach((item, index) => {
+      if (yPos > 275) {
+        pdf.addPage();
+        yPos = 20;
+        // Repetir encabezado
+        pdf.setFillColor(15, 118, 110);
+        pdf.rect(14, yPos - 6, 182, 9, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9);
+        pdf.text("#", 17, yPos);
+        pdf.text("Cant.", 24, yPos);
+        pdf.text("Ancho", 38, yPos);
+        pdf.text("Alto", 56, yPos);
+        pdf.text("Cristal 1", 72, yPos);
+        pdf.text("Cristal 2", 112, yPos);
+        pdf.text("Sep. (mm)", 150, yPos);
+        pdf.text("Color Sep.", 175, yPos);
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFont("helvetica", "normal");
+        yPos += 8;
+      }
+
+      // Fila alternada
+      if (index % 2 === 0) {
+        pdf.setFillColor(240, 253, 250); // teal-50
+        pdf.rect(14, yPos - 5, 182, 8, 'F');
+      }
+
+      pdf.setFontSize(9);
+      pdf.text(`${index + 1}`, 17, yPos);
+      pdf.text(`${item.cantidad}`, 24, yPos);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(`${item.ancho}`, 38, yPos);
+      pdf.text(`${item.alto}`, 56, yPos);
+      pdf.setFont("helvetica", "normal");
+      pdf.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 72, yPos);
+      pdf.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 112, yPos);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(`${item.separador.espesor}`, 150, yPos);
+      pdf.text(`${item.separador.color}`, 175, yPos);
+      pdf.setFont("helvetica", "normal");
+
+      yPos += 8;
+    });
+
+    // Línea de cierre
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(14, yPos, 196, yPos);
+
+    // Observaciones
+    if (observations) {
+      yPos += 10;
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Observaciones:", 14, yPos);
+      pdf.setFont("helvetica", "normal");
+      const splitObs = pdf.splitTextToSize(observations, 180);
+      pdf.text(splitObs, 14, yPos + 5);
+    }
+
+    pdf.save(`Orden_Trabajo_${budgetNumber}.pdf`);
+  };
+
   if (checkingAuth || isLoadingConfig) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
@@ -418,6 +648,15 @@ function CotizadorTermopanelContent() {
           >
             <Printer size={16} />
             Imprimir PDF
+          </button>
+          <button
+            onClick={handleExportWorkOrders}
+            className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            disabled={items.length === 0}
+            title="Generar órdenes de trabajo para Taller Corte Vidrio y Taller Termopaneles"
+          >
+            <ClipboardList size={16} />
+            Orden de Trabajo
           </button>
           <a href="/admin/config" className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
             <Settings size={16} />
