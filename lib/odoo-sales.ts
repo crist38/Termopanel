@@ -75,6 +75,7 @@ export class OdooSalesService {
   async createQuote(
     partnerId: number,
     lines: SaleOrderLineInput[],
+    rawItems: TermopanelItemData[] = [],
     autoConfirm = true
   ): Promise<number> {
     const orderLinesTuples = lines.map(line => {
@@ -111,7 +112,7 @@ export class OdooSalesService {
 
     if (autoConfirm) {
       await this.confirmOrder(orderId);
-      await this.createManufacturingOrders(orderId, lines);
+      await this.createManufacturingOrders(orderId, lines, rawItems);
     }
 
     return orderId;
@@ -155,33 +156,181 @@ export class OdooSalesService {
   }
 
   /**
+   * Datos brutos de un item del cotizador, necesarios para crear OTs específicas por taller.
+   */
+  // (interface definida abajo)
+
+  /**
+   * Busca los IDs de los centros de trabajo (work centers) por nombre.
+   * Cachea los resultados para evitar múltiples llamadas.
+   */
+  private workCenterCache: Record<string, number> = {};
+
+  async getWorkCenterId(name: string): Promise<number | null> {
+    if (this.workCenterCache[name]) return this.workCenterCache[name];
+
+    const results = await odoo.executeKw(
+      'mrp.workcenter',
+      'search_read',
+      [[['name', 'ilike', name]]],
+      { fields: ['id', 'name'], limit: 1 }
+    );
+
+    if (results.length > 0) {
+      this.workCenterCache[name] = results[0].id;
+      return results[0].id;
+    }
+    return null;
+  }
+
+  /**
    * Crea órdenes de fabricación (mrp.production) para cada línea de producto de la orden.
-   * Se usa cuando el producto no tiene BOM configurada en Odoo.
+   * Por cada línea:
+   *   1. Crea una MO y la confirma
+   *   2. Crea 2 work orders (mrp.workorder) vinculados a los work centers:
+   *      - Taller Corte Vidrio  → medidas + tipo de cristal
+   *      - Taller Termopaneles → medidas + cristales + separador (espesor + color)
    */
   async createManufacturingOrders(
     saleOrderId: number,
-    lines: SaleOrderLineInput[]
+    lines: SaleOrderLineInput[],
+    rawItems: TermopanelItemData[]
   ): Promise<number[]> {
     const productLines = lines.filter(l => !l.is_note && l.product_id && l.product_uom_qty > 0);
     const moIds: number[] = [];
 
-    for (const line of productLines) {
-      // Construir descripción detallada visible en la orden de fabricación
+    // Buscar IDs de los centros de trabajo
+    const wcCorteId = await this.getWorkCenterId('Taller Corte Vidrio');
+    const wcTermoId = await this.getWorkCenterId('Taller Termopaneles');
+
+    if (!wcCorteId || !wcTermoId) {
+      console.error('No se encontraron los centros de trabajo en Odoo.', { wcCorteId, wcTermoId });
+      throw new Error(
+        `No se encontraron los centros de trabajo: ` +
+        `${!wcCorteId ? '"Taller Corte Vidrio"' : ''} ` +
+        `${!wcTermoId ? '"Taller Termopaneles"' : ''}`.trim()
+      );
+    }
+
+    for (let i = 0; i < productLines.length; i++) {
+      const line = productLines[i];
+      const item = rawItems[i];
+
+      // ─── Crear la Orden de Fabricación ─────────────────
+      const fullDesc = [
+        `Termopanel ${item.ancho} x ${item.alto} mm`,
+        `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+        `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+        `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
+      ].join(' | ');
+
       const moData = {
         product_id: line.product_id,
         product_qty: line.product_uom_qty,
         origin: `S${saleOrderId}`,
-        // product_description_variants aparece como "Custom Description" en la OF
-        product_description_variants: line.name,
+        product_description_variants: fullDesc,
       };
 
-      const moId = await odoo.executeKw('mrp.production', 'create', [[moData]]);
-      const id = Array.isArray(moId) ? moId[0] : moId;
-      moIds.push(id);
+      const moResult = await odoo.executeKw('mrp.production', 'create', [[moData]]);
+      const moId = Array.isArray(moResult) ? moResult[0] : moResult;
+      moIds.push(moId);
 
-      // Publicar nota en el chatter de la OF con todos los detalles del termopanel
-      await odoo.executeKw('mrp.production', 'message_post', [[id]], {
-        body: `<b>Especificaciones del Termopanel:</b><br/>${line.name.replace(/\|/g, '<br/>')}`,
+      // ─── Confirmar la MO (Borrador → Confirmada) ──────
+      try {
+        await odoo.executeKw('mrp.production', 'action_confirm', [[moId]]);
+      } catch (e) {
+        console.warn(`No se pudo confirmar MO ${moId}, puede requerir BOM:`, e);
+        // Continuar aunque falle la confirmación
+      }
+
+      // ─── Work Order 1: TALLER CORTE VIDRIO ────────────
+      const descCorte = [
+        `Corte Vidrio | ${item.ancho} x ${item.alto} mm`,
+        `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+        `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+      ].join(' | ');
+
+      try {
+        const woCorteData = {
+          name: descCorte,
+          production_id: moId,
+          workcenter_id: wcCorteId,
+          product_uom_id: 1,
+          duration_expected: 60,
+        };
+
+        const woCorteResult = await odoo.executeKw('mrp.workorder', 'create', [[woCorteData]]);
+        const woCorteId = Array.isArray(woCorteResult) ? woCorteResult[0] : woCorteResult;
+
+        // Nota en el chatter del work order
+        const htmlCorte = [
+          `<b>🔹 TALLER CORTE VIDRIO</b>`,
+          `<b>Cantidad:</b> ${item.cantidad}`,
+          `<b>Medida:</b> ${item.ancho} x ${item.alto} mm`,
+          `<b>Cristal 1:</b> ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+          `<b>Cristal 2:</b> ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+        ].join('<br/>');
+
+        await odoo.executeKw('mrp.workorder', 'message_post', [[woCorteId]], {
+          body: htmlCorte,
+          message_type: 'comment',
+          subtype_xmlid: 'mail.mt_note',
+        });
+      } catch (e) {
+        console.error(`Error creando work order Corte Vidrio para MO ${moId}:`, e);
+      }
+
+      // ─── Work Order 2: TALLER TERMOPANELES ────────────
+      const descTermo = [
+        `Termopanel | ${item.ancho} x ${item.alto} mm`,
+        `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+        `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+        `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
+      ].join(' | ');
+
+      try {
+        const woTermoData = {
+          name: descTermo,
+          production_id: moId,
+          workcenter_id: wcTermoId,
+          product_uom_id: 1,
+          duration_expected: 60,
+        };
+
+        const woTermoResult = await odoo.executeKw('mrp.workorder', 'create', [[woTermoData]]);
+        const woTermoId = Array.isArray(woTermoResult) ? woTermoResult[0] : woTermoResult;
+
+        // Nota en el chatter del work order
+        const htmlTermo = [
+          `<b>🔸 TALLER TERMOPANELES</b>`,
+          `<b>Cantidad:</b> ${item.cantidad}`,
+          `<b>Medida:</b> ${item.ancho} x ${item.alto} mm`,
+          `<b>Cristal 1:</b> ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+          `<b>Cristal 2:</b> ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+          `<b>Separador:</b> ${item.separador.espesor}mm - Color: ${item.separador.color}`,
+        ].join('<br/>');
+
+        await odoo.executeKw('mrp.workorder', 'message_post', [[woTermoId]], {
+          body: htmlTermo,
+          message_type: 'comment',
+          subtype_xmlid: 'mail.mt_note',
+        });
+      } catch (e) {
+        console.error(`Error creando work order Termopaneles para MO ${moId}:`, e);
+      }
+
+      // ─── Nota general en la MO ────────────────────────
+      const htmlMO = [
+        `<b>📋 Especificaciones del Termopanel</b>`,
+        `<b>Cantidad:</b> ${item.cantidad}`,
+        `<b>Medida:</b> ${item.ancho} x ${item.alto} mm`,
+        `<b>Cristal 1:</b> ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+        `<b>Cristal 2:</b> ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+        `<b>Separador:</b> ${item.separador.espesor}mm - Color: ${item.separador.color}`,
+      ].join('<br/>');
+
+      await odoo.executeKw('mrp.production', 'message_post', [[moId]], {
+        body: htmlMO,
         message_type: 'comment',
         subtype_xmlid: 'mail.mt_note',
       });
@@ -189,6 +338,22 @@ export class OdooSalesService {
 
     return moIds;
   }
+}
+
+/**
+ * Interface con los datos brutos de un item del cotizador de termopaneles.
+ * Se usa para generar las órdenes de trabajo específicas por taller.
+ */
+export interface TermopanelItemData {
+  cantidad: number;
+  ancho: number;
+  alto: number;
+  cristal1: { tipo: string; espesor: number };
+  cristal2: { tipo: string; espesor: number };
+  separador: { espesor: number; color: string };
+  gas: boolean;
+  micropersiana: boolean;
+  palillaje: boolean;
 }
 
 export const odooSales = new OdooSalesService();
