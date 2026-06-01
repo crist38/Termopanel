@@ -7,12 +7,11 @@ export interface Vidrio {
 
 export const PRECIOS_VIDRIOS: Vidrio[] = [
     // Incoloro
-    { tipo: "Incoloro", codigo: "inc.3", espesor: 3, precio: 7000 },
-    { tipo: "Incoloro", codigo: "inc.4", espesor: 4, precio: 9500 },
-    { tipo: "Incoloro", codigo: "inc.5", espesor: 5, precio: 12500 },
-    { tipo: "Incoloro", codigo: "inc.6", espesor: 6, precio: 18000 },
-    { tipo: "Incoloro", codigo: "inc.8", espesor: 8, precio: 32000 },
-    { tipo: "Incoloro", codigo: "inc.10", espesor: 10, precio: 38000 },
+    { tipo: "Incoloro", codigo: "inc.4", espesor: 4, precio: 8200 },
+    { tipo: "Incoloro", codigo: "inc.5", espesor: 5, precio: 10990 },
+    { tipo: "Incoloro", codigo: "inc.6", espesor: 6, precio: 16000 },
+    { tipo: "Incoloro", codigo: "inc.8", espesor: 8, precio: 28500 },
+    { tipo: "Incoloro", codigo: "inc.10", espesor: 10, precio: 34900 },
 
     // Bronce
     { tipo: "Bronce", codigo: "br.4", espesor: 4, precio: 19900 },
@@ -28,18 +27,19 @@ export const PRECIOS_VIDRIOS: Vidrio[] = [
 
     // Semilla
     { tipo: "Semilla", codigo: "sem.4", espesor: 4, precio: 12000 },
-    { tipo: "Semilla Bronce", codigo: "sembr.4", espesor: 4, precio: 19900 }, // Assumed "sembr" is Semilla Bronce
+    { tipo: "Semilla Bronce", codigo: "sembr.4", espesor: 4, precio: 19900 },
 
     // Laminado
-    { tipo: "Laminado", codigo: "lam.5", espesor: 5, precio: 18000 },
+    { tipo: "Laminado", codigo: "lam.5", espesor: 5, precio: 20000 },
     { tipo: "Laminado", codigo: "lam.6", espesor: 6, precio: 22000 },
     { tipo: "Laminado", codigo: "lam.8", espesor: 8, precio: 28000 },
     { tipo: "Laminado", codigo: "lam.10", espesor: 10, precio: 49900 },
 
-    // Otros
-    { tipo: "Evergreen", codigo: "evergr.4", espesor: 4, precio: 35000 },
+    // Solar Cool BR.
     { tipo: "Solar Cool BR.", codigo: "solcool.4", espesor: 4, precio: 29900 },
-    { tipo: "Solar Green", codigo: "solgreen.4", espesor: 4, precio: 50000 },
+
+    // Solar Green
+    { tipo: "Solar Green", codigo: "solgreen.6", espesor: 4, precio: 29900 },
 
     // Reflex
     { tipo: "Reflex Bronce", codigo: "RFloat4", espesor: 4, precio: 29900 },
