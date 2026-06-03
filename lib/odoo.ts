@@ -31,9 +31,9 @@ export class OdooClient {
       id: Math.floor(Math.random() * 1000000000),
     };
 
-    // Timeout de 30 segundos por llamada
+    // Timeout de 60 segundos por llamada
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30_000);
+    const timer = setTimeout(() => controller.abort(), 60_000);
 
     let response: Response;
     try {
