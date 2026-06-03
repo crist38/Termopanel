@@ -31,16 +31,30 @@ export class OdooClient {
       id: Math.floor(Math.random() * 1000000000),
     };
 
-    const response = await fetch(`${this.url}/jsonrpc`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+    // Timeout de 30 segundos por llamada
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.url}/jsonrpc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      clearTimeout(timer);
+      if (err?.name === 'AbortError') {
+        throw new Error('Timeout: Odoo no respondió en 30 segundos. Intente nuevamente.');
+      }
+      throw new Error(`Error de red al conectar con Odoo (${this.url}): ${err?.message ?? err}`);
+    } finally {
+      clearTimeout(timer);
+    }
 
     if (!response.ok) {
-      throw new Error(`Error en la petición HTTP: ${response.status} ${response.statusText}`);
+      throw new Error(`Error HTTP ${response.status} desde Odoo: ${response.statusText}`);
     }
 
     const data = await response.json();
@@ -53,7 +67,8 @@ export class OdooClient {
   }
 
   /**
-   * Autentica el cliente y obtiene el User ID (uid) necesario para las consultas
+   * Autentica el cliente y obtiene el User ID (uid) necesario para las consultas.
+   * Si ya tenemos uid cacheado, lo reutiliza.
    */
   public async authenticate(): Promise<number> {
     if (this.uid) return this.uid;
@@ -66,6 +81,7 @@ export class OdooClient {
     ]);
 
     if (!result) {
+      this.uid = null;
       throw new Error('Falló la autenticación con Odoo. Verifica tus credenciales.');
     }
 
@@ -75,23 +91,28 @@ export class OdooClient {
 
   /**
    * Ejecuta un método en un modelo de Odoo (equivalente a execute_kw en XML-RPC)
-   * @param model Nombre del modelo de Odoo (ej: 'res.partner')
-   * @param method Método a ejecutar (ej: 'search_read', 'create', 'write')
-   * @param args Argumentos posicionales para el método
-   * @param kwargs Argumentos con nombre (keywords) opcionales
    */
   public async executeKw(model: string, method: string, args: any[] = [], kwargs: Record<string, any> = {}): Promise<any> {
     const uid = await this.authenticate();
 
-    return this.rpcCall('object', 'execute_kw', [
-      this.db,
-      uid,
-      this.apiKey,
-      model,
-      method,
-      args,
-      kwargs,
-    ]);
+    try {
+      return await this.rpcCall('object', 'execute_kw', [
+        this.db,
+        uid,
+        this.apiKey,
+        model,
+        method,
+        args,
+        kwargs,
+      ]);
+    } catch (err: any) {
+      // Si el error sugiere sesión inválida, limpiar uid para re-autenticar en el próximo intento
+      const msg = err?.message ?? '';
+      if (msg.includes('Session') || msg.includes('Access Denied') || msg.includes('auth')) {
+        this.uid = null;
+      }
+      throw err;
+    }
   }
 }
 
