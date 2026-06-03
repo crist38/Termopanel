@@ -1,11 +1,11 @@
 "use client"
 
 import { useState, useEffect, useRef, Suspense } from "react"
-import { TermopanelItem, calcularItem, calcularTotal } from "@/lib/calculos/termopanel"
+import { TermopanelItem, calcularItem, calcularTotal, calcularPrecioUnitario } from "@/lib/calculos/termopanel"
 import { PRECIOS_VIDRIOS, Vidrio, TIPOS_UNICOS as STATIC_TIPOS_UNICOS } from "@/lib/data/vidrios"
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, limit, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { getTermopanelConfig, TermopanelConfig } from '@/lib/configService';
+import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { Save, Printer, Plus, Trash2, Settings, Cloud, ClipboardList, LogOut } from 'lucide-react';
@@ -172,15 +172,24 @@ function CotizadorTermopanelContent() {
         updatedItem[field] = value
       }
 
-      // Calcular precio sugerido automágicamente
+      // Calcular precio sugerido con la fórmula completa del Excel
       const p1 = getPrecioVidrio(updatedItem.cristal1.tipo, updatedItem.cristal1.espesor)
       const p2 = getPrecioVidrio(updatedItem.cristal2.tipo, updatedItem.cristal2.espesor)
+      const precioSep = config
+        ? getPrecioSeparadorPorMl(
+            config.preciosSeparadores ?? [],
+            updatedItem.separador.color,
+            updatedItem.separador.espesor
+          )
+        : 136 // fallback Mate 10mm
 
-      const metros = (updatedItem.ancho * updatedItem.alto) / 1_000_000
-      const costoVidrios = (p1 + p2) * metros
-
-      // Actualizar automáticamente el Precio Unitario con el Costo Vidrios Base.
-      updatedItem.precioUnitario = Math.round(costoVidrios)
+      updatedItem.precioUnitario = calcularPrecioUnitario(
+        updatedItem,
+        p1,
+        p2,
+        precioSep,
+        config?.parametrosCalculo
+      )
 
       return updatedItem
     }))
