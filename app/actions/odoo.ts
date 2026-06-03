@@ -47,19 +47,15 @@ export async function guardarCotizacionEnOdoo(data: {
         ...(extras.length > 0 ? [`Extras: ${extras.join(', ')}`] : []),
       ].join(' | ');
 
-      // Dimensiones en metros para los campos visuales x_studio
-      const anchoM = item.ancho / 1000;
-      const altoM  = item.alto  / 1000;
-
       // Usamos UOM = Units (id:1) → cantidad en piezas, precio por pieza
-      // Odoo calculará: total = precioUnitario × cantidad  ← igual que la app
+      // IMPORTANTE: No enviar x_studio_ancho_m/alto_m porque Odoo tiene fórmulas
+      // que recomputan qty=m² y price_unit=precio_lista del producto.
+      // Las dimensiones ya van en el campo 'name' (descripción).
       return {
         product_id: defaultProductId,
         name: desc,
         product_uom_qty: item.cantidad,        // Número de piezas
         price_unit: item.precioUnitario,       // Precio por pieza (igual que la app)
-        x_studio_ancho_m: anchoM,              // Solo informativo
-        x_studio_alto_m: altoM,               // Solo informativo
       };
     });
 

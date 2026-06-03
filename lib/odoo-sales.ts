@@ -21,9 +21,6 @@ export interface SaleOrderLineInput {
   product_uom_qty: number; // Cantidad en piezas
   price_unit: number;      // Precio por pieza
   is_note?: boolean;
-  // Campos personalizados del Studio de Odoo para dimensiones
-  x_studio_ancho_m?: number; // Ancho en metros
-  x_studio_alto_m?: number;  // Alto en metros
 }
 
 export class OdooSalesService {
@@ -92,9 +89,9 @@ export class OdooSalesService {
         product_uom_qty: line.product_uom_qty, // Número de piezas
         product_uom_id: 1,                     // UOM = Units (id:1)
         price_unit: line.price_unit,
-        // Dimensiones informativas (x_studio puede recomponer qty pero lo sobreescribimos en write)
-        ...(line.x_studio_ancho_m !== undefined && { x_studio_ancho_m: line.x_studio_ancho_m }),
-        ...(line.x_studio_alto_m  !== undefined && { x_studio_alto_m:  line.x_studio_alto_m  }),
+        // NOTA: NO enviar x_studio_ancho_m/alto_m aquí.
+        // Esos campos tienen fórmulas en Odoo que recomputan qty=m² y
+        // price_unit=precio_lista, sobreescribiendo los valores correctos.
       }];
     });
 
