@@ -90,8 +90,9 @@ export class OdooSalesService {
         product_id: line.product_id || false,
         name: line.name,
         product_uom_qty: line.product_uom_qty, // Número de piezas
-        product_uom_id: 1,                     // UOM = Units (id:1), evita que x_studio controle la qty
+        product_uom_id: 1,                     // UOM = Units (id:1)
         price_unit: line.price_unit,
+        tax_id: [[5, 0, 0]],                   // (5=clear) → sin impuestos, precio ya es el final
         // Dimensiones informativas (x_studio puede recomponer qty pero lo sobreescribimos en write)
         ...(line.x_studio_ancho_m !== undefined && { x_studio_ancho_m: line.x_studio_ancho_m }),
         ...(line.x_studio_alto_m  !== undefined && { x_studio_alto_m:  line.x_studio_alto_m  }),
@@ -106,12 +107,13 @@ export class OdooSalesService {
     const newOrderId = await odoo.executeKw('sale.order', 'create', [[orderData]]);
     const orderId = Array.isArray(newOrderId) ? newOrderId[0] : newOrderId;
 
-    // Forzar el precio correcto en cada línea ANTES de confirmar
-    // Odoo reemplaza price_unit con su lista de precios al crear, por eso usamos write() por separado
+    // Forzar precio y sin impuestos ANTES de confirmar
     await this.forceLinePrices(orderId, lines);
 
     if (autoConfirm) {
       await this.confirmOrder(orderId);
+      // Forzar precios TAMBIÉN después de confirmar (Odoo puede recomputar al confirmar)
+      await this.forceLinePrices(orderId, lines);
       await this.createManufacturingOrders(orderId, lines, rawItems);
     }
 
@@ -143,6 +145,7 @@ export class OdooSalesService {
           price_unit: appLine.price_unit,
           product_uom_qty: appLine.product_uom_qty,
           product_uom_id: 1, // Units - mantener unidad para evitar recalculo
+          tax_id: [[5, 0, 0]], // Limpiar impuestos para que el precio sea el final
         }
       ]);
     }
