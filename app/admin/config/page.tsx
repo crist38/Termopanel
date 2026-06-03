@@ -4,15 +4,11 @@ import { useState, useEffect } from 'react';
 import { getTermopanelConfig, saveTermopanelConfig, TermopanelConfig } from '@/lib/configService';
 import { Vidrio } from '@/lib/data/vidrios';
 import { Save, Plus, Trash2, ArrowLeft, Settings, Layers, Hash } from 'lucide-react';
-import { auth } from '@/lib/firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { ADMIN_EMAILS } from '@/lib/constants';
 
 export default function ConfigPage() {
   const [config, setConfig] = useState<TermopanelConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
 
   // New Vidrio State
   const [newVidrioTipo, setNewVidrioTipo] = useState('');
@@ -24,11 +20,6 @@ export default function ConfigPage() {
 
   // New Color State
   const [newColor, setNewColor] = useState('');
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
-    return () => unsub();
-  }, []);
 
   useEffect(() => {
     const fetchConfig = async () => {

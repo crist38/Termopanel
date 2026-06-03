@@ -3,15 +3,14 @@
 import { useState, useEffect, useRef, Suspense } from "react"
 import { TermopanelItem, calcularItem, calcularTotal } from "@/lib/calculos/termopanel"
 import { PRECIOS_VIDRIOS, Vidrio, TIPOS_UNICOS as STATIC_TIPOS_UNICOS } from "@/lib/data/vidrios"
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, limit, doc, getDoc, setDoc, where } from 'firebase/firestore';
-import { db, auth } from '@/lib/firebase';
+import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, limit, doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Save, Printer, Plus, Trash2, ArrowLeft, LayoutDashboard, Settings, Cloud, ClipboardList } from 'lucide-react';
-import { ADMIN_EMAILS } from '@/lib/constants';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { Save, Printer, Plus, Trash2, Settings, Cloud, ClipboardList, LogOut } from 'lucide-react';
 import { guardarCotizacionEnOdoo } from '@/app/actions/odoo';
+import { logoutFromOdoo } from '@/app/actions/auth';
 
 
 function CotizadorTermopanelContent() {
@@ -45,21 +44,8 @@ function CotizadorTermopanelContent() {
   const editId = searchParams.get('editId');
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncingOdoo, setIsSyncingOdoo] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [sessionName, setSessionName] = useState<string>('');
   const router = useRouter();
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      if (!u) {
-        router.replace('/login');
-      } else {
-        setUser(u);
-        setCheckingAuth(false);
-      }
-    });
-    return () => unsub();
-  }, [router]);
 
   // Cargar configuración de precios
   useEffect(() => {
@@ -108,27 +94,37 @@ function CotizadorTermopanelContent() {
 
     const fetchNextId = async () => {
       try {
-        const user = auth.currentUser;
-        if (user) {
-          const q = query(
-            collection(db, 'presupuestos_termopaneles'),
-            where('userId', '==', user.uid),
-            orderBy('budgetNumber', 'desc'),
-            limit(1)
-          );
-          const querySnapshot = await getDocs(q);
-          if (!querySnapshot.empty) {
-            const lastData = querySnapshot.docs[0].data();
-            setBudgetNumber((lastData.budgetNumber || 0) + 1);
-          } else {
-            setBudgetNumber(1);
-          }
+        const q = query(
+          collection(db, 'presupuestos_termopaneles'),
+          orderBy('budgetNumber', 'desc'),
+          limit(1)
+        );
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          const lastData = querySnapshot.docs[0].data();
+          setBudgetNumber((lastData.budgetNumber || 0) + 1);
+        } else {
+          setBudgetNumber(1);
         }
       } catch (e) {
         console.error("Error fetching ID:", e);
       }
     };
     fetchNextId();
+
+    // Leer nombre del usuario desde la cookie de sesión
+    const cookieVal = document.cookie
+      .split('; ')
+      .find((r) => r.startsWith('odoo_user='))
+      ?.split('=')
+      .slice(1)
+      .join('=')
+    if (cookieVal) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(cookieVal))
+        setSessionName(parsed.name || parsed.email || '')
+      } catch {}
+    }
   }, []);
 
 
@@ -223,14 +219,7 @@ function CotizadorTermopanelContent() {
     }
     setIsSaving(true);
     try {
-      const user = auth.currentUser;
-      if (!user) {
-        alert("Debes estar logueado para guardar");
-        return;
-      }
-
       const budgetData = {
-        userId: user.uid,
         clientName,
         clientAddress,
         observations,
@@ -608,7 +597,7 @@ function CotizadorTermopanelContent() {
     pdf.save(`Orden_Trabajo_${budgetNumber}.pdf`);
   };
 
-  if (checkingAuth || isLoadingConfig) {
+  if (isLoadingConfig) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -623,7 +612,10 @@ function CotizadorTermopanelContent() {
           <h1 className="text-2xl font-bold text-slate-800">Cotizador de Termopaneles</h1>
           <p className="text-slate-500 text-sm">Presupuesto N° {budgetNumber}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          {sessionName && (
+            <span className="text-xs text-slate-400 hidden sm:block mr-1">{sessionName}</span>
+          )}
           <button
             onClick={handleSaveBudget}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
@@ -662,6 +654,16 @@ function CotizadorTermopanelContent() {
             <Settings size={16} />
             Configuración
           </a>
+          <form action={logoutFromOdoo}>
+            <button
+              type="submit"
+              className="flex items-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+              title="Cerrar sesión"
+            >
+              <LogOut size={16} />
+              Salir
+            </button>
+          </form>
         </div>
       </header>
       {/* Sección de Información del Cliente */}
