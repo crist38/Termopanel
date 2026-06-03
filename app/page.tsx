@@ -1,11 +1,11 @@
 "use client"
 
 import { useState, useEffect, useRef, Suspense } from "react"
-import { TermopanelItem, calcularItem, calcularTotal, calcularPrecioUnitario } from "@/lib/calculos/termopanel"
+import { TermopanelItem, calcularItem, calcularTotal, calcularPrecioUnitario, PARAMETROS_DEFAULT } from "@/lib/calculos/termopanel"
 import { PRECIOS_VIDRIOS, Vidrio, TIPOS_UNICOS as STATIC_TIPOS_UNICOS } from "@/lib/data/vidrios"
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, limit, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl } from '@/lib/configService';
+import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { Save, Printer, Plus, Trash2, Settings, Cloud, ClipboardList, LogOut } from 'lucide-react';
@@ -54,12 +54,26 @@ function CotizadorTermopanelContent() {
       const conf = await getTermopanelConfig();
       setConfig(conf);
       setTiposUnicos(Array.from(new Set(conf.vidrios.map(v => v.tipo))));
-      
-      // Update initial items to use the loaded config if needed, but defaults are fine
       setIsLoadingConfig(false);
     };
     fetchConfig();
   }, []);
+
+  // Recalcular precios de todos los items cuando la config carga
+  // (necesario para items ya cargados o editados antes de que config termine)
+  useEffect(() => {
+    if (!config) return;
+    setItems(prev => prev.map(item => {
+      if (item.ancho <= 0 || item.alto <= 0) return item;
+      const p1 = config.vidrios.find(v => v.tipo === item.cristal1.tipo && v.espesor === item.cristal1.espesor)?.precio ?? 0;
+      const p2 = config.vidrios.find(v => v.tipo === item.cristal2.tipo && v.espesor === item.cristal2.espesor)?.precio ?? 0;
+      const seps = config.preciosSeparadores?.length ? config.preciosSeparadores : PRECIOS_SEPARADORES_DEFAULT;
+      const precioSep = getPrecioSeparadorPorMl(seps, item.separador.color, item.separador.espesor);
+      const params = { ...PARAMETROS_DEFAULT, ...(config.parametrosCalculo ?? {}) };
+      return { ...item, precioUnitario: calcularPrecioUnitario(item, p1, p2, precioSep, params) };
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config]);
 
   // Cargar presupuesto para editar
   useEffect(() => {
@@ -175,13 +189,15 @@ function CotizadorTermopanelContent() {
       // Calcular precio sugerido con la fórmula completa del Excel
       const p1 = getPrecioVidrio(updatedItem.cristal1.tipo, updatedItem.cristal1.espesor)
       const p2 = getPrecioVidrio(updatedItem.cristal2.tipo, updatedItem.cristal2.espesor)
-      const precioSep = config
-        ? getPrecioSeparadorPorMl(
-            config.preciosSeparadores ?? [],
-            updatedItem.separador.color,
-            updatedItem.separador.espesor
-          )
-        : 136 // fallback Mate 10mm
+      // Usar siempre PRECIOS_SEPARADORES_DEFAULT como fallback garantizado
+      const seps = config?.preciosSeparadores?.length
+        ? config.preciosSeparadores
+        : PRECIOS_SEPARADORES_DEFAULT
+      const precioSep = getPrecioSeparadorPorMl(
+        seps,
+        updatedItem.separador.color,
+        updatedItem.separador.espesor
+      )
 
       updatedItem.precioUnitario = calcularPrecioUnitario(
         updatedItem,
