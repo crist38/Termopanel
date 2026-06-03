@@ -2,19 +2,20 @@
 
 import { useState, useEffect, useRef, Suspense } from "react"
 import { TermopanelItem, calcularItem, calcularTotal } from "@/lib/calculos/termopanel"
-import { PRECIOS_VIDRIOS, TIPOS_UNICOS } from "@/lib/data/vidrios"
+import { TIPOS_UNICOS as STATIC_TIPOS_UNICOS } from "@/lib/data/vidrios"
 import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, limit, doc, getDoc, setDoc, where } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
+import { getTermopanelConfig, TermopanelConfig } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { Save, Printer, Plus, Trash2, ArrowLeft, LayoutDashboard, Settings } from 'lucide-react';
 import { ADMIN_EMAILS } from '@/lib/constants';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
-const SEPARADORES = [6, 8, 10, 12]
-const COLORES_SEPARADOR = ["Mate", "Negro", "Bronce"]
-
 function CotizadorTermopanelContent() {
+  const [config, setConfig] = useState<TermopanelConfig | null>(null);
+  const [tiposUnicos, setTiposUnicos] = useState<string[]>(STATIC_TIPOS_UNICOS);
+  const [isLoadingConfig, setIsLoadingConfig] = useState(true);
   const [items, setItems] = useState<TermopanelItem[]>([
     {
       id: "1",
@@ -46,6 +47,18 @@ function CotizadorTermopanelContent() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => setUser(u));
     return () => unsub();
+  }, []);
+
+  // Cargar configuración de precios desde Firebase
+  useEffect(() => {
+    const fetchConfig = async () => {
+      setIsLoadingConfig(true);
+      const conf = await getTermopanelConfig();
+      setConfig(conf);
+      setTiposUnicos(Array.from(new Set(conf.vidrios.map(v => v.tipo))));
+      setIsLoadingConfig(false);
+    };
+    fetchConfig();
   }, []);
 
   // Cargar presupuesto para editar
@@ -106,11 +119,13 @@ function CotizadorTermopanelContent() {
 
 
   function getEspesores(tipo: string) {
-    return PRECIOS_VIDRIOS.filter(v => v.tipo === tipo).map(v => v.espesor).sort((a, b) => a - b)
+    if (!config) return [];
+    return config.vidrios.filter(v => v.tipo === tipo).map(v => v.espesor).sort((a, b) => a - b)
   }
 
   function getPrecioVidrio(tipo: string, espesor: number) {
-    return PRECIOS_VIDRIOS.find(v => v.tipo === tipo && v.espesor === espesor)?.precio || 0
+    if (!config) return 0;
+    return config.vidrios.find(v => v.tipo === tipo && v.espesor === espesor)?.precio || 0
   }
 
   function updateItem(id: string, field: keyof TermopanelItem | string, value: any) {
@@ -454,7 +469,7 @@ function CotizadorTermopanelContent() {
                       onChange={e => updateItem(item.id, 'cristal1.tipo', e.target.value)}
                       className="w-full bg-transparent text-[11px] p-1 outline-none min-w-[80px] text-slate-700"
                     >
-                      {TIPOS_UNICOS.map(t => <option key={t} value={t}>{t}</option>)}
+                      {tiposUnicos.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </td>
                   <td className="p-1 border-r border-slate-100">
@@ -474,7 +489,7 @@ function CotizadorTermopanelContent() {
                       onChange={e => updateItem(item.id, 'cristal2.tipo', e.target.value)}
                       className="w-full bg-transparent text-[11px] p-1 outline-none min-w-[80px] text-slate-700"
                     >
-                      {TIPOS_UNICOS.map(t => <option key={t} value={t}>{t}</option>)}
+                      {tiposUnicos.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </td>
                   <td className="p-1 border-r border-slate-100">
@@ -494,7 +509,7 @@ function CotizadorTermopanelContent() {
                       onChange={e => updateItem(item.id, 'separador.espesor', parseInt(e.target.value))}
                       className="w-full bg-transparent text-[11px] p-1 outline-none text-center text-slate-700"
                     >
-                      {SEPARADORES.map(t => <option key={t} value={t}>{t}</option>)}
+                      {(config?.separadores ?? [6, 8, 10, 12]).map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </td>
                   <td className="p-1 border-r border-slate-100">
@@ -503,7 +518,7 @@ function CotizadorTermopanelContent() {
                       onChange={e => updateItem(item.id, 'separador.color', e.target.value)}
                       className="w-full bg-transparent text-[11px] p-1 outline-none min-w-[60px] text-slate-700"
                     >
-                      {COLORES_SEPARADOR.map(t => <option key={t} value={t}>{t}</option>)}
+                      {(config?.coloresSeparador ?? ["Mate", "Negro", "Bronce"]).map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </td>
 
