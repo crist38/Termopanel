@@ -3,12 +3,12 @@
 import { useState, useEffect, useRef, Suspense } from "react"
 import { TermopanelItem, calcularItem, calcularTotal } from "@/lib/calculos/termopanel"
 import { TIPOS_UNICOS as STATIC_TIPOS_UNICOS } from "@/lib/data/vidrios"
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, limit, doc, getDoc, setDoc, where } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, doc, getDoc, where } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Save, Printer, Plus, Trash2, ArrowLeft, LayoutDashboard, Settings } from 'lucide-react';
+import { Printer, Plus, Trash2, ArrowLeft, LayoutDashboard, Settings } from 'lucide-react';
 import { ADMIN_EMAILS } from '@/lib/constants';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
@@ -41,7 +41,7 @@ function CotizadorTermopanelContent() {
 
   const searchParams = useSearchParams();
   const editId = searchParams.get('editId');
-  const [isSaving, setIsSaving] = useState(false);
+
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
@@ -202,48 +202,7 @@ function CotizadorTermopanelContent() {
 
   const totalNeto = calcularTotal(items)
 
-  const handleSaveBudget = async () => {
-    if (!clientName) {
-      alert("Por favor ingrese el nombre del cliente");
-      return;
-    }
-    setIsSaving(true);
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        alert("Debes estar logueado para guardar");
-        return;
-      }
 
-      const budgetData = {
-        userId: user.uid,
-        clientName,
-        clientAddress,
-        observations,
-        budgetNumber,
-        items,
-        totalNeto,
-        updatedAt: serverTimestamp(),
-        type: 'termopanel'
-      };
-
-      if (editId) {
-        await setDoc(doc(db, 'presupuestos_termopaneles', editId), budgetData, { merge: true });
-        alert("Presupuesto actualizado correctamente");
-      } else {
-        await addDoc(collection(db, 'presupuestos_termopaneles'), {
-          ...budgetData,
-          createdAt: serverTimestamp()
-        });
-        alert("Presupuesto guardado correctamente");
-      }
-    } catch (error) {
-      console.error("Error saving budget:", error);
-      alert("Error al guardar el presupuesto");
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   const handleExportPDF = () => {
     const doc = new jsPDF();
@@ -329,14 +288,7 @@ function CotizadorTermopanelContent() {
           <p className="text-slate-500 text-sm">Presupuesto N° {budgetNumber}</p>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={handleSaveBudget}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-            disabled={isSaving}
-          >
-            <Save size={16} />
-            {isSaving ? 'Guardando...' : 'Guardar'}
-          </button>
+
           <button
             onClick={handleExportPDF}
             className="flex items-center gap-2 bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"

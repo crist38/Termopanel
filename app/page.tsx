@@ -3,12 +3,12 @@
 import { useState, useEffect, useRef, Suspense } from "react"
 import { TermopanelItem, calcularItem, calcularTotal, calcularPrecioUnitario, PARAMETROS_DEFAULT } from "@/lib/calculos/termopanel"
 import { PRECIOS_VIDRIOS, Vidrio, TIPOS_UNICOS as STATIC_TIPOS_UNICOS } from "@/lib/data/vidrios"
-import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, limit, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Save, Printer, Plus, Trash2, Settings, Cloud, ClipboardList, LogOut } from 'lucide-react';
+import { Printer, Plus, Trash2, Settings, Cloud, ClipboardList, LogOut } from 'lucide-react';
 import { guardarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { logoutFromOdoo } from '@/app/actions/auth';
 
@@ -42,7 +42,7 @@ function CotizadorTermopanelContent() {
 
   const searchParams = useSearchParams();
   const editId = searchParams.get('editId');
-  const [isSaving, setIsSaving] = useState(false);
+
   const [isSyncingOdoo, setIsSyncingOdoo] = useState(false);
   const [sessionName, setSessionName] = useState<string>('');
   const router = useRouter();
@@ -237,41 +237,7 @@ function CotizadorTermopanelContent() {
 
   const totalNeto = calcularTotal(items)
 
-  const handleSaveBudget = async () => {
-    if (!clientName) {
-      alert("Por favor ingrese el nombre del cliente");
-      return;
-    }
-    setIsSaving(true);
-    try {
-      const budgetData = {
-        clientName,
-        clientAddress,
-        observations,
-        budgetNumber,
-        items,
-        totalNeto,
-        updatedAt: serverTimestamp(),
-        type: 'termopanel'
-      };
 
-      if (editId) {
-        await setDoc(doc(db, 'presupuestos_termopaneles', editId), budgetData, { merge: true });
-        alert("Presupuesto actualizado correctamente");
-      } else {
-        await addDoc(collection(db, 'presupuestos_termopaneles'), {
-          ...budgetData,
-          createdAt: serverTimestamp()
-        });
-        alert("Presupuesto guardado correctamente");
-      }
-    } catch (error) {
-      console.error("Error saving budget:", error);
-      alert("Error al guardar el presupuesto");
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   const handleSyncOdoo = async () => {
     if (!clientName) {
@@ -641,14 +607,7 @@ function CotizadorTermopanelContent() {
           {sessionName && (
             <span className="text-xs text-slate-400 hidden sm:block mr-1">{sessionName}</span>
           )}
-          <button
-            onClick={handleSaveBudget}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-            disabled={isSaving}
-          >
-            <Save size={16} />
-            {isSaving ? 'Guardando...' : 'Guardar'}
-          </button>
+
           <button
             onClick={handleSyncOdoo}
             className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
