@@ -46,7 +46,7 @@ export class OdooClient {
     } catch (err: any) {
       clearTimeout(timer);
       if (err?.name === 'AbortError') {
-        throw new Error('Timeout: Odoo no respondió en 30 segundos. Intente nuevamente.');
+        throw new Error('Timeout: Odoo no respondió en 60 segundos. Intente nuevamente.');
       }
       throw new Error(`Error de red al conectar con Odoo (${this.url}): ${err?.message ?? err}`);
     } finally {
