@@ -18,9 +18,11 @@ export interface SaleOrder {
 export interface SaleOrderLineInput {
   product_id?: number;
   name: string;
-  product_uom_qty: number; // Cantidad en piezas
-  price_unit: number;      // Precio por pieza
+  product_uom_qty: number; // Cantidad en m2 (total_area) o piezas
+  price_unit: number;      // Precio unitario
   is_note?: boolean;
+  x_studio_ancho_m?: number;
+  x_studio_alto_m?: number;
 }
 
 export class OdooSalesService {
@@ -86,12 +88,11 @@ export class OdooSalesService {
       return [0, 0, {
         product_id: line.product_id || false,
         name: line.name,
-        product_uom_qty: line.product_uom_qty, // Número de piezas
+        product_uom_qty: line.product_uom_qty, // Cantidad calculada (m2 redondeado)
         product_uom_id: 1,                     // UOM = Units (id:1)
-        price_unit: line.price_unit,
-        // NOTA: NO enviar x_studio_ancho_m/alto_m aquí.
-        // Esos campos tienen fórmulas en Odoo que recomputan qty=m² y
-        // price_unit=precio_lista, sobreescribiendo los valores correctos.
+        price_unit: line.price_unit,           // Precio unitario por m2
+        ...(line.x_studio_ancho_m !== undefined && { x_studio_ancho_m: line.x_studio_ancho_m }),
+        ...(line.x_studio_alto_m !== undefined && { x_studio_alto_m: line.x_studio_alto_m }),
       }];
     });
 
@@ -128,19 +129,19 @@ export class OdooSalesService {
 
     const productLines = lines.filter(l => !l.is_note);
 
+    const bulkUpdates = [];
     for (let i = 0; i < Math.min(orderLines.length, productLines.length); i++) {
       const lineId  = orderLines[i].id;
       const appLine = productLines[i];
-      // Forzar precio y cantidad correctos antes de confirmar.
-      // Odoo reemplaza price_unit con su lista de precios al crear.
-      // Si x_studio recomputó product_uom_qty, este write lo restaura.
-      await odoo.executeKw('sale.order.line', 'write', [
-        [lineId],
-        {
-          price_unit: appLine.price_unit,
-          product_uom_qty: appLine.product_uom_qty,
-          product_uom_id: 1, // Units - mantener unidad para evitar recalculo
-        }
+      bulkUpdates.push([1, lineId, {
+        price_unit: appLine.price_unit,
+      }]);
+    }
+
+    if (bulkUpdates.length > 0) {
+      await odoo.executeKw('sale.order', 'write', [
+        [orderId],
+        { order_line: bulkUpdates }
       ]);
     }
   }
@@ -233,10 +234,6 @@ export class OdooSalesService {
 
         // ─── Confirmar MO + Crear Work Orders en paralelo ──
         await Promise.all([
-          // Confirmar la MO (Borrador → Confirmada)
-          odoo.executeKw('mrp.production', 'action_confirm', [[moId]])
-            .catch(e => console.warn(`No se pudo confirmar MO ${moId}:`, e)),
-
           // Work Order 1: TALLER CORTE VIDRIO
           odoo.executeKw('mrp.workorder', 'create', [[{
             name: [

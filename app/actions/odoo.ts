@@ -47,15 +47,28 @@ export async function guardarCotizacionEnOdoo(data: {
         ...(extras.length > 0 ? [`Extras: ${extras.join(', ')}`] : []),
       ].join(' | ');
 
-      // Usamos UOM = Units (id:1) → cantidad en piezas, precio por pieza
-      // IMPORTANTE: No enviar x_studio_ancho_m/alto_m porque Odoo tiene fórmulas
-      // que recomputan qty=m² y price_unit=precio_lista del producto.
-      // Las dimensiones ya van en el campo 'name' (descripción).
+      // Las dimensiones se envían en metros a x_studio_ancho_m y x_studio_alto_m.
+      // Para que Odoo calcule la cantidad en m² correspondiente a la cantidad total de piezas
+      // (ya que Odoo calcula cantidad = ancho * alto), escalamos la altura por la cantidad de piezas.
+      const anchoM = item.ancho / 1000;
+      const altoM = (item.alto / 1000) * item.cantidad;
+
+      // Calculamos la cantidad redondeada a 2 decimales que computará Odoo
+      const qtyRounded = Math.round(anchoM * altoM * 100) / 100;
+      
+      // El total de la línea es precioUnitario * cantidad
+      const totalPrice = item.precioUnitario * item.cantidad;
+      
+      // Calculamos el precio unitario por m² tal que qtyRounded * priceUnitM2 = totalPrice
+      const priceUnitM2 = qtyRounded > 0 ? Math.round(totalPrice / qtyRounded) : 0;
+
       return {
         product_id: defaultProductId,
         name: desc,
-        product_uom_qty: item.cantidad,        // Número de piezas
-        price_unit: item.precioUnitario,       // Precio por pieza (igual que la app)
+        product_uom_qty: qtyRounded,
+        price_unit: priceUnitM2,
+        x_studio_ancho_m: anchoM,
+        x_studio_alto_m: altoM,
       };
     });
 
