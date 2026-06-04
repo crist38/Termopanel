@@ -110,11 +110,12 @@ export class OdooSalesService {
 
     if (autoConfirm) {
       await this.confirmOrder(orderId);
-      // Ejecutamos la creación de órdenes de fabricación en segundo plano (asíncronamente)
-      // para evitar que la solicitud web exceda el tiempo de espera (timeout) de 15 segundos.
-      this.createManufacturingOrders(orderId, lines, rawItems).catch(err => {
-        console.error("Error creating manufacturing orders in background:", err);
-      });
+      // Ejecutamos la creación de órdenes de fabricación (ahora optimizada por lote)
+      try {
+        await this.createManufacturingOrders(orderId, lines, rawItems);
+      } catch (err) {
+        console.error("Error creating manufacturing orders:", err);
+      }
     }
 
     return orderId;
@@ -200,6 +201,8 @@ export class OdooSalesService {
   ): Promise<number[]> {
     const productLines = lines.filter(l => !l.is_note && l.product_id && l.product_uom_qty > 0);
 
+    if (productLines.length === 0) return [];
+
     // Buscar IDs de los centros de trabajo en paralelo
     const [wcCorteId, wcTermoId] = await Promise.all([
       this.getWorkCenterId('Taller Corte Vidrio'),
@@ -215,11 +218,9 @@ export class OdooSalesService {
       );
     }
 
-    const moIds: number[] = [];
-    for (let i = 0; i < productLines.length; i++) {
-      const line = productLines[i];
+    // 1. Preparar datos para creación por lote (batch) de Órdenes de Fabricación (MOs)
+    const moDataList = productLines.map((line, i) => {
       const item = rawItems[i];
-
       const fullDesc = [
         `Termopanel ${item.ancho} x ${item.alto} mm`,
         `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
@@ -227,70 +228,82 @@ export class OdooSalesService {
         `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
       ].join(' | ');
 
-      // ─── Crear la Orden de Fabricación ─────────────────
-      const moResult = await odoo.executeKw('mrp.production', 'create', [[{
+      return {
         product_id: line.product_id,
         product_qty: line.product_uom_qty,
         origin: `S${saleOrderId}`,
         product_description_variants: fullDesc,
-      }]]);
-      const moId = Array.isArray(moResult) ? moResult[0] : moResult;
-      moIds.push(moId);
+      };
+    });
 
-      // ─── Crear Work Orders y Nota secuencialmente para evitar error 429 de Odoo ───
+    // Crear todas las MOs en una sola llamada RPC
+    const moResult = await odoo.executeKw('mrp.production', 'create', [moDataList]);
+    const moIds: number[] = Array.isArray(moResult) ? moResult : [moResult];
+
+    // 2. Preparar datos para creación por lote (batch) de Órdenes de Trabajo (WOs)
+    const woDataList: any[] = [];
+    for (let i = 0; i < moIds.length; i++) {
+      const moId = moIds[i];
+      const item = rawItems[i];
+
       // Work Order 1: TALLER CORTE VIDRIO
-      try {
-        await odoo.executeKw('mrp.workorder', 'create', [[{
-          name: [
-            `Corte Vidrio | ${item.ancho} x ${item.alto} mm`,
-            `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
-            `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
-          ].join(' | '),
-          production_id: moId,
-          workcenter_id: wcCorteId,
-          product_uom_id: 1,
-          duration_expected: 60,
-        }]]);
-      } catch (e) {
-        console.error(`Error WO Corte Vidrio MO ${moId}:`, e);
-      }
+      woDataList.push({
+        name: [
+          `Corte Vidrio | ${item.ancho} x ${item.alto} mm`,
+          `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+          `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+        ].join(' | '),
+        production_id: moId,
+        workcenter_id: wcCorteId,
+        product_uom_id: 1,
+        duration_expected: 60,
+      });
 
       // Work Order 2: TALLER TERMOPANELES
-      try {
-        await odoo.executeKw('mrp.workorder', 'create', [[{
-          name: [
-            `Termopanel | ${item.ancho} x ${item.alto} mm`,
-            `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
-            `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
-            `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
-          ].join(' | '),
-          production_id: moId,
-          workcenter_id: wcTermoId,
-          product_uom_id: 1,
-          duration_expected: 60,
-        }]]);
-      } catch (e) {
-        console.error(`Error WO Termopaneles MO ${moId}:`, e);
-      }
+      woDataList.push({
+        name: [
+          `Termopanel | ${item.ancho} x ${item.alto} mm`,
+          `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+          `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+          `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
+        ].join(' | '),
+        production_id: moId,
+        workcenter_id: wcTermoId,
+        product_uom_id: 1,
+        duration_expected: 60,
+      });
+    }
 
-      // Nota general en la MO
+    if (woDataList.length > 0) {
       try {
-        await odoo.executeKw('mrp.production', 'message_post', [[moId]], {
-          body: [
-            `<b>📋 Especificaciones del Termopanel</b>`,
-            `<b>Cantidad:</b> ${item.cantidad}`,
-            `<b>Medida:</b> ${item.ancho} x ${item.alto} mm`,
-            `<b>Cristal 1:</b> ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
-            `<b>Cristal 2:</b> ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
-            `<b>Separador:</b> ${item.separador.espesor}mm - Color: ${item.separador.color}`,
-          ].join('<br/>'),
-          message_type: 'comment',
-          subtype_xmlid: 'mail.mt_note',
-        });
+        await odoo.executeKw('mrp.workorder', 'create', [woDataList]);
       } catch (e) {
-        console.error(`Error nota MO ${moId}:`, e);
+        console.error('Error al crear Órdenes de Trabajo (WOs) por lote:', e);
       }
     }
+
+    // 3. Publicar notas en el chatter de cada MO en paralelo
+    const notePromises = moIds.map((moId, i) => {
+      const item = rawItems[i];
+      const body = [
+        `<b>📋 Especificaciones del Termopanel</b>`,
+        `<b>Cantidad:</b> ${item.cantidad}`,
+        `<b>Medida:</b> ${item.ancho} x ${item.alto} mm`,
+        `<b>Cristal 1:</b> ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+        `<b>Cristal 2:</b> ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+        `<b>Separador:</b> ${item.separador.espesor}mm - Color: ${item.separador.color}`,
+      ].join('<br/>');
+
+      return odoo.executeKw('mrp.production', 'message_post', [[moId]], {
+        body: body,
+        message_type: 'comment',
+        subtype_xmlid: 'mail.mt_note',
+      }).catch(e => {
+        console.error(`Error al publicar nota en MO ${moId}:`, e);
+      });
+    });
+
+    await Promise.allSettled(notePromises);
 
     return moIds;
   }

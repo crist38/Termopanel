@@ -35,8 +35,6 @@ function CotizadorTermopanelContent() {
 
   // Estado para Información del Cliente y Presupuesto
   const [clientName, setClientName] = useState('');
-  const [clientAddress, setClientAddress] = useState('');
-  const [observations, setObservations] = useState('');
   const [budgetNumber, setBudgetNumber] = useState(1);
   const [budgetDate, setBudgetDate] = useState('');
 
@@ -87,8 +85,6 @@ function CotizadorTermopanelContent() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setClientName(data.clientName || '');
-          setClientAddress(data.clientAddress || '');
-          setObservations(data.observations || '');
           setBudgetNumber(data.budgetNumber || 1);
           setItems(data.items || []);
         }
@@ -239,24 +235,47 @@ function CotizadorTermopanelContent() {
 
 
 
-  const handleSyncOdoo = async () => {
+  const handleProcessQuote = async () => {
     if (!clientName) {
-      alert("Por favor ingrese el nombre del cliente para sincronizar con Odoo");
+      alert("Por favor ingrese el nombre del cliente para procesar la cotización");
       return;
     }
     setIsSyncingOdoo(true);
     try {
       const odooRes = await guardarCotizacionEnOdoo({
         clientName,
-        clientAddress,
-        observations,
         budgetNumber,
         items,
         totalNeto
       });
 
       if (odooRes.exito) {
-        alert(`¡Orden de venta confirmada en Odoo! Se generó la orden de fabricación. (ID: ${odooRes.cotizacionId})`);
+        alert(`¡Orden de venta confirmada en Odoo! Se generó la orden de fabricación (ID: ${odooRes.cotizacionId}). A continuación se descargarán los PDFs.`);
+        
+        // Generar PDFs de Presupuesto y Órdenes de Trabajo de forma secuencial
+        await handleExportPDF();
+        await handleExportWorkOrders();
+
+        // Incrementar automáticamente el número de presupuesto para el siguiente
+        setBudgetNumber((prev) => prev + 1);
+
+        // Limpiar formulario para la siguiente cotización
+        setClientName('');
+        setItems([
+          {
+            id: crypto.randomUUID(),
+            cantidad: 1,
+            ancho: 0,
+            alto: 0,
+            cristal1: { tipo: "Incoloro", espesor: 4 },
+            cristal2: { tipo: "Incoloro", espesor: 4 },
+            separador: { espesor: 10, color: "Mate" },
+            gas: false,
+            micropersiana: false,
+            palillaje: false,
+            precioUnitario: 0
+          }
+        ]);
       } else {
         alert(`Error desde Odoo: ${odooRes.error}`);
       }
@@ -298,7 +317,6 @@ function CotizadorTermopanelContent() {
     doc.text("Información del Cliente", 14, 45);
     doc.setFontSize(10);
     doc.text(`Nombre: ${clientName}`, 14, 53);
-    doc.text(`Dirección: ${clientAddress}`, 14, 59);
 
     // Encabezado de Tabla
     let yPos = 75;
@@ -344,18 +362,53 @@ function CotizadorTermopanelContent() {
     doc.setFont("helvetica", "bold");
     doc.text(`Total Neto: $${totalNeto.toLocaleString('es-CL')}`, 140, yPos);
 
-    // Observaciones
-    if (observations) {
-      yPos += 15;
-      doc.setFontSize(11);
-      doc.text("Observaciones:", 14, yPos);
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      const splitObs = doc.splitTextToSize(observations, 180);
-      doc.text(splitObs, 14, yPos + 6);
+
+
+    // Verificar si hay espacio suficiente para las notas y firmas en la página actual (necesitamos al menos 70mm libres)
+    if (yPos > 200) {
+      doc.addPage();
+      yPos = 20;
     }
 
-    doc.save(`Presupuesto_Termopaneles_${budgetNumber}.pdf`);
+    yPos += 15;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("NOTAS:", 14, yPos);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(80, 80, 80);
+
+    const notas = [
+      "Este presupuesto tiene una validez de 10 días. Cualquier cambio generará otro presupuesto.",
+      "Estos valores quedan sujetos a cualquier cambio en el mercado.",
+      "Plazo de entrega a contar de 48 horas para Termopaneles, una vez recibida Orden de Compra.",
+      "PROWINDOWS LTDA. no responde por los daños de quiebres, rayaduras o picaduras en los cristales aportados por los clientes para recibir servicio de maquila, siendo de responsabilidad del cliente su reposición.",
+      "Esperando este Presupuesto sea de su agrado le saluda atentamente:",
+      "Una vez emitida la factura, el cliente tiene 24 horas para objetarla, de lo contrario esta se dará por aceptada."
+    ];
+
+    notas.forEach((nota) => {
+      yPos += 5.5;
+      const splitNota = doc.splitTextToSize(nota, 182);
+      doc.text(splitNota, 14, yPos);
+      yPos += (splitNota.length - 1) * 4.5;
+    });
+
+    // Firmas y Modalidad de Pago
+    yPos += 20;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(0, 0, 0);
+
+    // Firma de aceptación del Cliente
+    doc.text("Firma de aceptación del Cliente: ___________________________", 14, yPos);
+
+    // Modalidad de Pago
+    doc.text("Modalidad de Pago: __________________", 120, yPos);
+
+    const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
+    doc.save(`Presupuesto_Termopaneles_${budgetNumber}_${sanitizedClientName}.pdf`);
   };
 
   const handleExportWorkOrders = async () => {
@@ -467,16 +520,7 @@ function CotizadorTermopanelContent() {
     pdf.setFontSize(8);
     pdf.setTextColor(120, 120, 120);
     pdf.text("* Las medidas de los cristales corresponden al termopanel completo. Ajustar descuentos según separador.", 14, yPos);
-    if (observations) {
-      yPos += 8;
-      pdf.setFontSize(9);
-      pdf.setTextColor(0, 0, 0);
-      pdf.setFont("helvetica", "bold");
-      pdf.text("Observaciones:", 14, yPos);
-      pdf.setFont("helvetica", "normal");
-      const splitObs = pdf.splitTextToSize(observations, 180);
-      pdf.text(splitObs, 14, yPos + 5);
-    }
+
 
     // ======================================================
     // PÁGINA 2: TALLER TERMOPANELES
@@ -574,18 +618,10 @@ function CotizadorTermopanelContent() {
     pdf.setDrawColor(200, 200, 200);
     pdf.line(14, yPos, 196, yPos);
 
-    // Observaciones
-    if (observations) {
-      yPos += 10;
-      pdf.setFontSize(9);
-      pdf.setFont("helvetica", "bold");
-      pdf.text("Observaciones:", 14, yPos);
-      pdf.setFont("helvetica", "normal");
-      const splitObs = pdf.splitTextToSize(observations, 180);
-      pdf.text(splitObs, 14, yPos + 5);
-    }
 
-    pdf.save(`Orden_Trabajo_${budgetNumber}.pdf`);
+
+    const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
+    pdf.save(`Orden_Trabajo_${budgetNumber}_${sanitizedClientName}.pdf`);
   };
 
   if (isLoadingConfig) {
@@ -601,7 +637,16 @@ function CotizadorTermopanelContent() {
       <header className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Cotizador de Termopaneles</h1>
-          <p className="text-slate-500 text-sm">Presupuesto N° {budgetNumber}</p>
+          <div className="flex items-center gap-1.5 text-slate-500 text-sm mt-1">
+            <span>Presupuesto N°</span>
+            <input
+              suppressHydrationWarning
+              type="number"
+              value={budgetNumber === 0 ? "" : budgetNumber}
+              onChange={(e) => setBudgetNumber(parseInt(e.target.value) || 0)}
+              className="w-20 px-2 py-0.5 border border-slate-200 rounded text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 font-semibold bg-slate-50 hover:bg-slate-100 transition-colors"
+            />
+          </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           {sessionName && (
@@ -609,30 +654,13 @@ function CotizadorTermopanelContent() {
           )}
 
           <button
-            onClick={handleSyncOdoo}
-            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            onClick={handleProcessQuote}
+            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95"
             disabled={isSyncingOdoo || items.length === 0}
-            title="Sincronizar directamente con Odoo ERP"
+            title="Enviar a Odoo, Imprimir Presupuesto y Generar Órdenes de Trabajo"
           >
-            <Cloud size={16} />
-            {isSyncingOdoo ? 'Sincronizando...' : 'Enviar a Odoo'}
-          </button>
-          <button
-            onClick={handleExportPDF}
-            className="flex items-center gap-2 bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            disabled={items.length === 0}
-          >
-            <Printer size={16} />
-            Imprimir PDF
-          </button>
-          <button
-            onClick={handleExportWorkOrders}
-            className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            disabled={items.length === 0}
-            title="Generar órdenes de trabajo para Taller Corte Vidrio y Taller Termopaneles"
-          >
-            <ClipboardList size={16} />
-            Orden de Trabajo
+            <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
+            {isSyncingOdoo ? 'Procesando Todo...' : 'Procesar Todo (Odoo + PDFs)'}
           </button>
           <a href="/admin/config" className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
             <Settings size={16} />
@@ -651,8 +679,8 @@ function CotizadorTermopanelContent() {
         </div>
       </header>
       {/* Sección de Información del Cliente */}
-      <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
+      <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6">
+        <div className="max-w-md">
           <label className="block text-sm font-medium text-slate-600 mb-1">Nombre Cliente</label>
           <input
             suppressHydrationWarning
@@ -661,27 +689,6 @@ function CotizadorTermopanelContent() {
             onChange={(e) => setClientName(e.target.value)}
             className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             placeholder="Ej. Juan Pérez"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-600 mb-1">Dirección / Obra</label>
-          <input
-            suppressHydrationWarning
-            type="text"
-            value={clientAddress}
-            onChange={(e) => setClientAddress(e.target.value)}
-            className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            placeholder="Ej. Av. Siempre Viva 123"
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="block text-sm font-medium text-slate-600 mb-1">Observaciones</label>
-          <textarea
-            suppressHydrationWarning
-            value={observations}
-            onChange={(e) => setObservations(e.target.value)}
-            className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none h-20 resize-none"
-            placeholder="Notas adicionales..."
           />
         </div>
       </div >

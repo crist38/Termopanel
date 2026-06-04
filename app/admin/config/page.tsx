@@ -60,6 +60,16 @@ export default function ConfigPage() {
     setNewVidrioPrecio('');
   };
 
+  const updateVidrio = (index: number, field: keyof Vidrio, value: any) => {
+    if (!config) return;
+    const newVidrios = [...config.vidrios];
+    newVidrios[index] = {
+      ...newVidrios[index],
+      [field]: field === 'espesor' || field === 'precio' ? parseInt(value) || 0 : value
+    };
+    setConfig({ ...config, vidrios: newVidrios });
+  };
+
   const removeVidrio = (index: number) => {
     if (!config) return;
     const newVidrios = [...config.vidrios];
@@ -77,6 +87,13 @@ export default function ConfigPage() {
     setNewSeparador('');
   };
 
+  const updateSeparador = (index: number, value: string) => {
+    if (!config) return;
+    const newSeparadores = [...config.separadores];
+    newSeparadores[index] = parseInt(value) || 0;
+    setConfig({ ...config, separadores: newSeparadores });
+  };
+
   const removeSeparador = (val: number) => {
     if (!config) return;
     setConfig({ ...config, separadores: config.separadores.filter(s => s !== val) });
@@ -89,6 +106,13 @@ export default function ConfigPage() {
       setConfig({ ...config, coloresSeparador: [...config.coloresSeparador, newColor] });
     }
     setNewColor('');
+  };
+
+  const updateColor = (index: number, value: string) => {
+    if (!config) return;
+    const newColores = [...config.coloresSeparador];
+    newColores[index] = value;
+    setConfig({ ...config, coloresSeparador: newColores });
   };
 
   const removeColor = (color: string) => {
@@ -172,11 +196,38 @@ export default function ConfigPage() {
                   <tbody className="divide-y divide-slate-100">
                     {config.vidrios.map((v, i) => (
                       <tr key={i} className="hover:bg-slate-50">
-                        <td className="p-3 text-slate-800 font-medium">{v.tipo}</td>
-                        <td className="p-3 text-slate-600">{v.espesor} mm</td>
-                        <td className="p-3 text-slate-800 text-right font-mono">${v.precio.toLocaleString('es-CL')}</td>
-                        <td className="p-3 text-center">
-                          <button onClick={() => removeVidrio(i)} className="text-red-400 hover:text-red-600 transition-colors" title="Eliminar">
+                        <td className="p-2">
+                          <input
+                            type="text"
+                            value={v.tipo}
+                            onChange={e => updateVidrio(i, 'tipo', e.target.value)}
+                            className="p-1.5 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 outline-none w-full text-sm font-medium text-slate-800 bg-transparent hover:bg-slate-50/50 focus:bg-white transition-colors"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              value={v.espesor === 0 ? '' : v.espesor}
+                              onChange={e => updateVidrio(i, 'espesor', e.target.value)}
+                              className="p-1.5 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 outline-none w-20 text-sm text-slate-600 bg-transparent hover:bg-slate-50/50 focus:bg-white text-center transition-colors"
+                            />
+                            <span className="text-xs text-slate-400">mm</span>
+                          </div>
+                        </td>
+                        <td className="p-2 text-right">
+                          <div className="flex items-center gap-1.5 justify-end">
+                            <span className="text-xs text-slate-400 font-mono font-medium">$</span>
+                            <input
+                              type="number"
+                              value={v.precio === 0 ? '' : v.precio}
+                              onChange={e => updateVidrio(i, 'precio', e.target.value)}
+                              className="p-1.5 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 outline-none w-32 text-sm text-slate-800 bg-transparent hover:bg-slate-50/50 focus:bg-white text-right font-mono font-medium transition-colors"
+                            />
+                          </div>
+                        </td>
+                        <td className="p-2 text-center">
+                          <button onClick={() => removeVidrio(i)} className="text-red-400 hover:text-red-600 transition-colors p-1" title="Eliminar">
                             <Trash2 size={16} />
                           </button>
                         </td>
@@ -203,10 +254,16 @@ export default function ConfigPage() {
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {config.separadores.map(s => (
-                    <div key={s} className="bg-slate-100 border border-slate-200 rounded-full px-4 py-1 flex items-center gap-2 text-slate-700 font-medium text-sm">
-                      {s} mm
-                      <button onClick={() => removeSeparador(s)} className="text-slate-400 hover:text-red-500">
+                  {config.separadores.map((s, i) => (
+                    <div key={i} className="bg-slate-100 border border-slate-200 rounded-full px-3.5 py-1 flex items-center gap-1.5 text-slate-700 font-semibold text-sm shadow-sm">
+                      <input
+                        type="number"
+                        value={s === 0 ? '' : s}
+                        onChange={e => updateSeparador(i, e.target.value)}
+                        className="bg-transparent border-b border-transparent focus:border-slate-400 outline-none w-10 text-center font-bold text-slate-800"
+                      />
+                      <span className="text-xs text-slate-400 font-normal">mm</span>
+                      <button onClick={() => removeSeparador(s)} className="text-slate-400 hover:text-red-500 ml-0.5" title="Eliminar">
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -229,10 +286,15 @@ export default function ConfigPage() {
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {config.coloresSeparador.map(c => (
-                    <div key={c} className="bg-slate-100 border border-slate-200 rounded-full px-4 py-1 flex items-center gap-2 text-slate-700 font-medium text-sm">
-                      {c}
-                      <button onClick={() => removeColor(c)} className="text-slate-400 hover:text-red-500">
+                  {config.coloresSeparador.map((c, i) => (
+                    <div key={i} className="bg-slate-100 border border-slate-200 rounded-full px-3.5 py-1 flex items-center gap-1.5 text-slate-700 font-semibold text-sm shadow-sm">
+                      <input
+                        type="text"
+                        value={c}
+                        onChange={e => updateColor(i, e.target.value)}
+                        className="bg-transparent border-b border-transparent focus:border-slate-400 outline-none w-20 text-center font-semibold text-slate-800"
+                      />
+                      <button onClick={() => removeColor(c)} className="text-slate-400 hover:text-red-500 ml-0.5" title="Eliminar">
                         <Trash2 size={14} />
                       </button>
                     </div>
