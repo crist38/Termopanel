@@ -31,9 +31,9 @@ export class OdooClient {
       id: Math.floor(Math.random() * 1000000000),
     };
 
-    // Timeout de 60 segundos por llamada
+    // Timeout de 120 segundos por llamada (las operaciones batch de Odoo pueden tardar)
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60_000);
+    const timer = setTimeout(() => controller.abort(), 120_000);
 
     let response: Response;
     try {
@@ -46,7 +46,7 @@ export class OdooClient {
     } catch (err: any) {
       clearTimeout(timer);
       if (err?.name === 'AbortError') {
-        throw new Error('Timeout: Odoo no respondió en 60 segundos. Intente nuevamente.');
+        throw new Error('Timeout: Odoo no respondió en 120 segundos. Intente nuevamente.');
       }
       throw new Error(`Error de red al conectar con Odoo (${this.url}): ${err?.message ?? err}`);
     } finally {

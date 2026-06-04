@@ -250,7 +250,7 @@ function CotizadorTermopanelContent() {
       });
 
       if (odooRes.exito) {
-        alert(`¡Orden de venta confirmada en Odoo! Se generó la orden de fabricación (ID: ${odooRes.cotizacionId}). A continuación se descargarán los PDFs.`);
+        alert(`✅ ¡Listo! Orden de venta #${odooRes.cotizacionId} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
         
         // Generar PDFs de Presupuesto y Órdenes de Trabajo de forma secuencial
         await handleExportPDF();
@@ -660,7 +660,7 @@ function CotizadorTermopanelContent() {
             title="Enviar a Odoo, Imprimir Presupuesto y Generar Órdenes de Trabajo"
           >
             <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
-            {isSyncingOdoo ? 'Procesando Todo...' : 'Procesar Todo (Odoo + PDFs)'}
+            {isSyncingOdoo ? 'Enviando a Odoo (puede tardar ~1-2 min)...' : 'Procesar Todo (Odoo + PDFs)'}
           </button>
           <a href="/admin/config" className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
             <Settings size={16} />

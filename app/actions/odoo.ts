@@ -2,7 +2,6 @@
 
 import { odooCustomers } from '@/lib/odoo-customers';
 import { odooSales, SaleOrderLineInput, TermopanelItemData } from '@/lib/odoo-sales';
-import { after } from 'next/server';
 
 export async function guardarCotizacionEnOdoo(data: {
   clientName: string;
@@ -86,22 +85,9 @@ export async function guardarCotizacionEnOdoo(data: {
       palillaje: item.palillaje,
     }));
 
-    // 4. Crear cotización en Odoo en estado Borrador (sin confirmar de forma síncrona)
-    const cotizacionId = await odooSales.createQuote(clienteId, lineas, rawItems, false);
-
-    // Confirmación y órdenes de fabricación ejecutadas en segundo plano con Next.js after()
-    // para evitar tiempos de espera y timeouts en la respuesta HTTP
-    after(async () => {
-      try {
-        console.log(`[Odoo Background] Iniciando confirmación para SO ${cotizacionId}...`);
-        await odooSales.confirmOrder(cotizacionId);
-        console.log(`[Odoo Background] SO ${cotizacionId} confirmada. Creando órdenes de fabricación...`);
-        await odooSales.createManufacturingOrders(cotizacionId, lineas, rawItems);
-        console.log(`[Odoo Background] Órdenes de fabricación creadas con éxito para SO ${cotizacionId}.`);
-      } catch (err) {
-        console.error(`[Odoo Background Error] Error en procesamiento en segundo plano para SO ${cotizacionId}:`, err);
-      }
-    });
+    // 4. Crear cotización, confirmarla y crear órdenes de fabricación de forma síncrona.
+    // autoConfirm=true asegura que todo quede creado antes de responder al usuario.
+    const cotizacionId = await odooSales.createQuote(clienteId, lineas, rawItems, true);
 
     return { exito: true, cotizacionId };
   } catch (error: any) {
