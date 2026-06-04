@@ -221,7 +221,9 @@ export class OdooSalesService {
     // 1. Preparar datos para creación por lote (batch) de Órdenes de Fabricación (MOs)
     const moDataList = productLines.map((line, i) => {
       const item = rawItems[i];
+      const itemLabel = item.label || `V${i + 1}`;
       const fullDesc = [
+        `[${itemLabel}]`,
         `Termopanel ${item.ancho} x ${item.alto} mm`,
         `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
         `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
@@ -245,11 +247,12 @@ export class OdooSalesService {
     for (let i = 0; i < moIds.length; i++) {
       const moId = moIds[i];
       const item = rawItems[i];
+      const itemLabel = item.label || `V${i + 1}`;
 
       // Work Order 1: TALLER CORTE VIDRIO
       woDataList.push({
         name: [
-          `Corte Vidrio | ${item.ancho} x ${item.alto} mm`,
+          `[${itemLabel}] Corte Vidrio | ${item.ancho} x ${item.alto} mm`,
           `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
           `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
         ].join(' | '),
@@ -262,7 +265,7 @@ export class OdooSalesService {
       // Work Order 2: TALLER TERMOPANELES
       woDataList.push({
         name: [
-          `Termopanel | ${item.ancho} x ${item.alto} mm`,
+          `[${itemLabel}] Termopanel | ${item.ancho} x ${item.alto} mm`,
           `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
           `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
           `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
@@ -285,8 +288,9 @@ export class OdooSalesService {
     // 3. Publicar notas en el chatter de cada MO en paralelo
     const notePromises = moIds.map((moId, i) => {
       const item = rawItems[i];
+      const itemLabel = item.label || `V${i + 1}`;
       const body = [
-        `<b>📋 Especificaciones del Termopanel</b>`,
+        `<b>📋 Especificaciones del Termopanel [${itemLabel}]</b>`,
         `<b>Cantidad:</b> ${item.cantidad}`,
         `<b>Medida:</b> ${item.ancho} x ${item.alto} mm`,
         `<b>Cristal 1:</b> ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
@@ -314,6 +318,7 @@ export class OdooSalesService {
  * Se usa para generar las órdenes de trabajo específicas por taller.
  */
 export interface TermopanelItemData {
+  label?: string;
   cantidad: number;
   ancho: number;
   alto: number;

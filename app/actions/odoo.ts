@@ -30,13 +30,16 @@ export async function guardarCotizacionEnOdoo(data: {
     }
     const defaultProductId = parseInt(process.env.ODOO_DEFAULT_PRODUCT_ID);
 
-    const lineas: SaleOrderLineInput[] = data.items.map((item) => {
+    const lineas: SaleOrderLineInput[] = data.items.map((item, index) => {
       const extras = [];
       if (item.gas) extras.push('Gas Argón');
       if (item.micropersiana) extras.push('Micropersiana');
       if (item.palillaje) extras.push('Palillaje');
 
+      const itemLabel = item.label || `V${index + 1}`;
+
       const desc = [
+        `[${itemLabel}]`,
         `Cantidad: ${item.cantidad} unidad${item.cantidad !== 1 ? 'es' : ''}`,
         `Termopanel ${item.ancho} x ${item.alto} mm`,
         `Cristal 1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
@@ -73,7 +76,8 @@ export async function guardarCotizacionEnOdoo(data: {
 
 
     // 3. Preparar datos brutos de los items para las órdenes de trabajo por taller
-    const rawItems: TermopanelItemData[] = data.items.map((item) => ({
+    const rawItems: TermopanelItemData[] = data.items.map((item, index) => ({
+      label: item.label || `V${index + 1}`,
       cantidad: item.cantidad,
       ancho: item.ancho,
       alto: item.alto,

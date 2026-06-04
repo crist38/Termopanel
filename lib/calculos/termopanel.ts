@@ -1,5 +1,6 @@
 export interface TermopanelItem {
   id: string
+  label?: string
   cantidad: number
   ancho: number // mm
   alto: number // mm
