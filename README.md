@@ -98,6 +98,16 @@ La integración se maneja desde el servidor (Next.js Server Actions), garantizan
 
 ## 📋 Changelog
 
+### v2.1 - Junio 2026
+- ✅ **Optimización de Integración con Odoo**: Creación de MOs y WOs por lote (batching) y notas en paralelo (reduce las llamadas API de 28 a solo 3 para cotizaciones de varios productos).
+- ✅ **Ejecución en Segundo Plano**: Uso de Next.js `after()` para confirmar pedidos y fabricar en Odoo en segundo plano (la respuesta web es instantánea y se evitan timeouts).
+- ✅ **Edición Directa en Panel Admin**: Los cristales, espesores y colores del panel de configuración `/admin/config` ahora son completamente editables en línea antes de guardar.
+- ✅ **Fusión de Botones**: Unificado el flujo de Odoo y PDFs en un solo botón principal "Procesar Todo (Odoo + PDFs)" con transiciones visuales avanzadas.
+- ✅ **Número de Presupuesto Editable e Incremental**: El número de presupuesto en el encabezado ahora es un campo numérico editable y se incrementa automáticamente al procesar con éxito una cotización.
+- ✅ **PDF del Presupuesto Profesional**: Agregado el bloque de términos y condiciones legales, líneas de firmas de aceptación y modalidad de pago con ajuste de página inteligente.
+- ✅ **Descargas Personalizadas**: Nombre del cliente sanitizado y añadido al nombre de los archivos PDF generados para fácil identificación.
+- ✅ **Limpieza de campos**: Eliminados los campos redundantes de dirección de obra y observaciones para simplificar el flujo.
+
 ### v2.0 - Mayo 2026
 - ✅ Página de login con logo de empresa, correo/contraseña y Google OAuth
 - ✅ Protección de rutas: redirige a `/login` si no hay sesión activa
