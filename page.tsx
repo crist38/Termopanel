@@ -19,12 +19,13 @@ function CotizadorTermopanelContent() {
   const [items, setItems] = useState<TermopanelItem[]>([
     {
       id: "1",
+      label: "V1",
       cantidad: 1,
       ancho: 1000,
       alto: 1000,
       cristal1: { tipo: "Incoloro", espesor: 4 },
       cristal2: { tipo: "Incoloro", espesor: 4 },
-      separador: { espesor: 10, color: "Mate" },
+      separador: { espesor: 10, color: "Plata" },
       gas: false,
       micropersiana: false,
       palillaje: false,
@@ -179,8 +180,24 @@ function CotizadorTermopanelContent() {
   function addItem() {
     const defaultTipo = "Incoloro"
     const defaultEspesor = 4
+
+    let nextNum = 1;
+    const numbers = items
+      .map(item => {
+        const match = (item.label || '').match(/^V(\d+)$/i);
+        return match ? parseInt(match[1], 10) : null;
+      })
+      .filter((n): n is number => n !== null);
+    if (numbers.length > 0) {
+      nextNum = Math.max(...numbers) + 1;
+    } else {
+      nextNum = items.length + 1;
+    }
+    const defaultLabel = `V${nextNum}`;
+
     const newItem: TermopanelItem = {
       id: crypto.randomUUID(),
+      label: defaultLabel,
       cantidad: 1,
       ancho: 0,
       alto: 0,
@@ -227,37 +244,39 @@ function CotizadorTermopanelContent() {
     doc.setFillColor(240, 240, 240);
     doc.rect(14, yPos - 5, 182, 8, 'F');
     doc.setFont("helvetica", "bold");
-    doc.text("Cant.", 16, yPos);
-    doc.text("Dim. (mm)", 30, yPos);
-    doc.text("Configuración", 70, yPos);
-    doc.text("Unitario", 150, yPos);
-    doc.text("Total", 175, yPos);
+    doc.text("Ref", 16, yPos);
+    doc.text("Cant.", 43, yPos);
+    doc.text("Dim. (mm)", 57, yPos);
+    doc.text("Configuración", 84, yPos);
+    doc.text("Unitario", 152, yPos);
+    doc.text("Total", 176, yPos);
     doc.setFont("helvetica", "normal");
 
     yPos += 10;
 
     items.forEach((item, index) => {
       const calculo = calcularItem(item);
+      const labelVal = item.label || `V${index + 1}`;
+      const splitLabel = doc.splitTextToSize(labelVal, 25);
+      const configDesc = `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm | C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm | Sep: ${item.separador.espesor}mm ${item.separador.color}`;
+      const splitConfig = doc.splitTextToSize(configDesc, 66);
+
+      const lineCount = Math.max(splitLabel.length, splitConfig.length);
 
       // Verificar salto de página
-      if (yPos > 270) {
+      if (yPos + (lineCount * 5) > 275) {
         doc.addPage();
         yPos = 20;
       }
 
-      const configDesc = `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm | C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm | Sep: ${item.separador.espesor}mm ${item.separador.color}`;
+      doc.text(splitLabel, 16, yPos);
+      doc.text(item.cantidad.toString(), 43, yPos);
+      doc.text(`${item.ancho} x ${item.alto}`, 57, yPos);
+      doc.text(splitConfig, 84, yPos);
+      doc.text(`$${item.precioUnitario.toLocaleString('es-CL')}`, 152, yPos);
+      doc.text(`$${calculo.totalLinea.toLocaleString('es-CL')}`, 176, yPos);
 
-      doc.text(item.cantidad.toString(), 16, yPos);
-      doc.text(`${item.ancho} x ${item.alto}`, 30, yPos);
-
-      // Ajustar texto para configuración
-      const splitConfig = doc.splitTextToSize(configDesc, 75);
-      doc.text(splitConfig, 70, yPos);
-
-      doc.text(`$${item.precioUnitario.toLocaleString('es-CL')}`, 150, yPos);
-      doc.text(`$${calculo.totalLinea.toLocaleString('es-CL')}`, 175, yPos);
-
-      yPos += (splitConfig.length * 5) + 5;
+      yPos += (lineCount * 5) + 5;
     });
 
     // Total
@@ -349,7 +368,7 @@ function CotizadorTermopanelContent() {
         <table className="min-w-full text-xs sm:text-sm">
           <thead className="bg-slate-100 text-slate-700 uppercase font-bold text-[11px] tracking-wider">
             <tr>
-              <th className="p-3 text-center border-r border-slate-200 w-10">#</th>
+              <th className="p-3 text-center border-r border-slate-200 w-32">Ref / Posición</th>
               <th className="p-3 text-center border-r border-slate-200 w-16">Cant.</th>
               <th className="p-3 text-center border-r border-slate-200 bg-blue-50/50" colSpan={2}>Dimensiones (mm)</th>
               <th className="p-3 text-center border-r border-slate-200 bg-amber-50/50" colSpan={2}>Cristal 1</th>
@@ -383,7 +402,15 @@ function CotizadorTermopanelContent() {
 
               return (
                 <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="p-2 text-center text-slate-400 font-medium">{index + 1}</td>
+                  <td className="p-1 border-r border-slate-100">
+                    <input
+                      type="text"
+                      value={item.label !== undefined ? item.label : `V${index + 1}`}
+                      onChange={e => updateItem(item.id, 'label', e.target.value)}
+                      className="w-full text-center bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1 outline-none font-medium text-slate-700 placeholder-slate-400"
+                      placeholder={`V${index + 1}`}
+                    />
+                  </td>
 
                   {/* Cantidad */}
                   <td className="p-1 border-r border-slate-100">

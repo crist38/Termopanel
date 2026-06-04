@@ -20,6 +20,7 @@ function CotizadorTermopanelContent() {
   const [items, setItems] = useState<TermopanelItem[]>([
     {
       id: "1",
+      label: "V1",
       cantidad: 1,
       ancho: 1000,
       alto: 1000,
@@ -210,8 +211,24 @@ function CotizadorTermopanelContent() {
   function addItem() {
     const defaultTipo = "Incoloro"
     const defaultEspesor = 4
+
+    let nextNum = 1;
+    const numbers = items
+      .map(item => {
+        const match = (item.label || '').match(/^V(\d+)$/i);
+        return match ? parseInt(match[1], 10) : null;
+      })
+      .filter((n): n is number => n !== null);
+    if (numbers.length > 0) {
+      nextNum = Math.max(...numbers) + 1;
+    } else {
+      nextNum = items.length + 1;
+    }
+    const defaultLabel = `V${nextNum}`;
+
     const newItem: TermopanelItem = {
       id: crypto.randomUUID(),
+      label: defaultLabel,
       cantidad: 1,
       ancho: 0,
       alto: 0,
@@ -264,6 +281,7 @@ function CotizadorTermopanelContent() {
         setItems([
           {
             id: crypto.randomUUID(),
+            label: "V1",
             cantidad: 1,
             ancho: 0,
             alto: 0,
@@ -323,37 +341,39 @@ function CotizadorTermopanelContent() {
     doc.setFillColor(240, 240, 240);
     doc.rect(14, yPos - 5, 182, 8, 'F');
     doc.setFont("helvetica", "bold");
-    doc.text("Cant.", 16, yPos);
-    doc.text("Dim. (mm)", 30, yPos);
-    doc.text("Configuración", 70, yPos);
-    doc.text("Unitario", 150, yPos);
-    doc.text("Total", 175, yPos);
+    doc.text("Ref", 16, yPos);
+    doc.text("Cant.", 43, yPos);
+    doc.text("Dim. (mm)", 57, yPos);
+    doc.text("Configuración", 84, yPos);
+    doc.text("Unitario", 152, yPos);
+    doc.text("Total", 176, yPos);
     doc.setFont("helvetica", "normal");
 
     yPos += 10;
 
     items.forEach((item, index) => {
       const calculo = calcularItem(item);
+      const labelVal = item.label || `V${index + 1}`;
+      const splitLabel = doc.splitTextToSize(labelVal, 25);
+      const configDesc = `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm | C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm | Sep: ${item.separador.espesor}mm ${item.separador.color}`;
+      const splitConfig = doc.splitTextToSize(configDesc, 66);
+
+      const lineCount = Math.max(splitLabel.length, splitConfig.length);
 
       // Verificar salto de página
-      if (yPos > 270) {
+      if (yPos + (lineCount * 5) > 275) {
         doc.addPage();
         yPos = 20;
       }
 
-      const configDesc = `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm | C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm | Sep: ${item.separador.espesor}mm ${item.separador.color}`;
+      doc.text(splitLabel, 16, yPos);
+      doc.text(item.cantidad.toString(), 43, yPos);
+      doc.text(`${item.ancho} x ${item.alto}`, 57, yPos);
+      doc.text(splitConfig, 84, yPos);
+      doc.text(`$${item.precioUnitario.toLocaleString('es-CL')}`, 152, yPos);
+      doc.text(`$${calculo.totalLinea.toLocaleString('es-CL')}`, 176, yPos);
 
-      doc.text(item.cantidad.toString(), 16, yPos);
-      doc.text(`${item.ancho} x ${item.alto}`, 30, yPos);
-
-      // Ajustar texto para configuración
-      const splitConfig = doc.splitTextToSize(configDesc, 75);
-      doc.text(splitConfig, 70, yPos);
-
-      doc.text(`$${item.precioUnitario.toLocaleString('es-CL')}`, 150, yPos);
-      doc.text(`$${calculo.totalLinea.toLocaleString('es-CL')}`, 175, yPos);
-
-      yPos += (splitConfig.length * 5) + 5;
+      yPos += (lineCount * 5) + 5;
     });
 
     // Total
@@ -460,19 +480,23 @@ function CotizadorTermopanelContent() {
     pdf.setTextColor(255, 255, 255);
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(9);
-    pdf.text("#", 17, yPos);
-    pdf.text("Cant.", 25, yPos);
-    pdf.text("Ancho (mm)", 45, yPos);
-    pdf.text("Alto (mm)", 75, yPos);
-    pdf.text("Cristal 1", 105, yPos);
-    pdf.text("Cristal 2", 150, yPos);
+    pdf.text("Ref", 17, yPos);
+    pdf.text("Cant.", 47, yPos);
+    pdf.text("Ancho (mm)", 60, yPos);
+    pdf.text("Alto (mm)", 85, yPos);
+    pdf.text("Cristal 1", 110, yPos);
+    pdf.text("Cristal 2", 152, yPos);
     pdf.setTextColor(0, 0, 0);
     pdf.setFont("helvetica", "normal");
 
     yPos += 8;
 
     items.forEach((item, index) => {
-      if (yPos > 275) {
+      const labelVal = item.label || `V${index + 1}`;
+      const splitLabel = pdf.splitTextToSize(labelVal, 28);
+      const rowHeight = Math.max(8, (splitLabel.length * 4) + 4);
+
+      if (yPos + rowHeight > 275) {
         pdf.addPage();
         yPos = 20;
         // Repetir encabezado
@@ -481,12 +505,12 @@ function CotizadorTermopanelContent() {
         pdf.setTextColor(255, 255, 255);
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(9);
-        pdf.text("#", 17, yPos);
-        pdf.text("Cant.", 25, yPos);
-        pdf.text("Ancho (mm)", 45, yPos);
-        pdf.text("Alto (mm)", 75, yPos);
-        pdf.text("Cristal 1", 105, yPos);
-        pdf.text("Cristal 2", 150, yPos);
+        pdf.text("Ref", 17, yPos);
+        pdf.text("Cant.", 47, yPos);
+        pdf.text("Ancho (mm)", 60, yPos);
+        pdf.text("Alto (mm)", 85, yPos);
+        pdf.text("Cristal 1", 110, yPos);
+        pdf.text("Cristal 2", 152, yPos);
         pdf.setTextColor(0, 0, 0);
         pdf.setFont("helvetica", "normal");
         yPos += 8;
@@ -495,20 +519,20 @@ function CotizadorTermopanelContent() {
       // Fila alternada
       if (index % 2 === 0) {
         pdf.setFillColor(248, 250, 252); // slate-50
-        pdf.rect(14, yPos - 5, 182, 8, 'F');
+        pdf.rect(14, yPos - 5, 182, rowHeight, 'F');
       }
 
       pdf.setFontSize(9);
-      pdf.text(`${index + 1}`, 17, yPos);
-      pdf.text(`${item.cantidad}`, 25, yPos);
+      pdf.text(splitLabel, 17, yPos);
+      pdf.text(`${item.cantidad}`, 47, yPos);
       pdf.setFont("helvetica", "bold");
-      pdf.text(`${item.ancho}`, 45, yPos);
-      pdf.text(`${item.alto}`, 75, yPos);
+      pdf.text(`${item.ancho}`, 60, yPos);
+      pdf.text(`${item.alto}`, 85, yPos);
       pdf.setFont("helvetica", "normal");
-      pdf.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 105, yPos);
-      pdf.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 150, yPos);
+      pdf.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 110, yPos);
+      pdf.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 152, yPos);
 
-      yPos += 8;
+      yPos += rowHeight;
     });
 
     // Línea de cierre
@@ -555,13 +579,13 @@ function CotizadorTermopanelContent() {
     pdf.setTextColor(255, 255, 255);
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(9);
-    pdf.text("#", 17, yPos);
-    pdf.text("Cant.", 24, yPos);
-    pdf.text("Ancho", 38, yPos);
-    pdf.text("Alto", 56, yPos);
-    pdf.text("Cristal 1", 72, yPos);
-    pdf.text("Cristal 2", 112, yPos);
-    pdf.text("Sep. (mm)", 150, yPos);
+    pdf.text("Ref", 17, yPos);
+    pdf.text("Cant.", 47, yPos);
+    pdf.text("Ancho", 58, yPos);
+    pdf.text("Alto", 73, yPos);
+    pdf.text("Cristal 1", 88, yPos);
+    pdf.text("Cristal 2", 121, yPos);
+    pdf.text("Sep. (mm)", 154, yPos);
     pdf.text("Color Sep.", 175, yPos);
     pdf.setTextColor(0, 0, 0);
     pdf.setFont("helvetica", "normal");
@@ -569,7 +593,11 @@ function CotizadorTermopanelContent() {
     yPos += 8;
 
     items.forEach((item, index) => {
-      if (yPos > 275) {
+      const labelVal = item.label || `V${index + 1}`;
+      const splitLabel = pdf.splitTextToSize(labelVal, 28);
+      const rowHeight = Math.max(8, (splitLabel.length * 4) + 4);
+
+      if (yPos + rowHeight > 275) {
         pdf.addPage();
         yPos = 20;
         // Repetir encabezado
@@ -578,13 +606,13 @@ function CotizadorTermopanelContent() {
         pdf.setTextColor(255, 255, 255);
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(9);
-        pdf.text("#", 17, yPos);
-        pdf.text("Cant.", 24, yPos);
-        pdf.text("Ancho", 38, yPos);
-        pdf.text("Alto", 56, yPos);
-        pdf.text("Cristal 1", 72, yPos);
-        pdf.text("Cristal 2", 112, yPos);
-        pdf.text("Sep. (mm)", 150, yPos);
+        pdf.text("Ref", 17, yPos);
+        pdf.text("Cant.", 47, yPos);
+        pdf.text("Ancho", 58, yPos);
+        pdf.text("Alto", 73, yPos);
+        pdf.text("Cristal 1", 88, yPos);
+        pdf.text("Cristal 2", 121, yPos);
+        pdf.text("Sep. (mm)", 154, yPos);
         pdf.text("Color Sep.", 175, yPos);
         pdf.setTextColor(0, 0, 0);
         pdf.setFont("helvetica", "normal");
@@ -594,20 +622,20 @@ function CotizadorTermopanelContent() {
       // Fila alternada
       if (index % 2 === 0) {
         pdf.setFillColor(240, 253, 250); // teal-50
-        pdf.rect(14, yPos - 5, 182, 8, 'F');
+        pdf.rect(14, yPos - 5, 182, rowHeight, 'F');
       }
 
       pdf.setFontSize(9);
-      pdf.text(`${index + 1}`, 17, yPos);
-      pdf.text(`${item.cantidad}`, 24, yPos);
+      pdf.text(splitLabel, 17, yPos);
+      pdf.text(`${item.cantidad}`, 47, yPos);
       pdf.setFont("helvetica", "bold");
-      pdf.text(`${item.ancho}`, 38, yPos);
-      pdf.text(`${item.alto}`, 56, yPos);
+      pdf.text(`${item.ancho}`, 58, yPos);
+      pdf.text(`${item.alto}`, 73, yPos);
       pdf.setFont("helvetica", "normal");
-      pdf.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 72, yPos);
-      pdf.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 112, yPos);
+      pdf.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 88, yPos);
+      pdf.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 121, yPos);
       pdf.setFont("helvetica", "bold");
-      pdf.text(`${item.separador.espesor}`, 150, yPos);
+      pdf.text(`${item.separador.espesor}`, 154, yPos);
       pdf.text(`${item.separador.color}`, 175, yPos);
       pdf.setFont("helvetica", "normal");
 
@@ -697,7 +725,7 @@ function CotizadorTermopanelContent() {
         <table className="min-w-full text-xs sm:text-sm">
           <thead className="bg-slate-100 text-slate-700 uppercase font-bold text-[11px] tracking-wider">
             <tr>
-              <th className="p-3 text-center border-r border-slate-200 w-10">#</th>
+              <th className="p-3 text-center border-r border-slate-200 w-32">Ref / Posición</th>
               <th className="p-3 text-center border-r border-slate-200 w-16">Cant.</th>
               <th className="p-3 text-center border-r border-slate-200 bg-blue-50/50" colSpan={2}>Dimensiones (mm)</th>
               <th className="p-3 text-center border-r border-slate-200 bg-amber-50/50" colSpan={2}>Cristal 1</th>
@@ -731,7 +759,15 @@ function CotizadorTermopanelContent() {
 
               return (
                 <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="p-2 text-center text-slate-400 font-medium">{index + 1}</td>
+                  <td className="p-1 border-r border-slate-100">
+                    <input
+                      type="text"
+                      value={item.label !== undefined ? item.label : `V${index + 1}`}
+                      onChange={e => updateItem(item.id, 'label', e.target.value)}
+                      className="w-full text-center bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1 outline-none font-medium text-slate-700 placeholder-slate-400"
+                      placeholder={`V${index + 1}`}
+                    />
+                  </td>
 
                   {/* Cantidad */}
                   <td className="p-1 border-r border-slate-100">
