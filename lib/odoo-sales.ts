@@ -110,7 +110,11 @@ export class OdooSalesService {
 
     if (autoConfirm) {
       await this.confirmOrder(orderId);
-      await this.createManufacturingOrders(orderId, lines, rawItems);
+      // Ejecutamos la creación de órdenes de fabricación en segundo plano (asíncronamente)
+      // para evitar que la solicitud web exceda el tiempo de espera (timeout) de 15 segundos.
+      this.createManufacturingOrders(orderId, lines, rawItems).catch(err => {
+        console.error("Error creating manufacturing orders in background:", err);
+      });
     }
 
     return orderId;
@@ -211,74 +215,82 @@ export class OdooSalesService {
       );
     }
 
-    // Procesar todos los ítems en paralelo para reducir tiempo total
-    const moIds = await Promise.all(
-      productLines.map(async (line, i) => {
-        const item = rawItems[i];
+    const moIds: number[] = [];
+    for (let i = 0; i < productLines.length; i++) {
+      const line = productLines[i];
+      const item = rawItems[i];
 
-        const fullDesc = [
-          `Termopanel ${item.ancho} x ${item.alto} mm`,
-          `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
-          `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
-          `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
-        ].join(' | ');
+      const fullDesc = [
+        `Termopanel ${item.ancho} x ${item.alto} mm`,
+        `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+        `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+        `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
+      ].join(' | ');
 
-        // ─── Crear la Orden de Fabricación ─────────────────
-        const moResult = await odoo.executeKw('mrp.production', 'create', [[{
-          product_id: line.product_id,
-          product_qty: line.product_uom_qty,
-          origin: `S${saleOrderId}`,
-          product_description_variants: fullDesc,
+      // ─── Crear la Orden de Fabricación ─────────────────
+      const moResult = await odoo.executeKw('mrp.production', 'create', [[{
+        product_id: line.product_id,
+        product_qty: line.product_uom_qty,
+        origin: `S${saleOrderId}`,
+        product_description_variants: fullDesc,
+      }]]);
+      const moId = Array.isArray(moResult) ? moResult[0] : moResult;
+      moIds.push(moId);
+
+      // ─── Crear Work Orders y Nota secuencialmente para evitar error 429 de Odoo ───
+      // Work Order 1: TALLER CORTE VIDRIO
+      try {
+        await odoo.executeKw('mrp.workorder', 'create', [[{
+          name: [
+            `Corte Vidrio | ${item.ancho} x ${item.alto} mm`,
+            `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+            `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+          ].join(' | '),
+          production_id: moId,
+          workcenter_id: wcCorteId,
+          product_uom_id: 1,
+          duration_expected: 60,
         }]]);
-        const moId = Array.isArray(moResult) ? moResult[0] : moResult;
+      } catch (e) {
+        console.error(`Error WO Corte Vidrio MO ${moId}:`, e);
+      }
 
-        // ─── Confirmar MO + Crear Work Orders en paralelo ──
-        await Promise.all([
-          // Work Order 1: TALLER CORTE VIDRIO
-          odoo.executeKw('mrp.workorder', 'create', [[{
-            name: [
-              `Corte Vidrio | ${item.ancho} x ${item.alto} mm`,
-              `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
-              `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
-            ].join(' | '),
-            production_id: moId,
-            workcenter_id: wcCorteId,
-            product_uom_id: 1,
-            duration_expected: 60,
-          }]]).catch(e => console.error(`Error WO Corte Vidrio MO ${moId}:`, e)),
+      // Work Order 2: TALLER TERMOPANELES
+      try {
+        await odoo.executeKw('mrp.workorder', 'create', [[{
+          name: [
+            `Termopanel | ${item.ancho} x ${item.alto} mm`,
+            `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+            `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+            `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
+          ].join(' | '),
+          production_id: moId,
+          workcenter_id: wcTermoId,
+          product_uom_id: 1,
+          duration_expected: 60,
+        }]]);
+      } catch (e) {
+        console.error(`Error WO Termopaneles MO ${moId}:`, e);
+      }
 
-          // Work Order 2: TALLER TERMOPANELES
-          odoo.executeKw('mrp.workorder', 'create', [[{
-            name: [
-              `Termopanel | ${item.ancho} x ${item.alto} mm`,
-              `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
-              `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
-              `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
-            ].join(' | '),
-            production_id: moId,
-            workcenter_id: wcTermoId,
-            product_uom_id: 1,
-            duration_expected: 60,
-          }]]).catch(e => console.error(`Error WO Termopaneles MO ${moId}:`, e)),
-
-          // Nota general en la MO
-          odoo.executeKw('mrp.production', 'message_post', [[moId]], {
-            body: [
-              `<b>📋 Especificaciones del Termopanel</b>`,
-              `<b>Cantidad:</b> ${item.cantidad}`,
-              `<b>Medida:</b> ${item.ancho} x ${item.alto} mm`,
-              `<b>Cristal 1:</b> ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
-              `<b>Cristal 2:</b> ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
-              `<b>Separador:</b> ${item.separador.espesor}mm - Color: ${item.separador.color}`,
-            ].join('<br/>'),
-            message_type: 'comment',
-            subtype_xmlid: 'mail.mt_note',
-          }).catch(e => console.error(`Error nota MO ${moId}:`, e)),
-        ]);
-
-        return moId;
-      })
-    );
+      // Nota general en la MO
+      try {
+        await odoo.executeKw('mrp.production', 'message_post', [[moId]], {
+          body: [
+            `<b>📋 Especificaciones del Termopanel</b>`,
+            `<b>Cantidad:</b> ${item.cantidad}`,
+            `<b>Medida:</b> ${item.ancho} x ${item.alto} mm`,
+            `<b>Cristal 1:</b> ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+            `<b>Cristal 2:</b> ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+            `<b>Separador:</b> ${item.separador.espesor}mm - Color: ${item.separador.color}`,
+          ].join('<br/>'),
+          message_type: 'comment',
+          subtype_xmlid: 'mail.mt_note',
+        });
+      } catch (e) {
+        console.error(`Error nota MO ${moId}:`, e);
+      }
+    }
 
     return moIds;
   }
