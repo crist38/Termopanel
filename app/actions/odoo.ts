@@ -99,3 +99,58 @@ export async function guardarCotizacionEnOdoo(data: {
     return { exito: false, error: error.message || 'Error desconocido' };
   }
 }
+
+export async function guardarCotizacionMonoliticoEnOdoo(data: {
+  clientName: string;
+  budgetNumber: number;
+  items: any[];
+  totalNeto: number;
+}) {
+  try {
+    if (!data.clientName) {
+      return { exito: false, error: 'El nombre del cliente es obligatorio' };
+    }
+
+    const clienteId = await odooCustomers.getOrCreateCustomer({ name: data.clientName });
+
+    if (!process.env.ODOO_DEFAULT_PRODUCT_ID) {
+      return { exito: false, error: 'Variable de entorno ODOO_DEFAULT_PRODUCT_ID no configurada en el servidor.' };
+    }
+    const defaultProductId = parseInt(process.env.ODOO_DEFAULT_PRODUCT_ID);
+
+    const lineas: SaleOrderLineInput[] = data.items.map((item, index) => {
+      const itemLabel = item.label || `V${index + 1}`;
+      const desc = `[${itemLabel}] Cantidad: ${item.cantidad} | Cristal Monolítico ${item.ancho} x ${item.alto} mm | Cristal: ${item.cristal.tipo} ${item.cristal.espesor}mm`;
+
+      const anchoM = item.ancho / 1000;
+      const altoM = (item.alto / 1000) * item.cantidad;
+      const qtyRounded = Math.round(anchoM * altoM * 100) / 100;
+      const totalPrice = item.precioUnitario * item.cantidad;
+      const priceUnitM2 = qtyRounded > 0 ? Math.round(totalPrice / qtyRounded) : 0;
+
+      return {
+        product_id: defaultProductId,
+        name: desc,
+        product_uom_qty: qtyRounded,
+        price_unit: priceUnitM2,
+        x_studio_ancho_m: anchoM,
+        x_studio_alto_m: altoM,
+      };
+    });
+
+    const rawItems = data.items.map((item, index) => ({
+      label: item.label || `V${index + 1}`,
+      cantidad: item.cantidad,
+      ancho: item.ancho,
+      alto: item.alto,
+      cristal: { tipo: item.cristal.tipo, espesor: item.cristal.espesor },
+    }));
+
+    const cotizacionId = await odooSales.createMonoliticQuote(clienteId, lineas, rawItems, true, data.clientName);
+    return { exito: true, cotizacionId };
+  } catch (error: any) {
+    console.error('Error en Server Action Odoo (Monolítico):', error);
+    return { exito: false, error: error.message || 'Error desconocido' };
+  }
+}
+

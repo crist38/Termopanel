@@ -164,6 +164,8 @@ export class OdooSalesService {
    */
   // (interface definida abajo)
 
+  // (interface definida abajo)
+
   /**
    * Busca los IDs de los centros de trabajo (work centers) por nombre.
    * Cachea los resultados para evitar múltiples llamadas.
@@ -531,6 +533,96 @@ export class OdooSalesService {
 
     return moIds;
   }
+  // --- MONOLÍTICO ---
+
+  async createMonoliticQuote(
+    partnerId: number,
+    lines: SaleOrderLineInput[],
+    rawItems: MonoliticoItemData[],
+    autoConfirm = true,
+    clientName = ''
+  ): Promise<number> {
+    const orderLinesTuples = lines.map(line => {
+      if (line.is_note) return [0, 0, { display_type: 'line_note', name: line.name }];
+      return [0, 0, {
+        product_id: line.product_id || false,
+        name: line.name,
+        product_uom_qty: line.product_uom_qty,
+        product_uom_id: 1,
+        price_unit: line.price_unit,
+        ...(line.x_studio_ancho_m !== undefined && { x_studio_ancho_m: line.x_studio_ancho_m }),
+        ...(line.x_studio_alto_m !== undefined && { x_studio_alto_m: line.x_studio_alto_m }),
+      }];
+    });
+
+    const orderData = { partner_id: partnerId, order_line: orderLinesTuples };
+    const newOrderId = await odoo.executeKw('sale.order', 'create', [[orderData]]);
+    const orderId = Array.isArray(newOrderId) ? newOrderId[0] : newOrderId;
+
+    await this.forceLinePrices(orderId, lines);
+
+    if (autoConfirm) {
+      await this.confirmOrder(orderId);
+      try {
+        await this.createMonoliticManufacturingOrders(orderId, lines, rawItems, clientName);
+      } catch (err) {
+        console.error("Error creating monolithic manufacturing orders:", err);
+      }
+    }
+
+    return orderId;
+  }
+
+  async createMonoliticManufacturingOrders(
+    saleOrderId: number,
+    lines: SaleOrderLineInput[],
+    rawItems: MonoliticoItemData[],
+    clientName = ''
+  ): Promise<number[]> {
+    const productLines = lines.filter(l => !l.is_note && l.product_id && l.product_uom_qty > 0);
+    if (productLines.length === 0) return [];
+
+    const wcCorteId = await this.getWorkCenterId('Taller Corte Vidrio');
+    if (!wcCorteId) throw new Error('No se encontró el centro de trabajo "Taller Corte Vidrio"');
+
+    const moDataList = productLines.map((line, i) => {
+      const item = rawItems[i];
+      const itemLabel = item.label || `V${i + 1}`;
+      const fullDesc = `[${itemLabel}] Monolítico ${item.ancho} x ${item.alto} mm | Cristal: ${item.cristal.tipo} ${item.cristal.espesor}mm`;
+      return {
+        product_id: line.product_id,
+        product_qty: line.product_uom_qty,
+        origin: `S${saleOrderId}`,
+        product_description_variants: fullDesc,
+      };
+    });
+
+    const moResult = await odoo.executeKw('mrp.production', 'create', [moDataList]);
+    const moIds: number[] = Array.isArray(moResult) ? moResult : [moResult];
+
+    // Confirmar y crear Órdenes de Trabajo para Corte
+    const woDataList: any[] = [];
+    for (let i = 0; i < moIds.length; i++) {
+      const moId = moIds[i];
+      const item = rawItems[i];
+      await odoo.executeKw('mrp.production', 'action_confirm', [[moId]]);
+      const itemLabel = item.label || `V${i + 1}`;
+      const sanitizedClient = clientName ? clientName.trim() : 'Sin Cliente';
+      const opNameCorte = `${sanitizedClient} - [${itemLabel}] Monolítico | ${item.ancho} x ${item.alto} mm | Cristal: ${item.cristal.tipo} ${item.cristal.espesor}mm`;
+      
+      woDataList.push({
+        name: opNameCorte,
+        production_id: moId,
+        workcenter_id: wcCorteId,
+        duration_expected: 15,
+      });
+    }
+
+    if (woDataList.length > 0) {
+      await odoo.executeKw('mrp.workorder', 'create', [woDataList]);
+    }
+    return moIds;
+  }
 }
 
 /**
@@ -548,6 +640,14 @@ export interface TermopanelItemData {
   gas: boolean;
   micropersiana: boolean;
   palillaje: boolean;
+}
+
+export interface MonoliticoItemData {
+  label?: string;
+  cantidad: number;
+  ancho: number;
+  alto: number;
+  cristal: { tipo: string; espesor: number };
 }
 
 export const odooSales = new OdooSalesService();
