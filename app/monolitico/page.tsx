@@ -28,7 +28,7 @@ function CotizadorMonoliticoContent() {
   ])
 
   const [clientName, setClientName] = useState('');
-  const [budgetNumber, setBudgetNumber] = useState(1);
+  const [budgetName, setBudgetName] = useState('Borrador');
   const [budgetDate, setBudgetDate] = useState('');
 
   const searchParams = useSearchParams();
@@ -69,7 +69,7 @@ function CotizadorMonoliticoContent() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setClientName(data.clientName || '');
-          setBudgetNumber(data.budgetNumber || 1);
+          setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
           setItems(data.items || []);
         }
       } catch (e) {
@@ -83,22 +83,6 @@ function CotizadorMonoliticoContent() {
     if (editId) return;
     const today = new Date();
     setBudgetDate(today.toLocaleDateString('es-ES'));
-
-    const fetchNextId = async () => {
-      try {
-        const q = query(collection(db, 'presupuestos_monoliticos'), orderBy('budgetNumber', 'desc'), limit(1));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          const lastData = querySnapshot.docs[0].data();
-          setBudgetNumber((lastData.budgetNumber || 0) + 1);
-        } else {
-          setBudgetNumber(1);
-        }
-      } catch (e) {
-        console.error("Error fetching ID:", e);
-      }
-    };
-    fetchNextId();
 
     const cookieVal = document.cookie.split('; ').find((r) => r.startsWith('odoo_user='))?.split('=').slice(1).join('=')
     if (cookieVal) {
@@ -171,7 +155,8 @@ function CotizadorMonoliticoContent() {
     }))
   }
 
-  function handlePrint() {
+  function handlePrint(overrideName?: string) {
+    const finalName = overrideName || budgetName;
     const doc = new jsPDF();
     let yPos = 20;
     
@@ -186,7 +171,7 @@ function CotizadorMonoliticoContent() {
     yPos += 10;
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text(`Presupuesto N°: ${budgetNumber}`, 14, yPos);
+    doc.text(`Presupuesto N°: ${finalName}`, 14, yPos);
     doc.text(`Fecha: ${budgetDate}`, 120, yPos);
     yPos += 7;
     doc.text(`Cliente: ${clientName || 'Sin Cliente'}`, 14, yPos);
@@ -237,7 +222,7 @@ function CotizadorMonoliticoContent() {
     doc.text(`Total Neto: $${totalNeto.toLocaleString('es-CL')}`, 140, yPos);
     
     const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
-    doc.save(`Cotizacion_Monolitico_${budgetNumber}_${sanitizedClientName}.pdf`);
+    doc.save(`Cotizacion_Monolitico_${finalName}_${sanitizedClientName}.pdf`);
   }
 
   async function handleProcessQuote() {
@@ -251,33 +236,28 @@ function CotizadorMonoliticoContent() {
       return;
     }
 
-    const conf = confirm(`¿Estás seguro de enviar la Cotización de Cristales N° ${budgetNumber} a Odoo?\n\nEsto creará la nota de venta y la Orden de Trabajo para el Taller Corte Vidrio.`);
+    const conf = confirm(`¿Estás seguro de enviar la Cotización de Cristales N° ${budgetName} a Odoo?\n\nEsto creará la nota de venta y la Orden de Trabajo para el Taller Corte Vidrio.`);
     if (!conf) return;
 
     setIsSyncingOdoo(true);
     try {
       const response = await guardarCotizacionMonoliticoEnOdoo({
         clientName,
-        budgetNumber,
+        budgetNumber: 0,
         items,
         totalNeto,
       });
 
       if (response.exito) {
-        alert(`¡Cotización enviada exitosamente a Odoo!\nID Odoo: ${response.cotizacionId}`);
+        alert(`¡Cotización enviada exitosamente a Odoo!\nOrden de Venta: ${response.cotizacionName}`);
         
-        handlePrint();
+        const finalBudgetName = response.cotizacionName || 'Borrador';
+        setBudgetName(finalBudgetName);
 
-        await setDoc(doc(db, 'presupuestos_monoliticos', String(budgetNumber)), {
-          budgetNumber,
-          clientName,
-          date: new Date().toISOString(),
-          items,
-          totalNeto
-        });
+        handlePrint(finalBudgetName);
 
-        setBudgetNumber(prev => prev + 1);
         setClientName('');
+        setBudgetName('Borrador');
         setItems([{ id: crypto.randomUUID(), label: "V1", cantidad: 1, ancho: 1000, alto: 1000, cristal: { tipo: "Incoloro", espesor: 4 }, precioUnitario: 0 }]);
 
       } else {
@@ -306,12 +286,9 @@ function CotizadorMonoliticoContent() {
           <h1 className="text-2xl font-bold text-slate-800">Corte de Vidrios Monolíticos</h1>
           <div className="flex items-center gap-1.5 text-slate-500 text-sm mt-1">
             <span>Presupuesto N°</span>
-            <input
-              type="number"
-              value={budgetNumber === 0 ? "" : budgetNumber}
-              onChange={(e) => setBudgetNumber(parseInt(e.target.value) || 0)}
-              className="w-20 px-2 py-0.5 border border-slate-200 rounded text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 font-semibold bg-slate-50"
-            />
+            <div className="px-3 py-1 bg-slate-50 border border-slate-200 rounded text-slate-700 font-semibold min-w-[5rem] text-center">
+              {budgetName}
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
@@ -324,7 +301,7 @@ function CotizadorMonoliticoContent() {
             {isSyncingOdoo ? 'Sincronizando...' : 'Enviar a Odoo'}
           </button>
           <button
-            onClick={handlePrint}
+            onClick={() => handlePrint()}
             className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all font-medium text-sm"
           >
             <Printer size={18} /> Exportar PDF

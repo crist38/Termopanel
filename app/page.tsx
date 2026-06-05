@@ -36,7 +36,7 @@ function CotizadorTermopanelContent() {
 
   // Estado para Información del Cliente y Presupuesto
   const [clientName, setClientName] = useState('');
-  const [budgetNumber, setBudgetNumber] = useState(1);
+  const [budgetName, setBudgetName] = useState('Borrador');
   const [budgetDate, setBudgetDate] = useState('');
 
   const searchParams = useSearchParams();
@@ -86,7 +86,7 @@ function CotizadorTermopanelContent() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setClientName(data.clientName || '');
-          setBudgetNumber(data.budgetNumber || 1);
+          setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
           setItems(data.items || []);
         }
       } catch (e) {
@@ -102,26 +102,6 @@ function CotizadorTermopanelContent() {
     if (editId) return;
     const today = new Date();
     setBudgetDate(today.toLocaleDateString('es-ES'));
-
-    const fetchNextId = async () => {
-      try {
-        const q = query(
-          collection(db, 'presupuestos_termopaneles'),
-          orderBy('budgetNumber', 'desc'),
-          limit(1)
-        );
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          const lastData = querySnapshot.docs[0].data();
-          setBudgetNumber((lastData.budgetNumber || 0) + 1);
-        } else {
-          setBudgetNumber(1);
-        }
-      } catch (e) {
-        console.error("Error fetching ID:", e);
-      }
-    };
-    fetchNextId();
 
     // Leer nombre del usuario desde la cookie de sesión
     const cookieVal = document.cookie
@@ -261,32 +241,24 @@ function CotizadorTermopanelContent() {
     try {
       const odooRes = await guardarCotizacionEnOdoo({
         clientName,
-        budgetNumber,
+        budgetNumber: 0,
         items,
         totalNeto
       });
 
       if (odooRes.exito) {
-        alert(`✅ ¡Listo! Orden de venta #${odooRes.cotizacionId} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
+        alert(`✅ ¡Listo! Orden de venta ${odooRes.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
         
+        const finalBudgetName = odooRes.cotizacionName || 'Borrador';
+        setBudgetName(finalBudgetName);
+
         // Generar PDFs de Presupuesto y Órdenes de Trabajo de forma secuencial
-        await handleExportPDF();
-        await handleExportWorkOrders();
-
-        // Guardar en Firebase para que el ID se autoincremente para el próximo usuario
-        await setDoc(doc(db, 'presupuestos_termopaneles', String(budgetNumber)), {
-          budgetNumber,
-          clientName,
-          date: new Date().toISOString(),
-          items,
-          totalNeto
-        });
-
-        // Incrementar automáticamente el número de presupuesto para el siguiente
-        setBudgetNumber((prev) => prev + 1);
+        await handleExportPDF(finalBudgetName);
+        await handleExportWorkOrders(finalBudgetName);
 
         // Limpiar formulario para la siguiente cotización
         setClientName('');
+        setBudgetName('Borrador');
         setItems([
           {
             id: crypto.randomUUID(),
@@ -314,7 +286,8 @@ function CotizadorTermopanelContent() {
     }
   };
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = async (overrideName?: string) => {
+    const finalName = overrideName || budgetName;
     const doc = new jsPDF();
 
     try {
@@ -336,7 +309,7 @@ function CotizadorTermopanelContent() {
     doc.text("Presupuesto Termopaneles", 50, 25);
 
     doc.setFontSize(10);
-    doc.text(`N° Presupuesto: ${budgetNumber}`, 150, 22);
+    doc.text(`N° Presupuesto: ${finalName}`, 150, 22);
     doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 150, 28);
 
     // Información del Cliente
@@ -437,10 +410,11 @@ function CotizadorTermopanelContent() {
     doc.text("Modalidad de Pago: __________________", 120, yPos);
 
     const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
-    doc.save(`Presupuesto_Termopaneles_${budgetNumber}_${sanitizedClientName}.pdf`);
+    doc.save(`Cotizacion_${finalName}_${sanitizedClientName}.pdf`);
   };
 
-  const handleExportWorkOrders = async () => {
+  const handleExportWorkOrders = async (overrideName?: string) => {
+    const finalName = overrideName || budgetName;
     if (items.length === 0) return;
     const pdf = new jsPDF();
 
@@ -474,7 +448,7 @@ function CotizadorTermopanelContent() {
 
     pdf.setFontSize(9);
     pdf.setFont("helvetica", "normal");
-    pdf.text(`N° Presupuesto: ${budgetNumber}`, 155, 18);
+    pdf.text(`Ref: ${finalName}`, 155, 18);
     pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
     pdf.text(`Cliente: ${clientName}`, 155, 30);
 
@@ -573,7 +547,7 @@ function CotizadorTermopanelContent() {
 
     pdf.setFontSize(9);
     pdf.setFont("helvetica", "normal");
-    pdf.text(`N° Presupuesto: ${budgetNumber}`, 155, 18);
+    pdf.text(`Ref: ${finalName}`, 155, 18);
     pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
     pdf.text(`Cliente: ${clientName}`, 155, 30);
 
@@ -658,7 +632,7 @@ function CotizadorTermopanelContent() {
 
 
     const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
-    pdf.save(`Orden_Trabajo_${budgetNumber}_${sanitizedClientName}.pdf`);
+    pdf.save(`Ordenes_Trabajo_${finalName}_${sanitizedClientName}.pdf`);
   };
 
   if (isLoadingConfig) {
@@ -676,13 +650,9 @@ function CotizadorTermopanelContent() {
           <h1 className="text-2xl font-bold text-slate-800">Cotizador de Termopaneles</h1>
           <div className="flex items-center gap-1.5 text-slate-500 text-sm mt-1">
             <span>Presupuesto N°</span>
-            <input
-              suppressHydrationWarning
-              type="number"
-              value={budgetNumber === 0 ? "" : budgetNumber}
-              onChange={(e) => setBudgetNumber(parseInt(e.target.value) || 0)}
-              className="w-20 px-2 py-0.5 border border-slate-200 rounded text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 font-semibold bg-slate-50 hover:bg-slate-100 transition-colors"
-            />
+            <div className="px-3 py-1 bg-slate-50 border border-slate-200 rounded text-slate-700 font-semibold min-w-[5rem] text-center">
+              {budgetName}
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
