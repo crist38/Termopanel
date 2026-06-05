@@ -75,7 +75,8 @@ export class OdooSalesService {
     partnerId: number,
     lines: SaleOrderLineInput[],
     rawItems: TermopanelItemData[] = [],
-    autoConfirm = true
+    autoConfirm = true,
+    clientName = ''
   ): Promise<number> {
     const orderLinesTuples = lines.map(line => {
       if (line.is_note) {
@@ -112,7 +113,7 @@ export class OdooSalesService {
       await this.confirmOrder(orderId);
       // Ejecutamos la creación de órdenes de fabricación (ahora optimizada por lote)
       try {
-        await this.createManufacturingOrders(orderId, lines, rawItems);
+        await this.createManufacturingOrders(orderId, lines, rawItems, clientName);
       } catch (err) {
         console.error("Error creating manufacturing orders:", err);
       }
@@ -197,7 +198,8 @@ export class OdooSalesService {
   async createManufacturingOrders(
     saleOrderId: number,
     lines: SaleOrderLineInput[],
-    rawItems: TermopanelItemData[]
+    rawItems: TermopanelItemData[],
+    clientName = ''
   ): Promise<number[]> {
     const productLines = lines.filter(l => !l.is_note && l.product_id && l.product_uom_qty > 0);
 
@@ -249,10 +251,12 @@ export class OdooSalesService {
       const item = rawItems[i];
       const itemLabel = item.label || `V${i + 1}`;
 
+      const clientPrefix = clientName ? `${clientName} | ` : '';
+
       // Work Order 1: TALLER CORTE VIDRIO
       woDataList.push({
         name: [
-          `[${itemLabel}] Corte Vidrio | ${item.ancho} x ${item.alto} mm`,
+          `[${itemLabel}] ${clientPrefix}Corte Vidrio | ${item.ancho} x ${item.alto} mm`,
           `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
           `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
         ].join(' | '),
@@ -265,7 +269,7 @@ export class OdooSalesService {
       // Work Order 2: TALLER TERMOPANELES
       woDataList.push({
         name: [
-          `[${itemLabel}] Termopanel | ${item.ancho} x ${item.alto} mm`,
+          `[${itemLabel}] ${clientPrefix}Termopanel | ${item.ancho} x ${item.alto} mm`,
           `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
           `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
           `Sep: ${item.separador.espesor}mm ${item.separador.color}`,

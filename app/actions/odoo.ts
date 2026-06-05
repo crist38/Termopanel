@@ -91,7 +91,7 @@ export async function guardarCotizacionEnOdoo(data: {
 
     // 4. Crear cotización, confirmarla y crear órdenes de fabricación de forma síncrona.
     // autoConfirm=true asegura que todo quede creado antes de responder al usuario.
-    const cotizacionId = await odooSales.createQuote(clienteId, lineas, rawItems, true);
+    const cotizacionId = await odooSales.createQuote(clienteId, lineas, rawItems, true, data.clientName);
 
     return { exito: true, cotizacionId };
   } catch (error: any) {
