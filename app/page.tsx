@@ -524,7 +524,7 @@ function CotizadorTermopanelContent() {
 
       pdf.setFontSize(9);
       pdf.text(splitLabel, 17, yPos);
-      pdf.text(`${item.cantidad}`, 47, yPos);
+      pdf.text(`${item.cantidad * 2}`, 47, yPos);
       pdf.setFont("helvetica", "bold");
       pdf.text(`${item.ancho}`, 60, yPos);
       pdf.text(`${item.alto}`, 85, yPos);
