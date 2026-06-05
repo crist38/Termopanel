@@ -169,6 +169,86 @@ export class OdooSalesService {
    * Cachea los resultados para evitar múltiples llamadas.
    */
   private workCenterCache: Record<string, number> = {};
+  private productCache: Record<string, number> = {};
+  private uomCache: Record<string, number> = {};
+
+  /**
+   * Busca la UOM (unidad de medida) por nombre, probando múltiples candidatos.
+   * Cachea el resultado.
+   */
+  async getUomId(candidates: string[]): Promise<number | null> {
+    for (const name of candidates) {
+      const key = name.toLowerCase();
+      if (this.uomCache[key]) return this.uomCache[key];
+      const results = await odoo.executeKw(
+        'uom.uom', 'search_read',
+        [[['name', '=', name]]],
+        { fields: ['id', 'name'], limit: 1 }
+      );
+      if (results.length > 0) {
+        this.uomCache[key] = results[0].id;
+        return results[0].id;
+      }
+    }
+    // Si no encuentra exacto, intenta ilike con el primer candidato
+    const fallback = await odoo.executeKw(
+      'uom.uom', 'search_read',
+      [[['name', 'ilike', candidates[0]]]],
+      { fields: ['id', 'name'], limit: 1 }
+    );
+    if (fallback.length > 0) {
+      this.uomCache[candidates[0].toLowerCase()] = fallback[0].id;
+      return fallback[0].id;
+    }
+    return null;
+  }
+
+  /**
+   * Busca un producto por nombre exacto. Si no existe, lo crea como consumible.
+   * Cachea el product.product ID resultante.
+   */
+  async findOrCreateProduct(name: string, uomId: number): Promise<number | null> {
+    const key = name.toLowerCase();
+    if (this.productCache[key]) return this.productCache[key];
+
+    // Buscar template existente
+    const existing = await odoo.executeKw(
+      'product.template', 'search_read',
+      [[['name', '=', name]]],
+      { fields: ['id', 'product_variant_ids'], limit: 1 }
+    );
+
+    if (existing.length > 0 && existing[0].product_variant_ids?.length > 0) {
+      const productId = existing[0].product_variant_ids[0];
+      this.productCache[key] = productId;
+      return productId;
+    }
+
+    // Crear nuevo producto consumible
+    const tmplResult = await odoo.executeKw('product.template', 'create', [[
+      {
+        name,
+        type: 'consu',   // consumible: se registra en MO sin bloquear por stock
+        uom_id: uomId,
+        uom_po_id: uomId,
+        purchase_ok: true,
+        sale_ok: false,
+      }
+    ]]);
+    const tmplId = Array.isArray(tmplResult) ? tmplResult[0] : tmplResult;
+
+    // Obtener el product.product generado automáticamente
+    const variants = await odoo.executeKw(
+      'product.product', 'search_read',
+      [[['product_tmpl_id', '=', tmplId]]],
+      { fields: ['id'], limit: 1 }
+    );
+    if (variants.length > 0) {
+      this.productCache[key] = variants[0].id;
+      return variants[0].id;
+    }
+    return null;
+  }
 
   async getWorkCenterId(name: string): Promise<number | null> {
     if (this.workCenterCache[name]) return this.workCenterCache[name];
@@ -220,7 +300,44 @@ export class OdooSalesService {
       );
     }
 
-    // 1. Preparar datos para creación por lote (batch) de Órdenes de Fabricación (MOs)
+    // 1. Buscar/crear productos de insumos y sus UOMs
+    let hotmeltId: number | null = null;
+    let salId: number | null = null;
+    let builoId: number | null = null;
+    let escuadrasId: number | null = null;
+    const separadorProductMap: Record<string, number> = {};
+    let uomMetrosId: number | null = null;
+    let uomUnitsId: number | null = null;
+
+    try {
+      [uomMetrosId, uomUnitsId] = await Promise.all([
+        this.getUomId(['m', 'Metro', 'Metros', 'Meter', 'Meters', 'metro(s)']),
+        this.getUomId(['u', 'Units', 'Unit', 'Unidades', 'Unidad', 'uom_unit']),
+      ]);
+
+      if (uomMetrosId && uomUnitsId) {
+        const sepKeys = [...new Set(rawItems.map(i => `Separador ${i.separador.espesor}mm ${i.separador.color}`))];
+
+        const [hm, sal, but, esc, ...seps] = await Promise.all([
+          this.findOrCreateProduct('Hotmelt', uomMetrosId),
+          this.findOrCreateProduct('Sal Deshidratante', uomMetrosId),
+          this.findOrCreateProduct('Butilo', uomMetrosId),
+          this.findOrCreateProduct('Escuadras', uomUnitsId),
+          ...sepKeys.map(k => this.findOrCreateProduct(k, uomMetrosId!)),
+        ]);
+        hotmeltId  = hm;
+        salId      = sal;
+        builoId    = but;
+        escuadrasId = esc;
+        sepKeys.forEach((k, i) => { if (seps[i]) separadorProductMap[k] = seps[i]!; });
+      } else {
+        console.warn('No se encontraron UOMs de metros o unidades en Odoo. Los insumos no se vincularán como componentes.');
+      }
+    } catch (e) {
+      console.error('Error al buscar/crear productos de insumos:', e);
+    }
+
+    // 2. Preparar datos para creación por lote (batch) de Órdenes de Fabricación (MOs)
     const moDataList = productLines.map((line, i) => {
       const item = rawItems[i];
       const itemLabel = item.label || `V${i + 1}`;
@@ -232,11 +349,32 @@ export class OdooSalesService {
         `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
       ].join(' | ');
 
+      // Calcular cantidades de insumos para este ítem
+      const perimMl = 2 * (item.ancho + item.alto) / 1000;
+      const totalMl = parseFloat((perimMl * item.cantidad).toFixed(3));
+      const escuadrasQty = 4 * item.cantidad;
+      const sepKey = `Separador ${item.separador.espesor}mm ${item.separador.color}`;
+
+      // Construir componentes (move_raw_ids) si hay productos disponibles
+      const moveRawIds: any[] = [];
+      if (uomMetrosId) {
+        if (hotmeltId)  moveRawIds.push([0, 0, { product_id: hotmeltId,  product_uom_qty: totalMl,       product_uom: uomMetrosId, name: 'Hotmelt' }]);
+        if (salId)      moveRawIds.push([0, 0, { product_id: salId,      product_uom_qty: totalMl,       product_uom: uomMetrosId, name: 'Sal Deshidratante' }]);
+        if (builoId)    moveRawIds.push([0, 0, { product_id: builoId,    product_uom_qty: totalMl,       product_uom: uomMetrosId, name: 'Butilo' }]);
+        if (separadorProductMap[sepKey]) {
+          moveRawIds.push([0, 0, { product_id: separadorProductMap[sepKey], product_uom_qty: totalMl, product_uom: uomMetrosId, name: sepKey }]);
+        }
+      }
+      if (uomUnitsId && escuadrasId) {
+        moveRawIds.push([0, 0, { product_id: escuadrasId, product_uom_qty: escuadrasQty, product_uom: uomUnitsId, name: 'Escuadras' }]);
+      }
+
       return {
         product_id: line.product_id,
         product_qty: line.product_uom_qty,
         origin: `S${saleOrderId}`,
         product_description_variants: fullDesc,
+        ...(moveRawIds.length > 0 && { move_raw_ids: moveRawIds }),
       };
     });
 
