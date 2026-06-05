@@ -3,6 +3,8 @@ export const metadata = {
   description: 'Cotizador de termopaneles',
 }
 
+import { Navbar } from './components/Navbar'
+
 export default function RootLayout({
   children,
 }: {
@@ -14,7 +16,10 @@ export default function RootLayout({
         {/* Agregamos Tailwind via CDN temporalmente para que los estilos funcionen hasta que lo configures */}
         <script src="https://cdn.tailwindcss.com"></script>
       </head>
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning className="bg-slate-50 min-h-screen">
+        <Navbar />
+        {children}
+      </body>
     </html>
   )
 }
