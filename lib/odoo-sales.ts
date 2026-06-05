@@ -289,10 +289,23 @@ export class OdooSalesService {
       }
     }
 
-    // 3. Publicar notas en el chatter de cada MO en paralelo
+    // 3. Helper para calcular insumos de cada ítem
+    const calcInsumos = (item: TermopanelItemData, idx: number) => {
+      const perimMl = 2 * (item.ancho + item.alto) / 1000; // metros lineales de perímetro
+      const totalMl = perimMl * item.cantidad;
+      return {
+        label: item.label || `V${idx + 1}`,
+        perimMl,
+        totalMl,
+        escuadras: 4 * item.cantidad,
+      };
+    };
+
+    // 4. Publicar notas en el chatter de cada MO en paralelo (specs + insumos del ítem)
     const notePromises = moIds.map((moId, i) => {
       const item = rawItems[i];
       const itemLabel = item.label || `V${i + 1}`;
+      const ins = calcInsumos(item, i);
       const body = [
         `<b>📋 Especificaciones del Termopanel [${itemLabel}]</b>`,
         `<b>Cantidad:</b> ${item.cantidad}`,
@@ -300,6 +313,13 @@ export class OdooSalesService {
         `<b>Cristal 1:</b> ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
         `<b>Cristal 2:</b> ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
         `<b>Separador:</b> ${item.separador.espesor}mm - Color: ${item.separador.color}`,
+        `&nbsp;`,
+        `<b>📦 Insumos [${itemLabel}] — ${item.cantidad} ud × ${ins.perimMl.toFixed(3)} ml/ud</b>`,
+        `<b>Separador ${item.separador.espesor}mm ${item.separador.color}:</b> ${ins.totalMl.toFixed(3)} ml`,
+        `<b>Hotmelt:</b> ${ins.totalMl.toFixed(3)} ml`,
+        `<b>Sal deshidratante:</b> ${ins.totalMl.toFixed(3)} ml`,
+        `<b>Butilo:</b> ${ins.totalMl.toFixed(3)} ml`,
+        `<b>Escuadras:</b> ${ins.escuadras} unidades`,
       ].join('<br/>');
 
       return odoo.executeKw('mrp.production', 'message_post', [[moId]], {
@@ -312,6 +332,40 @@ export class OdooSalesService {
     });
 
     await Promise.allSettled(notePromises);
+
+    // 5. Publicar resumen total de insumos en la Orden de Venta
+    try {
+      const allInsumos = rawItems.map((item, i) => calcInsumos(item, i));
+      const totSeparador  = allInsumos.reduce((s, x) => s + x.totalMl, 0);
+      const totHotmelt    = allInsumos.reduce((s, x) => s + x.totalMl, 0);
+      const totSal        = allInsumos.reduce((s, x) => s + x.totalMl, 0);
+      const totButilo     = allInsumos.reduce((s, x) => s + x.totalMl, 0);
+      const totEscuadras  = allInsumos.reduce((s, x) => s + x.escuadras, 0);
+
+      const itemRows = allInsumos.map(ins =>
+        `&nbsp;&nbsp;• <b>[${ins.label}]:</b> ${ins.perimMl.toFixed(3)} ml/ud × ${ins.escuadras / 4} ud = ${ins.totalMl.toFixed(3)} ml | Escuadras: ${ins.escuadras}`
+      ).join('<br/>');
+
+      const summaryBody = [
+        `<b>📊 RESUMEN TOTAL DE INSUMOS — ${clientName || 'Cliente'}</b>`,
+        `<b>─────────────────────────────</b>`,
+        itemRows,
+        `<b>─────────────────────────────</b>`,
+        `<b>Separador (total):</b> ${totSeparador.toFixed(3)} ml`,
+        `<b>Hotmelt (total):</b> ${totHotmelt.toFixed(3)} ml`,
+        `<b>Sal deshidratante (total):</b> ${totSal.toFixed(3)} ml`,
+        `<b>Butilo (total):</b> ${totButilo.toFixed(3)} ml`,
+        `<b>Escuadras (total):</b> ${totEscuadras} unidades`,
+      ].join('<br/>');
+
+      await odoo.executeKw('sale.order', 'message_post', [[saleOrderId]], {
+        body: summaryBody,
+        message_type: 'comment',
+        subtype_xmlid: 'mail.mt_note',
+      });
+    } catch (e) {
+      console.error('Error al publicar resumen de insumos en la SO:', e);
+    }
 
     return moIds;
   }
