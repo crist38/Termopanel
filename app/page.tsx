@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from "react"
 import { TermopanelItem, calcularItem, calcularTotal, calcularPrecioUnitario, PARAMETROS_DEFAULT } from "@/lib/calculos/termopanel"
 import { PRECIOS_VIDRIOS, Vidrio, TIPOS_UNICOS as STATIC_TIPOS_UNICOS } from "@/lib/data/vidrios"
-import { collection, getDocs, query, orderBy, limit, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -272,6 +272,15 @@ function CotizadorTermopanelContent() {
         // Generar PDFs de Presupuesto y Órdenes de Trabajo de forma secuencial
         await handleExportPDF();
         await handleExportWorkOrders();
+
+        // Guardar en Firebase para que el ID se autoincremente para el próximo usuario
+        await setDoc(doc(db, 'presupuestos_termopaneles', String(budgetNumber)), {
+          budgetNumber,
+          clientName,
+          date: new Date().toISOString(),
+          items,
+          totalNeto
+        });
 
         // Incrementar automáticamente el número de presupuesto para el siguiente
         setBudgetNumber((prev) => prev + 1);
