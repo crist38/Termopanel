@@ -349,38 +349,62 @@ export class OdooSalesService {
         `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
       ].join(' | ');
 
+      return {
+        product_id: line.product_id,
+        product_qty: line.product_uom_qty,
+        origin: `S${saleOrderId}`,
+        product_description_variants: fullDesc,
+      };
+    });
+
+    // Crear todas las MOs en una sola llamada RPC (sin insumos todavía para que Odoo asigne las ubicaciones)
+    const moResult = await odoo.executeKw('mrp.production', 'create', [moDataList]);
+    const moIds: number[] = Array.isArray(moResult) ? moResult : [moResult];
+
+    // Obtener las ubicaciones de producción que Odoo asignó automáticamente
+    const mosData = await odoo.executeKw(
+      'mrp.production', 'read', [moIds],
+      { fields: ['id', 'location_src_id', 'production_location_id'] }
+    );
+
+    // Escribir los insumos (componentes) en cada MO usando las ubicaciones correctas
+    for (let i = 0; i < moIds.length; i++) {
+      const moId = moIds[i];
+      const item = rawItems[i];
+      const moRecord = mosData.find((m: any) => m.id === moId);
+      
+      if (!moRecord || !moRecord.location_src_id || !moRecord.production_location_id) continue;
+
+      const locSrcId = moRecord.location_src_id[0];
+      const locDestId = moRecord.production_location_id[0];
+
       // Calcular cantidades de insumos para este ítem
       const perimMl = 2 * (item.ancho + item.alto) / 1000;
       const totalMl = parseFloat((perimMl * item.cantidad).toFixed(3));
       const escuadrasQty = 4 * item.cantidad;
       const sepKey = `Separador ${item.separador.espesor}mm ${item.separador.color}`;
 
-      // Construir componentes (move_raw_ids) si hay productos disponibles
       const moveRawIds: any[] = [];
       if (uomMetrosId) {
-        if (hotmeltId)  moveRawIds.push([0, 0, { product_id: hotmeltId,  product_uom_qty: totalMl,       product_uom: uomMetrosId, name: 'Hotmelt' }]);
-        if (salId)      moveRawIds.push([0, 0, { product_id: salId,      product_uom_qty: totalMl,       product_uom: uomMetrosId, name: 'Sal Deshidratante' }]);
-        if (builoId)    moveRawIds.push([0, 0, { product_id: builoId,    product_uom_qty: totalMl,       product_uom: uomMetrosId, name: 'Butilo' }]);
+        if (hotmeltId)  moveRawIds.push([0, 0, { name: 'Hotmelt', product_id: hotmeltId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
+        if (salId)      moveRawIds.push([0, 0, { name: 'Sal Deshidratante', product_id: salId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
+        if (builoId)    moveRawIds.push([0, 0, { name: 'Butilo', product_id: builoId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
         if (separadorProductMap[sepKey]) {
-          moveRawIds.push([0, 0, { product_id: separadorProductMap[sepKey], product_uom_qty: totalMl, product_uom: uomMetrosId, name: sepKey }]);
+          moveRawIds.push([0, 0, { name: sepKey, product_id: separadorProductMap[sepKey], product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
         }
       }
       if (uomUnitsId && escuadrasId) {
-        moveRawIds.push([0, 0, { product_id: escuadrasId, product_uom_qty: escuadrasQty, product_uom: uomUnitsId, name: 'Escuadras' }]);
+        moveRawIds.push([0, 0, { name: 'Escuadras', product_id: escuadrasId, product_uom_qty: escuadrasQty, product_uom: uomUnitsId, location_id: locSrcId, location_dest_id: locDestId }]);
       }
 
-      return {
-        product_id: line.product_id,
-        product_qty: line.product_uom_qty,
-        origin: `S${saleOrderId}`,
-        product_description_variants: fullDesc,
-        ...(moveRawIds.length > 0 && { move_raw_ids: moveRawIds }),
-      };
-    });
-
-    // Crear todas las MOs en una sola llamada RPC
-    const moResult = await odoo.executeKw('mrp.production', 'create', [moDataList]);
-    const moIds: number[] = Array.isArray(moResult) ? moResult : [moResult];
+      if (moveRawIds.length > 0) {
+        try {
+          await odoo.executeKw('mrp.production', 'write', [[moId], { move_raw_ids: moveRawIds }]);
+        } catch (err) {
+          console.error(`Error al vincular componentes en MO ${moId}:`, err);
+        }
+      }
+    }
 
     // 2. Preparar datos para creación por lote (batch) de Órdenes de Trabajo (WOs)
     const woDataList: any[] = [];
