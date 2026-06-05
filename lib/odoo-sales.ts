@@ -77,7 +77,7 @@ export class OdooSalesService {
     rawItems: TermopanelItemData[] = [],
     autoConfirm = true,
     clientName = ''
-  ): Promise<number> {
+  ): Promise<{ id: number; name: string }> {
     const orderLinesTuples = lines.map(line => {
       if (line.is_note) {
         // Línea de nota: solo texto, sin producto, sin cantidad, sin precio
@@ -119,7 +119,10 @@ export class OdooSalesService {
       }
     }
 
-    return orderId;
+    const orderDataResp = await odoo.executeKw('sale.order', 'search_read', [[['id', '=', orderId]]], { fields: ['name'], limit: 1 });
+    const orderName = orderDataResp.length > 0 ? orderDataResp[0].name : `SO${orderId}`;
+
+    return { id: orderId, name: orderName };
   }
 
   /**
@@ -541,7 +544,7 @@ export class OdooSalesService {
     rawItems: MonoliticoItemData[],
     autoConfirm = true,
     clientName = ''
-  ): Promise<number> {
+  ): Promise<{ id: number; name: string }> {
     const orderLinesTuples = lines.map(line => {
       if (line.is_note) return [0, 0, { display_type: 'line_note', name: line.name }];
       return [0, 0, {
@@ -570,7 +573,10 @@ export class OdooSalesService {
       }
     }
 
-    return orderId;
+    const orderDataResp = await odoo.executeKw('sale.order', 'search_read', [[['id', '=', orderId]]], { fields: ['name'], limit: 1 });
+    const orderName = orderDataResp.length > 0 ? orderDataResp[0].name : `SO${orderId}`;
+
+    return { id: orderId, name: orderName };
   }
 
   async createMonoliticManufacturingOrders(

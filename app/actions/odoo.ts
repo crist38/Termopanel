@@ -91,9 +91,9 @@ export async function guardarCotizacionEnOdoo(data: {
 
     // 4. Crear cotización, confirmarla y crear órdenes de fabricación de forma síncrona.
     // autoConfirm=true asegura que todo quede creado antes de responder al usuario.
-    const cotizacionId = await odooSales.createQuote(clienteId, lineas, rawItems, true, data.clientName);
+    const odooQuote = await odooSales.createQuote(clienteId, lineas, rawItems, true, data.clientName);
 
-    return { exito: true, cotizacionId };
+    return { exito: true, cotizacionId: odooQuote.id, cotizacionName: odooQuote.name };
   } catch (error: any) {
     console.error('Error en Server Action Odoo:', error);
     return { exito: false, error: error.message || 'Error desconocido' };
@@ -146,8 +146,8 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
       cristal: { tipo: item.cristal.tipo, espesor: item.cristal.espesor },
     }));
 
-    const cotizacionId = await odooSales.createMonoliticQuote(clienteId, lineas, rawItems, true, data.clientName);
-    return { exito: true, cotizacionId };
+    const odooQuote = await odooSales.createMonoliticQuote(clienteId, lineas, rawItems, true, data.clientName);
+    return { exito: true, cotizacionId: odooQuote.id, cotizacionName: odooQuote.name };
   } catch (error: any) {
     console.error('Error en Server Action Odoo (Monolítico):', error);
     return { exito: false, error: error.message || 'Error desconocido' };
