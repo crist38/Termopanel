@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react"
 import { MonoliticoItem, calcularItemMonolitico, calcularTotalMonolitico } from "@/lib/calculos/monolitico"
 import { TIPOS_UNICOS as STATIC_TIPOS_UNICOS } from "@/lib/data/vidrios"
-import { collection, getDocs, query, orderBy, limit, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -265,6 +265,21 @@ function CotizadorMonoliticoContent() {
 
       if (response.exito) {
         alert(`¡Cotización enviada exitosamente a Odoo!\nID Odoo: ${response.cotizacionId}`);
+        
+        handlePrint();
+
+        await setDoc(doc(db, 'presupuestos_monoliticos', String(budgetNumber)), {
+          budgetNumber,
+          clientName,
+          date: new Date().toISOString(),
+          items,
+          totalNeto
+        });
+
+        setBudgetNumber(prev => prev + 1);
+        setClientName('');
+        setItems([{ id: crypto.randomUUID(), label: "V1", cantidad: 1, ancho: 1000, alto: 1000, cristal: { tipo: "Incoloro", espesor: 4 }, precioUnitario: 0 }]);
+
       } else {
         alert(`Error al guardar en Odoo: ${response.error}`);
       }
