@@ -11,6 +11,7 @@ import jsPDF from 'jspdf';
 import { Printer, Plus, Trash2, Settings, Cloud, ClipboardList, LogOut } from 'lucide-react';
 import { guardarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { logoutFromOdoo } from '@/app/actions/auth';
+import { ClientSelector } from '@/components/ClientSelector';
 
 
 function CotizadorTermopanelContent() {
@@ -36,6 +37,7 @@ function CotizadorTermopanelContent() {
 
   // Estado para Información del Cliente y Presupuesto
   const [clientName, setClientName] = useState('');
+  const [clientId, setClientId] = useState<number | undefined>(undefined);
   const [budgetName, setBudgetName] = useState('Borrador');
   const [budgetDate, setBudgetDate] = useState('');
 
@@ -240,6 +242,7 @@ function CotizadorTermopanelContent() {
     setIsSyncingOdoo(true);
     try {
       const odooRes = await guardarCotizacionEnOdoo({
+        clientId,
         clientName,
         budgetNumber: 0,
         items,
@@ -701,16 +704,16 @@ function CotizadorTermopanelContent() {
       <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6">
         <div className="max-w-md">
           <label className="block text-sm font-medium text-slate-600 mb-1">Nombre Cliente</label>
-          <input
-            suppressHydrationWarning
-            type="text"
+          <ClientSelector
             value={clientName}
-            onChange={(e) => setClientName(e.target.value)}
-            className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            placeholder="Ej. Juan Pérez"
+            clientId={clientId}
+            onChange={(name, id) => {
+              setClientName(name);
+              setClientId(id);
+            }}
           />
         </div>
-      </div >
+      </div>
 
       <div className="overflow-x-auto bg-white rounded-xl shadow-sm border border-slate-200">
         <table className="min-w-full text-xs sm:text-sm">

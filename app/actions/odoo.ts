@@ -1,28 +1,53 @@
 'use server'
 
-import { odooCustomers } from '@/lib/odoo-customers';
+import { odooCustomers, OdooCustomer, CustomerInput } from '@/lib/odoo-customers';
 import { odooSales, SaleOrderLineInput, TermopanelItemData } from '@/lib/odoo-sales';
 import { getSession } from '@/app/actions/auth';
 
+export async function buscarClientesOdoo(query: string): Promise<{ exito: boolean; data?: OdooCustomer[]; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session) return { exito: false, error: 'No autorizado' };
+    const clientes = await odooCustomers.searchCustomer(query);
+    return { exito: true, data: clientes };
+  } catch (error: any) {
+    return { exito: false, error: error.message || 'Error al buscar clientes' };
+  }
+}
+
+export async function crearClienteOdoo(data: CustomerInput): Promise<{ exito: boolean; id?: number; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session) return { exito: false, error: 'No autorizado' };
+    const clientId = await odooCustomers.createCustomer(data);
+    return { exito: true, id: clientId };
+  } catch (error: any) {
+    return { exito: false, error: error.message || 'Error al crear cliente' };
+  }
+}
+
 export async function guardarCotizacionEnOdoo(data: {
+  clientId?: number;
   clientName: string;
   budgetNumber: number;
   items: any[];
   totalNeto: number;
 }) {
   try {
-    if (!data.clientName) {
+    if (!data.clientName && !data.clientId) {
       return { exito: false, error: 'El nombre del cliente es obligatorio' };
     }
 
     // 1. Obtener o crear cliente en Odoo
-    const clienteId = await odooCustomers.getOrCreateCustomer({
-      name: data.clientName,
-      // Si en el futuro agregas email o RUT al formulario, pásalos aquí:
-      // email: data.clientEmail,
-      // vat: data.clientRut
-    });
-
+    let clienteId = data.clientId;
+    if (!clienteId) {
+      clienteId = await odooCustomers.getOrCreateCustomer({
+        name: data.clientName || 'Cliente sin nombre',
+      });
+    }
+    // Si en el futuro agregas email o RUT al formulario, pásalos aquí:
+    // email: data.clientEmail,
+    // vat: data.clientRut
     // 2. Preparar las líneas de la cotización
     // Odoo requiere un product_id válido en cada línea para poder confirmar pedidos.
     // Se usa un producto genérico de tipo "service" configurado en la variable de entorno.
@@ -104,17 +129,21 @@ export async function guardarCotizacionEnOdoo(data: {
 }
 
 export async function guardarCotizacionMonoliticoEnOdoo(data: {
+  clientId?: number;
   clientName: string;
   budgetNumber: number;
   items: any[];
   totalNeto: number;
 }) {
   try {
-    if (!data.clientName) {
+    if (!data.clientName && !data.clientId) {
       return { exito: false, error: 'El nombre del cliente es obligatorio' };
     }
 
-    const clienteId = await odooCustomers.getOrCreateCustomer({ name: data.clientName });
+    let clienteId = data.clientId;
+    if (!clienteId) {
+      clienteId = await odooCustomers.getOrCreateCustomer({ name: data.clientName || 'Cliente sin nombre' });
+    }
 
     if (!process.env.ODOO_DEFAULT_PRODUCT_ID) {
       return { exito: false, error: 'Variable de entorno ODOO_DEFAULT_PRODUCT_ID no configurada en el servidor.' };

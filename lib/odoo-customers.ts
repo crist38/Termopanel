@@ -31,7 +31,7 @@ export class OdooCustomersService {
       'res.partner',
       'search_read',
       [
-        ['|', ['email', 'ilike', query], ['vat', 'ilike', query]] // Busca coincidencias en email OR vat
+        ['|', '|', ['name', 'ilike', query], ['email', 'ilike', query], ['vat', 'ilike', query]] // Busca coincidencias en name, email OR vat
       ],
       {
         fields: ['id', 'name', 'email', 'vat', 'phone'],
