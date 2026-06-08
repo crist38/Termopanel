@@ -2,6 +2,7 @@
 
 import { odooCustomers } from '@/lib/odoo-customers';
 import { odooSales, SaleOrderLineInput, TermopanelItemData } from '@/lib/odoo-sales';
+import { getSession } from '@/app/actions/auth';
 
 export async function guardarCotizacionEnOdoo(data: {
   clientName: string;
@@ -91,7 +92,9 @@ export async function guardarCotizacionEnOdoo(data: {
 
     // 4. Crear cotización, confirmarla y crear órdenes de fabricación de forma síncrona.
     // autoConfirm=true asegura que todo quede creado antes de responder al usuario.
-    const odooQuote = await odooSales.createQuote(clienteId, lineas, rawItems, true, data.clientName);
+    const session = await getSession();
+    const userId = session?.uid;
+    const odooQuote = await odooSales.createQuote(clienteId, lineas, rawItems, true, data.clientName, userId);
 
     return { exito: true, cotizacionId: odooQuote.id, cotizacionName: odooQuote.name };
   } catch (error: any) {
@@ -146,7 +149,9 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
       cristal: { tipo: item.cristal.tipo, espesor: item.cristal.espesor },
     }));
 
-    const odooQuote = await odooSales.createMonoliticQuote(clienteId, lineas, rawItems, true, data.clientName);
+    const session = await getSession();
+    const userId = session?.uid;
+    const odooQuote = await odooSales.createMonoliticQuote(clienteId, lineas, rawItems, true, data.clientName, userId);
     return { exito: true, cotizacionId: odooQuote.id, cotizacionName: odooQuote.name };
   } catch (error: any) {
     console.error('Error en Server Action Odoo (Monolítico):', error);
