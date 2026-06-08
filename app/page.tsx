@@ -417,6 +417,7 @@ function CotizadorTermopanelContent() {
     const finalName = overrideName || budgetName;
     if (items.length === 0) return;
     const pdf = new jsPDF();
+    const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
 
     // Cargar logo
     let logoBase64: string | null = null;
@@ -522,9 +523,16 @@ function CotizadorTermopanelContent() {
     pdf.setDrawColor(200, 200, 200);
     pdf.line(14, yPos, 196, yPos);
 
+    yPos += 8;
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(`Total a cortar: ${(totalM2 * 2).toFixed(2)} m²`, 14, yPos);
+
     // Nota al pie
-    yPos += 10;
+    yPos += 8;
     pdf.setFontSize(8);
+    pdf.setFont("helvetica", "normal");
     pdf.setTextColor(120, 120, 120);
     pdf.text("* Las medidas de los cristales corresponden al termopanel completo. Ajustar descuentos según separador.", 14, yPos);
 
@@ -629,7 +637,11 @@ function CotizadorTermopanelContent() {
     pdf.setDrawColor(200, 200, 200);
     pdf.line(14, yPos, 196, yPos);
 
-
+    yPos += 8;
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(`Total a armar: ${totalM2.toFixed(2)} m²`, 14, yPos);
 
     const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
     pdf.save(`Ordenes_Trabajo_${finalName}_${sanitizedClientName}.pdf`);

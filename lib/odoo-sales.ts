@@ -76,7 +76,8 @@ export class OdooSalesService {
     lines: SaleOrderLineInput[],
     rawItems: TermopanelItemData[] = [],
     autoConfirm = true,
-    clientName = ''
+    clientName = '',
+    userId?: number
   ): Promise<{ id: number; name: string }> {
     const orderLinesTuples = lines.map(line => {
       if (line.is_note) {
@@ -97,10 +98,11 @@ export class OdooSalesService {
       }];
     });
 
-    const orderData = {
+    const orderData: any = {
       partner_id: partnerId,
       order_line: orderLinesTuples,
     };
+    if (userId) orderData.user_id = userId;
 
     const newOrderId = await odoo.executeKw('sale.order', 'create', [[orderData]]);
     const orderId = Array.isArray(newOrderId) ? newOrderId[0] : newOrderId;
@@ -543,7 +545,8 @@ export class OdooSalesService {
     lines: SaleOrderLineInput[],
     rawItems: MonoliticoItemData[],
     autoConfirm = true,
-    clientName = ''
+    clientName = '',
+    userId?: number
   ): Promise<{ id: number; name: string }> {
     const orderLinesTuples = lines.map(line => {
       if (line.is_note) return [0, 0, { display_type: 'line_note', name: line.name }];
@@ -558,7 +561,8 @@ export class OdooSalesService {
       }];
     });
 
-    const orderData = { partner_id: partnerId, order_line: orderLinesTuples };
+    const orderData: any = { partner_id: partnerId, order_line: orderLinesTuples };
+    if (userId) orderData.user_id = userId;
     const newOrderId = await odoo.executeKw('sale.order', 'create', [[orderData]]);
     const orderId = Array.isArray(newOrderId) ? newOrderId[0] : newOrderId;
 
