@@ -10,6 +10,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { Printer, Plus, Trash2, Cloud } from 'lucide-react';
 import { guardarCotizacionMonoliticoEnOdoo } from '@/app/actions/odoo';
+import { ClientSelector } from '@/components/ClientSelector';
 
 function CotizadorMonoliticoContent() {
   const [config, setConfig] = useState<TermopanelConfig | null>(null);
@@ -28,6 +29,7 @@ function CotizadorMonoliticoContent() {
   ])
 
   const [clientName, setClientName] = useState('');
+  const [clientId, setClientId] = useState<number | undefined>(undefined);
   const [budgetName, setBudgetName] = useState('Borrador');
   const [budgetDate, setBudgetDate] = useState('');
 
@@ -242,6 +244,7 @@ function CotizadorMonoliticoContent() {
     setIsSyncingOdoo(true);
     try {
       const response = await guardarCotizacionMonoliticoEnOdoo({
+        clientId,
         clientName,
         budgetNumber: 0,
         items,
@@ -313,12 +316,13 @@ function CotizadorMonoliticoContent() {
         <div className="flex flex-col sm:flex-row gap-4 items-end">
           <div className="w-full sm:w-1/3">
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Nombre del Cliente / Obra</label>
-            <input
-              type="text"
+            <ClientSelector
               value={clientName}
-              onChange={e => setClientName(e.target.value)}
-              placeholder="Ej: Constructora ABC / Edificio Central"
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              clientId={clientId}
+              onChange={(name, id) => {
+                setClientName(name);
+                setClientId(id);
+              }}
             />
           </div>
           <div className="w-full sm:w-1/4">
