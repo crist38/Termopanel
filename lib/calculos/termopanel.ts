@@ -10,6 +10,7 @@ export interface TermopanelItem {
   gas: boolean
   micropersiana: boolean
   palillaje: boolean
+  descuento?: number // Porcentaje de descuento (0-100)
   precioUnitario: number
 }
 
@@ -23,7 +24,7 @@ export interface ParametrosCalculo {
   /** Factor de pérdida de insumos de maquila (aplica sobre maquila) */
   factorPerdida: number               // default: 0.12 (12%)
   /** Factor de gastos generales + overhead sobre costos totales */
-  factorGG: number                    // default: 1.4 (40% sobre costo)
+  factorGG: number                    // default: 1.0 (100% sobre costo, modificado desde 1.4)
   /** Factor de precio de venta sobre el costo con GG (margen de utilidad) */
   factorVenta: number                 // default: 1.9584
   /** Costo adicional por gas argón (por unidad) */
@@ -33,7 +34,7 @@ export interface ParametrosCalculo {
 export const PARAMETROS_DEFAULT: ParametrosCalculo = {
   costoButiloSalesPorMl: 361.59,
   factorPerdida: 0.12,
-  factorGG: 1.4,
+  factorGG: 1.0,
   factorVenta: 1.9584,
   costoGasArgon: 1300,
 }
@@ -75,7 +76,11 @@ export function calcularPrecioUnitario(
   if (item.gas) base += params.costoGasArgon
 
   const colGG = base * params.factorGG
-  const pu = colGG * params.factorVenta
+  let pu = colGG * params.factorVenta
+
+  if (item.descuento && item.descuento > 0) {
+    pu = pu * (1 - item.descuento / 100)
+  }
 
   return Math.round(pu)
 }

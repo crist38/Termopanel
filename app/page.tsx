@@ -31,6 +31,7 @@ function CotizadorTermopanelContent() {
       gas: false,
       micropersiana: false,
       palillaje: false,
+      descuento: 0,
       precioUnitario: 0
     }
   ])
@@ -220,6 +221,7 @@ function CotizadorTermopanelContent() {
       gas: false,
       micropersiana: false,
       palillaje: false,
+      descuento: 0,
       precioUnitario: 0
     }
     setItems([...items, newItem])
@@ -275,6 +277,7 @@ function CotizadorTermopanelContent() {
             gas: false,
             micropersiana: false,
             palillaje: false,
+            descuento: 0,
             precioUnitario: 0
           }
         ]);
@@ -726,6 +729,7 @@ function CotizadorTermopanelContent() {
               <th className="p-3 text-center border-r border-slate-200 bg-amber-50/50" colSpan={2}>Cristal 2</th>
               <th className="p-3 text-center border-r border-slate-200 bg-gray-50/50" colSpan={2}>Separador</th>
               <th className="p-3 text-center border-r border-slate-200 w-24">Extras</th>
+              <th className="p-3 text-center border-r border-slate-200 w-20">Desc. (%)</th>
               <th className="p-3 text-center border-r border-slate-200 w-28">P. Unit (V)</th>
               <th className="p-3 text-center border-r border-slate-200 w-28">Total</th>
               <th className="p-3 text-center w-10"></th>
@@ -742,6 +746,7 @@ function CotizadorTermopanelContent() {
               <th className="p-1 border-r border-t border-slate-200 text-center font-semibold">mm</th>
               <th className="p-1 border-r border-t border-slate-200 text-center font-semibold">Color</th>
               <th className="p-1 border-r border-t border-slate-200 text-center font-semibold">G/M/P</th>
+              <th className="p-1 border-r border-t border-slate-200 text-center font-semibold">%</th>
               <th className="border-r border-slate-200 text-center font-semibold">($)</th>
               <th className="border-r border-slate-200 text-center font-semibold">($)</th>
               <th></th>
@@ -859,6 +864,17 @@ function CotizadorTermopanelContent() {
                     <label title="Palillaje" className="cursor-pointer text-xs"><input type="checkbox" checked={item.palillaje} onChange={e => updateItem(item.id, 'palillaje', e.target.checked)} className="accent-teal-600" /> P</label>
                   </td>
 
+                  {/* Descuento */}
+                  <td className="p-1 border-r border-slate-100">
+                    <input
+                      type="number"
+                      value={item.descuento || ""}
+                      onChange={e => updateItem(item.id, 'descuento', parseInt(e.target.value) || 0)}
+                      className="w-full text-center bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1 outline-none text-sm text-slate-700"
+                      placeholder="0"
+                    />
+                  </td>
+
                   {/* Precio Unitario */}
                   <td className="p-1 border-r border-slate-100">
                     <input
@@ -891,7 +907,7 @@ function CotizadorTermopanelContent() {
           </tbody>
           <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
             <tr>
-              <td colSpan={12} className="p-4 text-right text-slate-600 text-sm">Total Neto:</td>
+              <td colSpan={13} className="p-4 text-right text-slate-600 text-sm">Total Neto:</td>
               <td className="p-4 text-right text-slate-900 border-l border-slate-200 font-mono text-xl">
                 ${totalNeto.toLocaleString()}
               </td>
