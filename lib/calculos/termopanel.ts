@@ -24,19 +24,22 @@ export interface ParametrosCalculo {
   /** Factor de pérdida de insumos de maquila (aplica sobre maquila) */
   factorPerdida: number               // default: 0.12 (12%)
   /** Factor de gastos generales + overhead sobre costos totales */
-  factorGG: number                    // default: 1.0 (100% sobre costo, modificado desde 1.4)
+  factorGG: number                    // default: 1.1 (110% sobre costo)
   /** Factor de precio de venta sobre el costo con GG (margen de utilidad) */
   factorVenta: number                 // default: 1.9584
   /** Costo adicional por gas argón (por unidad) */
   costoGasArgon: number               // default: 1300 CLP
+  /** Costo de mano de obra (por m2) */
+  costoManoDeObra: number             // default: 1650 CLP
 }
 
 export const PARAMETROS_DEFAULT: ParametrosCalculo = {
   costoButiloSalesPorMl: 361.59,
   factorPerdida: 0.12,
-  factorGG: 1.0,
+  factorGG: 1.1,
   factorVenta: 1.9584,
   costoGasArgon: 1300,
+  costoManoDeObra: 1650,
 }
 
 /**
@@ -69,8 +72,9 @@ export function calcularPrecioUnitario(
   const C2 = precioCristal2 * m2
   const maquila = (params.costoButiloSalesPorMl + precioSeparadorPorMl) * ml
   const perdida = maquila * params.factorPerdida
+  const manoDeObra = (params.costoManoDeObra || 1650) * m2
 
-  let base = C1 + C2 + maquila + perdida
+  let base = C1 + C2 + maquila + perdida + manoDeObra
 
   // Extras
   if (item.gas) base += params.costoGasArgon
