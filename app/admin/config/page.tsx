@@ -132,6 +132,17 @@ export default function ConfigPage() {
     });
   };
 
+  const updateFactorGG = (value: string) => {
+    if (!config) return;
+    setConfig({
+      ...config,
+      parametrosCalculo: {
+        ...(config.parametrosCalculo || {}),
+        factorGG: parseFloat(value) || 1.0
+      }
+    });
+  };
+
   if (isLoading) {
     return <div className="flex h-screen items-center justify-center text-slate-500">Cargando configuración...</div>;
   }
@@ -323,19 +334,37 @@ export default function ConfigPage() {
               <h2 className="text-lg font-bold text-slate-800">Parámetros Adicionales</h2>
             </div>
             <div className="p-6">
-              <div className="flex flex-col gap-2 max-w-xs">
-                <label className="text-sm font-semibold text-slate-700">Mano de Obra (por m²)</label>
-                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
-                  <span className="text-slate-400 font-mono font-medium">$</span>
-                  <input
-                    type="number"
-                    value={config.parametrosCalculo?.costoManoDeObra === 0 ? '' : (config.parametrosCalculo?.costoManoDeObra || '')}
-                    onChange={e => updateManoDeObra(e.target.value)}
-                    className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium"
-                    placeholder="Ej: 1650"
-                  />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-semibold text-slate-700">Mano de Obra (por m²)</label>
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                    <span className="text-slate-400 font-mono font-medium">$</span>
+                    <input
+                      type="number"
+                      value={config.parametrosCalculo?.costoManoDeObra === 0 ? '' : (config.parametrosCalculo?.costoManoDeObra || '')}
+                      onChange={e => updateManoDeObra(e.target.value)}
+                      className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium"
+                      placeholder="Ej: 1650"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500">Este costo se suma a los materiales base.</p>
                 </div>
-                <p className="text-xs text-slate-500">Este costo se suma a los materiales base.</p>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-semibold text-slate-700">Factor de Recargo (GG)</label>
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                    <span className="text-slate-400 font-mono font-medium">x</span>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={config.parametrosCalculo?.factorGG || ''}
+                      onChange={e => updateFactorGG(e.target.value)}
+                      className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium"
+                      placeholder="Ej: 1.1009"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500">Multiplicador sobre la base (ej. 1.1009 = 110.09%).</p>
+                </div>
               </div>
             </div>
           </section>

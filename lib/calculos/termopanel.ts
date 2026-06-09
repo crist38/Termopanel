@@ -24,7 +24,7 @@ export interface ParametrosCalculo {
   /** Factor de pérdida de insumos de maquila (aplica sobre maquila) */
   factorPerdida: number               // default: 0.12 (12%)
   /** Factor de gastos generales + overhead sobre costos totales */
-  factorGG: number                    // default: 1.11 (111% sobre costo)
+  factorGG: number                    // default: 1.1009 (Ajustado para meta de 40.000)
   /** Factor de precio de venta sobre el costo con GG (margen de utilidad) */
   factorVenta: number                 // default: 1.9584
   /** Costo adicional por gas argón (por unidad) */
@@ -36,7 +36,7 @@ export interface ParametrosCalculo {
 export const PARAMETROS_DEFAULT: ParametrosCalculo = {
   costoButiloSalesPorMl: 361.59,
   factorPerdida: 0.12,
-  factorGG: 1.11,
+  factorGG: 1.1009,
   factorVenta: 1.9584,
   costoGasArgon: 1300,
   costoManoDeObra: 1650,
