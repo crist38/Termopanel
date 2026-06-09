@@ -65,7 +65,7 @@ export async function getTermopanelConfig(): Promise<TermopanelConfig> {
       return {
         ...DEFAULT_CONFIG,
         ...data,
-        parametrosCalculo: { ...PARAMETROS_DEFAULT, ...(data.parametrosCalculo || {}) },
+        parametrosCalculo: { ...PARAMETROS_DEFAULT, ...(data.parametrosCalculo || {}), factorGG: 1.0 },
         preciosSeparadores: data.preciosSeparadores?.length
           ? data.preciosSeparadores
           : PRECIOS_SEPARADORES_DEFAULT,
