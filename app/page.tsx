@@ -8,7 +8,7 @@ import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Printer, Plus, Trash2, Settings, Cloud, ClipboardList, LogOut } from 'lucide-react';
+import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, BarChart2 } from 'lucide-react';
 import { guardarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { logoutFromOdoo } from '@/app/actions/auth';
 import { ClientSelector } from '@/components/ClientSelector';
@@ -233,6 +233,7 @@ function CotizadorTermopanelContent() {
   }
 
   const totalNeto = calcularTotal(items)
+  const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
 
 
 
@@ -323,6 +324,9 @@ function CotizadorTermopanelContent() {
     doc.text("Información del Cliente", 14, 45);
     doc.setFontSize(10);
     doc.text(`Nombre: ${clientName}`, 14, 53);
+    
+    const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
+    doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} m²`, 14, 61);
 
     // Encabezado de Tabla
     let yPos = 75;
@@ -367,8 +371,17 @@ function CotizadorTermopanelContent() {
     // Total
     doc.line(14, yPos, 196, yPos);
     yPos += 10;
+
+    const iva = Math.round(totalNeto * 0.19);
+    const totalConIva = totalNeto + iva;
+
     doc.setFont("helvetica", "bold");
     doc.text(`Total Neto: $${totalNeto.toLocaleString('es-CL')}`, 140, yPos);
+    yPos += 6;
+    doc.text(`IVA (19%): $${iva.toLocaleString('es-CL')}`, 140, yPos);
+    yPos += 6;
+    doc.setFontSize(11);
+    doc.text(`Total: $${totalConIva.toLocaleString('es-CL')}`, 140, yPos);
 
 
 
@@ -662,7 +675,7 @@ function CotizadorTermopanelContent() {
   }
 
   return (
-    <div className="p-4 bg-slate-50 min-h-screen font-sans">
+    <div className="p-4 pb-24 bg-slate-50 min-h-screen font-sans">
       <header className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Cotizador de Termopaneles</h1>
@@ -687,9 +700,9 @@ function CotizadorTermopanelContent() {
             <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
             {isSyncingOdoo ? 'Enviando a Odoo (puede tardar ~1-2 min)...' : 'Procesar Todo (Odoo + PDFs)'}
           </button>
-          <a href="/admin/config" className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-            <Settings size={16} />
-            Configuración
+          <a href="/reports" className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+            <BarChart2 size={16} />
+            Reportes
           </a>
           <form action={logoutFromOdoo}>
             <button
@@ -907,9 +920,23 @@ function CotizadorTermopanelContent() {
           </tbody>
           <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
             <tr>
-              <td colSpan={13} className="p-4 text-right text-slate-600 text-sm">Total Neto:</td>
-              <td className="p-4 text-right text-slate-900 border-l border-slate-200 font-mono text-xl">
+              <td colSpan={13} className="p-2 text-right text-slate-600 text-sm border-r border-slate-100">Total Neto:</td>
+              <td className="p-2 text-right text-slate-900 font-mono text-base px-2">
                 ${totalNeto.toLocaleString()}
+              </td>
+              <td></td>
+            </tr>
+            <tr>
+              <td colSpan={13} className="p-2 text-right text-slate-600 text-sm border-r border-slate-100">IVA (19%):</td>
+              <td className="p-2 text-right text-slate-900 font-mono text-base px-2">
+                ${Math.round(totalNeto * 0.19).toLocaleString()}
+              </td>
+              <td></td>
+            </tr>
+            <tr className="bg-slate-100/50">
+              <td colSpan={13} className="p-3 text-right text-slate-800 text-sm border-r border-slate-100">Total:</td>
+              <td className="p-3 text-right text-teal-700 font-mono text-lg font-bold px-2">
+                ${Math.round(totalNeto * 1.19).toLocaleString()}
               </td>
               <td></td>
             </tr>
@@ -928,6 +955,33 @@ function CotizadorTermopanelContent() {
           * Los precios base se calculan automáticamente según el m² de vidrio.
         </div>
       </div>
+
+      {/* Footer Fijo con Resumen de Metros Cuadrados */}
+      <footer className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-200 shadow-[0_-8px_30px_rgb(0,0,0,0.04)] p-4 z-40">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-teal-50 text-teal-600 rounded-lg">
+              <ClipboardList size={20} />
+            </div>
+            <div>
+              <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Metraje Total</p>
+              <p className="text-sm sm:text-base font-bold text-slate-800">
+                Total Metros Cuadrados: <span className="text-teal-600 font-mono">{totalM2.toFixed(2)} m²</span>
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="text-right">
+              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Total Neto</p>
+              <p className="text-sm font-bold text-slate-800 font-mono">${totalNeto.toLocaleString()}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Total (con IVA)</p>
+              <p className="text-sm font-bold text-teal-700 font-mono">${Math.round(totalNeto * 1.19).toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div >
   )
 }

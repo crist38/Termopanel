@@ -145,10 +145,11 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
       clienteId = await odooCustomers.getOrCreateCustomer({ name: data.clientName || 'Cliente sin nombre' });
     }
 
-    if (!process.env.ODOO_DEFAULT_PRODUCT_ID) {
-      return { exito: false, error: 'Variable de entorno ODOO_DEFAULT_PRODUCT_ID no configurada en el servidor.' };
+    const monoliticoProductIdStr = process.env.ODOO_MONOLITIC_PRODUCT_ID || process.env.ODOO_DEFAULT_PRODUCT_ID;
+    if (!monoliticoProductIdStr) {
+      return { exito: false, error: 'Variable de entorno ODOO_MONOLITIC_PRODUCT_ID o ODOO_DEFAULT_PRODUCT_ID no configurada en el servidor.' };
     }
-    const defaultProductId = parseInt(process.env.ODOO_DEFAULT_PRODUCT_ID);
+    const monoliticoProductId = parseInt(monoliticoProductIdStr);
 
     const lineas: SaleOrderLineInput[] = data.items.map((item, index) => {
       const itemLabel = item.label || `V${index + 1}`;
@@ -161,7 +162,7 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
       const priceUnitM2 = qtyRounded > 0 ? Math.round(totalPrice / qtyRounded) : 0;
 
       return {
-        product_id: defaultProductId,
+        product_id: monoliticoProductId,
         name: desc,
         product_uom_qty: qtyRounded,
         price_unit: priceUnitM2,
