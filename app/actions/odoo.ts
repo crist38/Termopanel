@@ -59,7 +59,7 @@ export async function guardarCotizacionEnOdoo(data: {
 
     const lineas: SaleOrderLineInput[] = data.items.map((item, index) => {
       const extras = [];
-      if (item.gas) extras.push('Gas Argón');
+      if (item.pulido) extras.push('Pulido');
       if (item.micropersiana) extras.push('Micropersiana');
       if (item.palillaje) extras.push('Palillaje');
 
@@ -111,7 +111,7 @@ export async function guardarCotizacionEnOdoo(data: {
       cristal1: { tipo: item.cristal1.tipo, espesor: item.cristal1.espesor },
       cristal2: { tipo: item.cristal2.tipo, espesor: item.cristal2.espesor },
       separador: { espesor: item.separador.espesor, color: item.separador.color },
-      gas: item.gas,
+      pulido: item.pulido,
       micropersiana: item.micropersiana,
       palillaje: item.palillaje,
     }));
