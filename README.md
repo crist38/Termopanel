@@ -98,6 +98,13 @@ La integración se maneja desde el servidor (Next.js Server Actions), garantizan
 
 ## 📋 Changelog
 
+### v2.2 - Junio 2026
+- ✅ **Gestión de Cotizaciones de Odoo**: Nueva página `/cotizaciones` para listar, buscar, filtrar por estado y ver el detalle de cotizaciones almacenadas en Odoo.
+- ✅ **Búsqueda y Paginación**: Caja de búsqueda interactiva (con debounce) por cliente y N° de Orden, y paginación de 15 registros por página.
+- ✅ **Edición de Cotizaciones Draft**: Permite modificar la cantidad y el precio unitario de las líneas de cotizaciones en borrador (`draft`) directamente desde la app, recalculando los totales (neto, IVA y total) y sincronizándolos con Odoo.
+- ✅ **Cancelación de Pedidos**: Opción de cancelar cotizaciones en estado borrador desde la interfaz con confirmación de seguridad.
+- ✅ **Navegación Integrada**: Enlace directo en el Navbar con el ícono `FileText` para fácil acceso.
+
 ### v2.1 - Junio 2026
 - ✅ **Optimización de Integración con Odoo**: Creación de MOs y WOs por lote (batching) y notas en paralelo (reduce las llamadas API de 28 a solo 3 para cotizaciones de varios productos).
 - ✅ **Ejecución en Segundo Plano**: Uso de Next.js `after()` para confirmar pedidos y fabricar en Odoo en segundo plano (la respuesta web es instantánea y se evitan timeouts).
