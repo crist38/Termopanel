@@ -38,6 +38,7 @@ function CotizadorTermopanelContent() {
 
   // Estado para Información del Cliente y Presupuesto
   const [clientName, setClientName] = useState('');
+  const [obra, setObra] = useState('');
   const [clientId, setClientId] = useState<number | undefined>(undefined);
   const [budgetName, setBudgetName] = useState('Borrador');
   const [budgetDate, setBudgetDate] = useState('');
@@ -89,6 +90,7 @@ function CotizadorTermopanelContent() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setClientName(data.clientName || '');
+          setObra(data.obra || '');
           setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
           setItems(data.items || []);
         }
@@ -264,6 +266,7 @@ function CotizadorTermopanelContent() {
 
         // Limpiar formulario para la siguiente cotización
         setClientName('');
+        setObra('');
         setBudgetName('Borrador');
         setItems([
           {
@@ -325,11 +328,17 @@ function CotizadorTermopanelContent() {
     doc.setFontSize(10);
     doc.text(`Nombre: ${clientName}`, 14, 53);
     
+    let currentY = 53;
+    if (obra.trim()) {
+      currentY += 8;
+      doc.text(`Obra: ${obra.trim()}`, 14, currentY);
+    }
+    currentY += 8;
     const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
-    doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} m²`, 14, 61);
+    doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} m²`, 14, currentY);
 
     // Encabezado de Tabla
-    let yPos = 75;
+    let yPos = currentY + 14;
     doc.setFillColor(240, 240, 240);
     doc.rect(14, yPos - 5, 182, 8, 'F');
     doc.setFont("helvetica", "bold");
@@ -471,13 +480,18 @@ function CotizadorTermopanelContent() {
     pdf.text(`Ref: ${finalName}`, 155, 18);
     pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
     pdf.text(`Cliente: ${clientName}`, 155, 30);
+    let topHeaderOffset = 38;
+    if (obra.trim()) {
+      pdf.text(`Obra: ${obra.trim()}`, 155, 36);
+      topHeaderOffset = 44;
+    }
 
     // Línea separadora
     pdf.setDrawColor(200, 200, 200);
-    pdf.line(14, 38, 196, 38);
+    pdf.line(14, topHeaderOffset, 196, topHeaderOffset);
 
     // Encabezado tabla Corte Vidrio
-    let yPos = 48;
+    let yPos = topHeaderOffset + 10;
     pdf.setFillColor(51, 65, 85); // slate-700
     pdf.rect(14, yPos - 6, 182, 9, 'F');
     pdf.setTextColor(255, 255, 255);
@@ -577,13 +591,18 @@ function CotizadorTermopanelContent() {
     pdf.text(`Ref: ${finalName}`, 155, 18);
     pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
     pdf.text(`Cliente: ${clientName}`, 155, 30);
+    topHeaderOffset = 38;
+    if (obra.trim()) {
+      pdf.text(`Obra: ${obra.trim()}`, 155, 36);
+      topHeaderOffset = 44;
+    }
 
     // Línea separadora
     pdf.setDrawColor(200, 200, 200);
-    pdf.line(14, 38, 196, 38);
+    pdf.line(14, topHeaderOffset, 196, topHeaderOffset);
 
     // Encabezado tabla Termopaneles
-    yPos = 48;
+    yPos = topHeaderOffset + 10;
     pdf.setFillColor(15, 118, 110); // teal-700
     pdf.rect(14, yPos - 6, 182, 9, 'F');
     pdf.setTextColor(255, 255, 255);
@@ -718,16 +737,28 @@ function CotizadorTermopanelContent() {
       </header>
       {/* Sección de Información del Cliente */}
       <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6">
-        <div className="max-w-md">
-          <label className="block text-sm font-medium text-slate-600 mb-1">Nombre Cliente</label>
-          <ClientSelector
-            value={clientName}
-            clientId={clientId}
-            onChange={(name, id) => {
-              setClientName(name);
-              setClientId(id);
-            }}
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">Nombre Cliente</label>
+            <ClientSelector
+              value={clientName}
+              clientId={clientId}
+              onChange={(name, id) => {
+                setClientName(name);
+                setClientId(id);
+              }}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">Obra (Opcional)</label>
+            <input
+              type="text"
+              value={obra}
+              onChange={(e) => setObra(e.target.value)}
+              placeholder="Nombre de la obra, dirección, etc."
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
+            />
+          </div>
         </div>
       </div>
 

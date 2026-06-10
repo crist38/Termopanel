@@ -29,6 +29,7 @@ function CotizadorMonoliticoContent() {
   ])
 
   const [clientName, setClientName] = useState('');
+  const [obra, setObra] = useState('');
   const [clientId, setClientId] = useState<number | undefined>(undefined);
   const [budgetName, setBudgetName] = useState('Borrador');
   const [budgetDate, setBudgetDate] = useState('');
@@ -71,6 +72,7 @@ function CotizadorMonoliticoContent() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setClientName(data.clientName || '');
+          setObra(data.obra || '');
           setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
           setItems(data.items || []);
         }
@@ -196,6 +198,10 @@ function CotizadorMonoliticoContent() {
     doc.text(`Fecha: ${budgetDate}`, 120, yPos);
     yPos += 7;
     doc.text(`Cliente: ${clientName || 'Sin Cliente'}`, 14, yPos);
+    if (obra.trim()) {
+      yPos += 7;
+      doc.text(`Obra: ${obra.trim()}`, 14, yPos);
+    }
     
     const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
     yPos += 7;
@@ -332,11 +338,16 @@ function CotizadorMonoliticoContent() {
     pdf.text(`Ref: ${finalName}`, 155, 18);
     pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
     pdf.text(`Cliente: ${clientName || 'Sin Cliente'}`, 155, 30);
+    let topHeaderOffset = 38;
+    if (obra.trim()) {
+      pdf.text(`Obra: ${obra.trim()}`, 155, 36);
+      topHeaderOffset = 44;
+    }
 
     pdf.setDrawColor(200, 200, 200);
-    pdf.line(14, 38, 196, 38);
+    pdf.line(14, topHeaderOffset, 196, topHeaderOffset);
 
-    let yPos = 48;
+    let yPos = topHeaderOffset + 10;
     pdf.setFillColor(51, 65, 85);
     pdf.rect(14, yPos - 6, 182, 9, 'F');
     pdf.setTextColor(255, 255, 255);
@@ -444,6 +455,7 @@ function CotizadorMonoliticoContent() {
         await handleExportAllPDFs(finalBudgetName);
 
         setClientName('');
+        setObra('');
         setBudgetName('Borrador');
         setItems([{ id: crypto.randomUUID(), label: "V1", cantidad: 1, ancho: 1000, alto: 1000, cristal: { tipo: "Incoloro", espesor: 4 }, precioUnitario: 0 }]);
 
@@ -506,7 +518,7 @@ function CotizadorMonoliticoContent() {
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6">
         <div className="flex flex-col sm:flex-row gap-4 items-end">
           <div className="w-full sm:w-1/3">
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Nombre del Cliente / Obra</label>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Nombre del Cliente</label>
             <ClientSelector
               value={clientName}
               clientId={clientId}
@@ -514,6 +526,16 @@ function CotizadorMonoliticoContent() {
                 setClientName(name);
                 setClientId(id);
               }}
+            />
+          </div>
+          <div className="w-full sm:w-1/3">
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Obra (Opcional)</label>
+            <input
+              type="text"
+              value={obra}
+              onChange={(e) => setObra(e.target.value)}
+              placeholder="Nombre de la obra, dirección, etc."
+              className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 text-slate-800"
             />
           </div>
           <div className="w-full sm:w-1/4">
