@@ -121,15 +121,38 @@ export default function ConfigPage() {
   };
 
   // --- Parámetros Generales ---
-  const updateManoDeObra = (value: string) => {
+  const updateParamCalculo = (field: string, value: string) => {
     if (!config) return;
     setConfig({
       ...config,
       parametrosCalculo: {
         ...(config.parametrosCalculo || {}),
-        costoManoDeObra: parseInt(value) || 0
+        [field]: value.includes('.') ? parseFloat(value) || 0 : parseInt(value) || 0
       }
     });
+  };
+
+  const getPrecioSeparador = (color: string, espesor: number): number => {
+    if (!config) return 0;
+    const found = config.preciosSeparadores?.find(
+      p => p.color.toLowerCase() === color.toLowerCase() && p.espesor === espesor
+    );
+    return found?.precioPorMl ?? 0;
+  };
+
+  const updatePrecioSeparador = (color: string, espesor: number, priceStr: string) => {
+    if (!config) return;
+    const price = parseInt(priceStr) || 0;
+    const prices = [...(config.preciosSeparadores || [])];
+    const idx = prices.findIndex(
+      p => p.color.toLowerCase() === color.toLowerCase() && p.espesor === espesor
+    );
+    if (idx !== -1) {
+      prices[idx] = { ...prices[idx], precioPorMl: price };
+    } else {
+      prices.push({ color, espesor, precioPorMl: price });
+    }
+    setConfig({ ...config, preciosSeparadores: prices });
   };
 
   if (isLoading) {
@@ -316,26 +339,158 @@ export default function ConfigPage() {
             </section>
           </div>
 
+          {/* MATRIZ DE PRECIOS DE SEPARADORES */}
+          <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="bg-slate-100 px-6 py-4 border-b border-slate-200 flex items-center gap-2">
+              <Hash className="text-teal-600" size={20} />
+              <h2 className="text-lg font-bold text-slate-800">Matriz de Precios de Separadores (por metro lineal)</h2>
+            </div>
+            <div className="p-6">
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                    <tr>
+                      <th className="p-3 text-left font-semibold">Color \ Espesor</th>
+                      {config.separadores.map(s => (
+                        <th key={s} className="p-3 text-center font-semibold">{s} mm</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {config.coloresSeparador.map(color => (
+                      <tr key={color} className="hover:bg-slate-50">
+                        <td className="p-3 font-semibold text-slate-700">{color}</td>
+                        {config.separadores.map(espesor => (
+                          <td key={espesor} className="p-2 text-center">
+                            <div className="flex items-center gap-1 justify-center max-w-[120px] mx-auto">
+                              <span className="text-xs text-slate-400 font-mono">$</span>
+                              <input
+                                type="number"
+                                value={getPrecioSeparador(color, espesor) || ''}
+                                onChange={e => updatePrecioSeparador(color, espesor, e.target.value)}
+                                className="p-1.5 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 outline-none w-20 text-center font-mono text-sm"
+                                placeholder="0"
+                              />
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-slate-500 mt-2">
+                * Configura el precio en CLP por metro lineal para cada combinación de color y espesor del separador.
+              </p>
+            </div>
+          </section>
+
           {/* PARAMETROS DE CALCULO */}
           <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="bg-slate-100 px-6 py-4 border-b border-slate-200 flex items-center gap-2">
               <Settings className="text-purple-500" size={20} />
-              <h2 className="text-lg font-bold text-slate-800">Parámetros Adicionales</h2>
+              <h2 className="text-lg font-bold text-slate-800">Parámetros de Costos Adicionales e Insumos</h2>
             </div>
             <div className="p-6">
-              <div className="flex flex-col gap-2 max-w-xs">
-                <label className="text-sm font-semibold text-slate-700">Mano de Obra (por m²)</label>
-                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
-                  <span className="text-slate-400 font-mono font-medium">$</span>
-                  <input
-                    type="number"
-                    value={config.parametrosCalculo?.costoManoDeObra === 0 ? '' : (config.parametrosCalculo?.costoManoDeObra || '')}
-                    onChange={e => updateManoDeObra(e.target.value)}
-                    className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium"
-                    placeholder="Ej: 1650"
-                  />
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                
+                {/* Mano de Obra */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Mano de Obra (por m²)</label>
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                    <span className="text-slate-400 font-mono font-medium">$</span>
+                    <input
+                      type="number"
+                      value={config.parametrosCalculo?.costoManoDeObra || ''}
+                      onChange={e => updateParamCalculo('costoManoDeObra', e.target.value)}
+                      className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium text-sm"
+                      placeholder="Ej: 1650"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">Costo de fabricación cobrado por m².</p>
                 </div>
-                <p className="text-xs text-slate-500">Este costo se suma a los materiales base.</p>
+
+                {/* Costo Pulido */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Costo Pulido (por unidad)</label>
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                    <span className="text-slate-400 font-mono font-medium">$</span>
+                    <input
+                      type="number"
+                      value={config.parametrosCalculo?.costoPulido || ''}
+                      onChange={e => updateParamCalculo('costoPulido', e.target.value)}
+                      className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium text-sm"
+                      placeholder="Ej: 1300"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">Costo adicional si se activa Pulido (Pu).</p>
+                </div>
+
+                {/* Costo Escuadra */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Costo Escuadra (por unidad)</label>
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                    <span className="text-slate-400 font-mono font-medium">$</span>
+                    <input
+                      type="number"
+                      value={config.parametrosCalculo?.costoEscuadra || ''}
+                      onChange={e => updateParamCalculo('costoEscuadra', e.target.value)}
+                      className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium text-sm"
+                      placeholder="Ej: 100"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">Precio unitario de escuadras (se usan 4 por panel).</p>
+                </div>
+
+                {/* Costo Butilo */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Costo Butilo (por metro lineal)</label>
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                    <span className="text-slate-400 font-mono font-medium">$</span>
+                    <input
+                      type="number"
+                      value={config.parametrosCalculo?.costoButilo || ''}
+                      onChange={e => updateParamCalculo('costoButilo', e.target.value)}
+                      className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium text-sm"
+                      placeholder="Ej: 150"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">Costo de butilo en CLP por metro lineal.</p>
+                </div>
+
+                {/* Costo Sal Higroscópica */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Costo Sal Higroscópica (por ml)</label>
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                    <span className="text-slate-400 font-mono font-medium">$</span>
+                    <input
+                      type="number"
+                      value={config.parametrosCalculo?.costoSalHigroscopica || ''}
+                      onChange={e => updateParamCalculo('costoSalHigroscopica', e.target.value)}
+                      className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium text-sm"
+                      placeholder="Ej: 100"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">Costo de sales deshidratantes por metro lineal.</p>
+                </div>
+
+                {/* Costo Hotmelt */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Costo Hotmelt (por metro lineal)</label>
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                    <span className="text-slate-400 font-mono font-medium">$</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={config.parametrosCalculo?.costoHotmelt || ''}
+                      onChange={e => updateParamCalculo('costoHotmelt', e.target.value)}
+                      className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium text-sm"
+                      placeholder="Ej: 111.59"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">Costo del sellante hotmelt por metro lineal.</p>
+                </div>
+
               </div>
             </div>
           </section>

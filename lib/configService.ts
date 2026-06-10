@@ -61,11 +61,22 @@ export async function getTermopanelConfig(): Promise<TermopanelConfig> {
 
     if (docSnap.exists()) {
       const data = docSnap.data() as Partial<TermopanelConfig>;
+      const rawParams = data.parametrosCalculo || {};
+      const parametrosCalculo = {
+        ...PARAMETROS_DEFAULT,
+        ...rawParams,
+      };
+      
+      // Migrar costoGasArgon a costoPulido si corresponde
+      if (parametrosCalculo.costoPulido === undefined && (rawParams as any).costoGasArgon !== undefined) {
+        parametrosCalculo.costoPulido = (rawParams as any).costoGasArgon;
+      }
+
       // Merge con defaults para que campos nuevos (preciosSeparadores, parametrosCalculo) no sean undefined
       return {
         ...DEFAULT_CONFIG,
         ...data,
-        parametrosCalculo: { ...PARAMETROS_DEFAULT, ...(data.parametrosCalculo || {}), factorGG: 1.11 },
+        parametrosCalculo,
         preciosSeparadores: data.preciosSeparadores?.length
           ? data.preciosSeparadores
           : PRECIOS_SEPARADORES_DEFAULT,

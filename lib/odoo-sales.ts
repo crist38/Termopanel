@@ -778,7 +778,7 @@ export interface TermopanelItemData {
   cristal1: { tipo: string; espesor: number };
   cristal2: { tipo: string; espesor: number };
   separador: { espesor: number; color: string };
-  gas: boolean;
+  pulido: boolean;
   micropersiana: boolean;
   palillaje: boolean;
 }

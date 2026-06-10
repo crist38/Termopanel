@@ -26,7 +26,7 @@ function CotizadorTermopanelContent() {
       cristal1: { tipo: "Incoloro", espesor: 4 },
       cristal2: { tipo: "Incoloro", espesor: 4 },
       separador: { espesor: 10, color: "Plata" },
-      gas: false,
+      pulido: false,
       micropersiana: false,
       palillaje: false,
       precioUnitario: 0
@@ -204,7 +204,7 @@ function CotizadorTermopanelContent() {
       cristal1: { tipo: defaultTipo, espesor: defaultEspesor },
       cristal2: { tipo: defaultTipo, espesor: defaultEspesor },
       separador: { espesor: 10, color: "Plata" },
-      gas: false,
+      pulido: false,
       micropersiana: false,
       palillaje: false,
       precioUnitario: 0
@@ -503,7 +503,7 @@ function CotizadorTermopanelContent() {
 
                   {/* Extras (Condensados) */}
                   <td className="p-1 border-r border-slate-100 text-center space-x-2">
-                    <label title="Gas Argón" className="cursor-pointer text-xs"><input type="checkbox" checked={item.gas} onChange={e => updateItem(item.id, 'gas', e.target.checked)} className="accent-teal-600" /> G</label>
+                    <label title="Pulido" className="cursor-pointer text-xs"><input type="checkbox" checked={item.pulido} onChange={e => updateItem(item.id, 'pulido', e.target.checked)} className="accent-teal-600" /> Pu</label>
                     <label title="Micropersiana" className="cursor-pointer text-xs"><input type="checkbox" checked={item.micropersiana} onChange={e => updateItem(item.id, 'micropersiana', e.target.checked)} className="accent-teal-600" /> M</label>
                     <label title="Palillaje" className="cursor-pointer text-xs"><input type="checkbox" checked={item.palillaje} onChange={e => updateItem(item.id, 'palillaje', e.target.checked)} className="accent-teal-600" /> P</label>
                   </td>

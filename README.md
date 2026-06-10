@@ -98,6 +98,13 @@ La integración se maneja desde el servidor (Next.js Server Actions), garantizan
 
 ## 📋 Changelog
 
+### v2.3 - Junio 2026
+- ✅ **Reemplazo de Gas Argón por Pulido**: Se sustituyó el extra "Gas Argón" por la opción de "Pulido" en el cotizador y en las especificaciones enviadas a Odoo.
+- ✅ **Costo de Pulido Configurable**: Se añadió un campo en el panel de configuración `/admin/config` para editar libremente el precio unitario del Pulido.
+- ✅ **Desglose y Edición de Insumos**: Se agregaron entradas en la configuración para editar individualmente los costos de **escuadras**, **hotmelt**, **sal higroscópica** y **butilo**.
+- ✅ **Fórmula de Maquila Detallada**: La fórmula de cálculo ahora integra los costos de estos insumos individuales de manera dinámica.
+- ✅ **Matriz de Precios de Separadores**: Nueva interfaz en la configuración para visualizar y editar el precio por metro lineal de los separadores por combinación de color y espesor.
+
 ### v2.2 - Junio 2026
 - ✅ **Gestión de Cotizaciones de Odoo**: Nueva página `/cotizaciones` para listar, buscar, filtrar por estado y ver el detalle de cotizaciones almacenadas en Odoo.
 - ✅ **Búsqueda y Paginación**: Caja de búsqueda interactiva (con debounce) por cliente y N° de Orden, y paginación de 15 registros por página.
