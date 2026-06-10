@@ -1,8 +1,9 @@
 'use server'
 
 import { odooCustomers, OdooCustomer, CustomerInput } from '@/lib/odoo-customers';
-import { odooSales, SaleOrderLineInput, TermopanelItemData } from '@/lib/odoo-sales';
+import { odooSales, SaleOrderLineInput, TermopanelItemData, OrderSearchParams } from '@/lib/odoo-sales';
 import { getSession } from '@/app/actions/auth';
+
 
 export async function buscarClientesOdoo(query: string): Promise<{ exito: boolean; data?: OdooCustomer[]; error?: string }> {
   try {
@@ -189,3 +190,65 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
   }
 }
 
+// ─── Listado y Edición de Cotizaciones ──────────────────────────────────────
+
+export async function listarCotizacionesOdoo(params: OrderSearchParams = {}): Promise<{
+  exito: boolean;
+  orders?: any[];
+  total?: number;
+  error?: string;
+}> {
+  try {
+    const session = await getSession();
+    if (!session) return { exito: false, error: 'No autorizado' };
+    const result = await odooSales.getOrders(params);
+    return { exito: true, orders: result.orders, total: result.total };
+  } catch (error: any) {
+    console.error('Error al listar cotizaciones Odoo:', error);
+    return { exito: false, error: error.message || 'Error desconocido' };
+  }
+}
+
+export async function obtenerDetalleCotizacion(orderId: number): Promise<{
+  exito: boolean;
+  order?: any;
+  error?: string;
+}> {
+  try {
+    const session = await getSession();
+    if (!session) return { exito: false, error: 'No autorizado' };
+    const order = await odooSales.getOrderDetail(orderId);
+    if (!order) return { exito: false, error: 'Orden no encontrada' };
+    return { exito: true, order };
+  } catch (error: any) {
+    console.error('Error al obtener detalle de cotización:', error);
+    return { exito: false, error: error.message || 'Error desconocido' };
+  }
+}
+
+export async function actualizarLineaCotizacion(
+  lineId: number,
+  data: { price_unit?: number; product_uom_qty?: number }
+): Promise<{ exito: boolean; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session) return { exito: false, error: 'No autorizado' };
+    await odooSales.updateOrderLine(lineId, data);
+    return { exito: true };
+  } catch (error: any) {
+    console.error('Error al actualizar línea de cotización:', error);
+    return { exito: false, error: error.message || 'Error desconocido' };
+  }
+}
+
+export async function cancelarCotizacion(orderId: number): Promise<{ exito: boolean; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session) return { exito: false, error: 'No autorizado' };
+    await odooSales.cancelOrder(orderId);
+    return { exito: true };
+  } catch (error: any) {
+    console.error('Error al cancelar cotización:', error);
+    return { exito: false, error: error.message || 'Error desconocido' };
+  }
+}

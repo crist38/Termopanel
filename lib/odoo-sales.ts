@@ -9,7 +9,43 @@ export interface SaleOrder {
   partner_id: [number, string]; // [ID, Name]
   state: string;
   amount_total: number;
+  amount_untaxed: number;
+  amount_tax: number;
   date_order: string;
+  user_id: [number, string] | false;
+  note: string | false;
+}
+
+/**
+ * Interface para una línea de pedido con detalle completo
+ */
+export interface OrderLine {
+  id: number;
+  name: string;
+  product_uom_qty: number;
+  price_unit: number;
+  price_subtotal: number;
+  display_type: string | false;
+  product_id: [number, string] | false;
+  x_studio_ancho_m?: number;
+  x_studio_alto_m?: number;
+}
+
+/**
+ * Interface para el detalle completo de una orden
+ */
+export interface OrderDetail extends SaleOrder {
+  order_line: OrderLine[];
+}
+
+/**
+ * Parámetros de búsqueda para listar órdenes
+ */
+export interface OrderSearchParams {
+  search?: string;         // Buscar por nombre SO o cliente
+  state?: string;          // 'draft' | 'sale' | 'cancel' | '' (todos)
+  limit?: number;
+  offset?: number;
 }
 
 /**
@@ -538,7 +574,102 @@ export class OdooSalesService {
 
     return moIds;
   }
+
+  // --- CONSULTA Y EDICIÓN DE COTIZACIONES EXISTENTES ---
+
+  /**
+   * Obtiene órdenes de venta con filtros y paginación.
+   */
+  async getOrders(params: OrderSearchParams = {}): Promise<{ orders: SaleOrder[]; total: number }> {
+    const { search = '', state = '', limit = 15, offset = 0 } = params;
+
+    const domain: any[] = [];
+
+    if (state) {
+      domain.push(['state', '=', state]);
+    }
+
+    if (search.trim()) {
+      domain.push('|');
+      domain.push(['name', 'ilike', search.trim()]);
+      domain.push(['partner_id.name', 'ilike', search.trim()]);
+    }
+
+    const [orders, total] = await Promise.all([
+      odoo.executeKw(
+        'sale.order',
+        'search_read',
+        [domain],
+        {
+          fields: ['id', 'name', 'partner_id', 'state', 'amount_total', 'amount_untaxed', 'amount_tax', 'date_order', 'user_id'],
+          order: 'id desc',
+          limit,
+          offset,
+        }
+      ),
+      odoo.executeKw(
+        'sale.order',
+        'search_count',
+        [domain],
+        {}
+      ),
+    ]);
+
+    return { orders, total };
+  }
+
+  /**
+   * Obtiene el detalle completo de una orden de venta, incluyendo sus líneas.
+   */
+  async getOrderDetail(orderId: number): Promise<OrderDetail | null> {
+    const orders = await odoo.executeKw(
+      'sale.order',
+      'search_read',
+      [[['id', '=', orderId]]],
+      {
+        fields: ['id', 'name', 'partner_id', 'state', 'amount_total', 'amount_untaxed', 'amount_tax', 'date_order', 'user_id', 'note', 'order_line'],
+        limit: 1,
+      }
+    );
+
+    if (!orders || orders.length === 0) return null;
+
+    const order = orders[0];
+
+    // Obtener las líneas con detalle
+    const lineIds: number[] = order.order_line || [];
+    let lines: OrderLine[] = [];
+
+    if (lineIds.length > 0) {
+      lines = await odoo.executeKw(
+        'sale.order.line',
+        'read',
+        [lineIds],
+        {
+          fields: ['id', 'name', 'product_id', 'product_uom_qty', 'price_unit', 'price_subtotal', 'display_type', 'x_studio_ancho_m', 'x_studio_alto_m'],
+        }
+      );
+    }
+
+    return { ...order, order_line: lines };
+  }
+
+  /**
+   * Actualiza precio unitario y/o cantidad de una línea de pedido (solo en órdenes draft).
+   */
+  async updateOrderLine(lineId: number, data: { price_unit?: number; product_uom_qty?: number }): Promise<void> {
+    await odoo.executeKw('sale.order.line', 'write', [[lineId], data]);
+  }
+
+  /**
+   * Cancela una orden de venta (solo funciona si está en estado draft/borrador).
+   */
+  async cancelOrder(orderId: number): Promise<void> {
+    await odoo.executeKw('sale.order', 'action_cancel', [[orderId]]);
+  }
+
   // --- MONOLÍTICO ---
+
 
   async createMonoliticQuote(
     partnerId: number,
