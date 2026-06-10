@@ -8,7 +8,7 @@ import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Printer, Plus, Trash2, Cloud } from 'lucide-react';
+import { Printer, Plus, Trash2, Cloud, ClipboardList, BarChart2 } from 'lucide-react';
 import { guardarCotizacionMonoliticoEnOdoo } from '@/app/actions/odoo';
 import { ClientSelector } from '@/components/ClientSelector';
 
@@ -96,6 +96,7 @@ function CotizadorMonoliticoContent() {
   }, [editId]);
 
   const totalNeto = calcularTotalMonolitico(items);
+  const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
 
   function addItem() {
     setItems([
@@ -157,28 +158,50 @@ function CotizadorMonoliticoContent() {
     }))
   }
 
-  function handlePrint(overrideName?: string) {
+  async function handlePrint(overrideName?: string) {
     const finalName = overrideName || budgetName;
     const doc = new jsPDF();
-    let yPos = 20;
+    let yPos = 25;
+
+    try {
+      const res = await fetch('/logo.png');
+      const blob = await res.blob();
+      const logoBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      doc.addImage(logoBase64, 'PNG', 14, 10, 30, 30);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(20);
+      doc.text("PRO WINDOWS", 50, yPos);
+      yPos += 10;
+      doc.setFontSize(14);
+      doc.text("COTIZACIÓN DE CRISTALES MONOLÍTICOS", 50, yPos);
+    } catch (e) {
+      console.error("Error al cargar el logo en el PDF", e);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(20);
+      doc.text("PRO WINDOWS", 14, yPos);
+      yPos += 15;
+      doc.setFontSize(14);
+      doc.text("COTIZACIÓN DE CRISTALES MONOLÍTICOS", 14, yPos);
+    }
     
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
-    doc.text("PRO WINDOWS", 14, yPos);
-    
-    yPos += 15;
-    doc.setFontSize(14);
-    doc.text("COTIZACIÓN DE CRISTALES MONOLÍTICOS", 14, yPos);
-    
-    yPos += 10;
+    yPos += 12;
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.text(`Presupuesto N°: ${finalName}`, 14, yPos);
     doc.text(`Fecha: ${budgetDate}`, 120, yPos);
     yPos += 7;
     doc.text(`Cliente: ${clientName || 'Sin Cliente'}`, 14, yPos);
+    
+    const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
+    yPos += 7;
+    doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} m²`, 14, yPos);
 
-    yPos += 15;
+    yPos += 12;
     
     // Tabla
     doc.setFont("helvetica", "bold");
@@ -200,6 +223,11 @@ function CotizadorMonoliticoContent() {
       const area = (item.ancho * item.alto) / 1_000_000;
       const totalLinea = item.precioUnitario * item.cantidad;
       
+      if (yPos > 270) {
+        doc.addPage();
+        yPos = 20;
+      }
+
       doc.text(item.label || '', 16, yPos);
       doc.text(item.cantidad.toString(), 30, yPos);
       doc.text(item.ancho.toString(), 45, yPos);
@@ -210,21 +238,177 @@ function CotizadorMonoliticoContent() {
       doc.text(`$${totalLinea.toLocaleString()}`, 180, yPos);
       
       yPos += 8;
-      
-      if (yPos > 270) {
-        doc.addPage();
-        yPos = 20;
-      }
     });
 
     yPos += 5;
     doc.line(14, yPos, 196, yPos);
     yPos += 10;
+
+    const iva = Math.round(totalNeto * 0.19);
+    const totalConIva = totalNeto + iva;
+
     doc.setFont("helvetica", "bold");
     doc.text(`Total Neto: $${totalNeto.toLocaleString('es-CL')}`, 140, yPos);
+    yPos += 6;
+    doc.text(`IVA (19%): $${iva.toLocaleString('es-CL')}`, 140, yPos);
+    yPos += 6;
+    doc.setFontSize(11);
+    doc.text(`Total: $${totalConIva.toLocaleString('es-CL')}`, 140, yPos);
+
+    if (yPos > 200) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    yPos += 15;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("NOTAS:", 14, yPos);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(80, 80, 80);
+
+    const notas = [
+      "Este presupuesto tiene una validez de 10 días. Cualquier cambio generará otro presupuesto.",
+      "Estos valores quedan sujetos a cualquier cambio en el mercado.",
+      "Plazo de entrega a contar de 48 horas para cristales monolíticos, una vez recibida Orden de Compra.",
+      "PROWINDOWS LTDA. no responde por los daños de quiebres, rayaduras o picaduras en los cristales aportados por los clientes para recibir servicio de maquila, siendo de responsabilidad del cliente su reposición.",
+      "Esperando este Presupuesto sea de su agrado le saluda atentamente:",
+      "Una vez emitida la factura, el cliente tiene 24 horas para objetarla, de lo contrario esta se dará por aceptada."
+    ];
+
+    notas.forEach((nota) => {
+      yPos += 5.5;
+      const splitNota = doc.splitTextToSize(nota, 182);
+      doc.text(splitNota, 14, yPos);
+      yPos += (splitNota.length - 1) * 4.5;
+    });
+
+    yPos += 20;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(0, 0, 0);
+
+    doc.text("Firma de aceptación del Cliente: ___________________________", 14, yPos);
+    doc.text("Modalidad de Pago: __________________", 120, yPos);
     
     const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
     doc.save(`Cotizacion_Monolitico_${finalName}_${sanitizedClientName}.pdf`);
+  }
+
+  async function handleExportWorkOrder(overrideName?: string) {
+    const finalName = overrideName || budgetName;
+    if (items.length === 0) return;
+    const pdf = new jsPDF();
+    const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
+
+    let logoBase64: string | null = null;
+    try {
+      const res = await fetch('/logo.png');
+      const blob = await res.blob();
+      logoBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      console.error("Error al cargar el logo en el PDF", e);
+    }
+
+    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 25, 25);
+
+    pdf.setFontSize(18);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("ORDEN DE TRABAJO", 45, 20);
+    pdf.setFontSize(13);
+    pdf.setTextColor(80, 80, 80);
+    pdf.text("Taller Corte Vidrio", 45, 28);
+    pdf.setTextColor(0, 0, 0);
+
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(`Ref: ${finalName}`, 155, 18);
+    pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
+    pdf.text(`Cliente: ${clientName || 'Sin Cliente'}`, 155, 30);
+
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(14, 38, 196, 38);
+
+    let yPos = 48;
+    pdf.setFillColor(51, 65, 85);
+    pdf.rect(14, yPos - 6, 182, 9, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    pdf.text("Ref", 17, yPos);
+    pdf.text("Cant.", 47, yPos);
+    pdf.text("Ancho (mm)", 65, yPos);
+    pdf.text("Alto (mm)", 95, yPos);
+    pdf.text("Cristal Monolítico", 125, yPos);
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFont("helvetica", "normal");
+
+    yPos += 8;
+
+    items.forEach((item, index) => {
+      const labelVal = item.label || `V${index + 1}`;
+      const splitLabel = pdf.splitTextToSize(labelVal, 28);
+      const rowHeight = Math.max(8, (splitLabel.length * 4) + 4);
+
+      if (yPos + rowHeight > 275) {
+        pdf.addPage();
+        yPos = 20;
+        pdf.setFillColor(51, 65, 85);
+        pdf.rect(14, yPos - 6, 182, 9, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(9);
+        pdf.text("Ref", 17, yPos);
+        pdf.text("Cant.", 47, yPos);
+        pdf.text("Ancho (mm)", 65, yPos);
+        pdf.text("Alto (mm)", 95, yPos);
+        pdf.text("Cristal Monolítico", 125, yPos);
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFont("helvetica", "normal");
+        yPos += 8;
+      }
+
+      if (index % 2 === 0) {
+        pdf.setFillColor(248, 250, 252);
+        pdf.rect(14, yPos - 5, 182, rowHeight, 'F');
+      }
+
+      pdf.setFontSize(9);
+      pdf.text(splitLabel, 17, yPos);
+      pdf.text(`${item.cantidad}`, 47, yPos);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(`${item.ancho}`, 65, yPos);
+      pdf.text(`${item.alto}`, 95, yPos);
+      pdf.setFont("helvetica", "normal");
+      pdf.text(`${item.cristal.tipo} ${item.cristal.espesor}mm`, 125, yPos);
+
+      yPos += rowHeight;
+    });
+
+    pdf.setDrawColor(200, 200, 200);
+    pdf.line(14, yPos, 196, yPos);
+
+    yPos += 8;
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(0, 0, 0);
+    pdf.text(`Total a cortar: ${totalM2.toFixed(2)} m²`, 14, yPos);
+
+    const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
+    pdf.save(`Orden_Corte_${finalName}_${sanitizedClientName}.pdf`);
+  }
+
+  async function handleExportAllPDFs(overrideName?: string) {
+    const finalBudgetNameVal = overrideName || budgetName;
+    await handlePrint(finalBudgetNameVal);
+    await handleExportWorkOrder(finalBudgetNameVal);
   }
 
   async function handleProcessQuote() {
@@ -257,7 +441,7 @@ function CotizadorMonoliticoContent() {
         const finalBudgetName = response.cotizacionName || 'Borrador';
         setBudgetName(finalBudgetName);
 
-        handlePrint(finalBudgetName);
+        await handleExportAllPDFs(finalBudgetName);
 
         setClientName('');
         setBudgetName('Borrador');
@@ -283,7 +467,7 @@ function CotizadorMonoliticoContent() {
   }
 
   return (
-    <div className="p-4 bg-slate-50 min-h-screen font-sans">
+    <div className="p-4 pb-24 bg-slate-50 min-h-screen font-sans">
       <header className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Corte de Vidrios Monolíticos</h1>
@@ -304,11 +488,18 @@ function CotizadorMonoliticoContent() {
             {isSyncingOdoo ? 'Sincronizando...' : 'Enviar a Odoo'}
           </button>
           <button
-            onClick={() => handlePrint()}
+            onClick={() => handleExportAllPDFs()}
             className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all font-medium text-sm"
           >
             <Printer size={18} /> Exportar PDF
           </button>
+          <a
+            href="/reports"
+            className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+          >
+            <BarChart2 size={16} />
+            Reportes
+          </a>
         </div>
       </header>
 
@@ -422,9 +613,23 @@ function CotizadorMonoliticoContent() {
             </tbody>
             <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
               <tr>
-                <td colSpan={8} className="p-4 text-right text-slate-600 text-sm">Total Neto:</td>
-                <td className="p-4 text-right text-slate-900 border-l border-slate-200 font-mono text-xl">
+                <td colSpan={8} className="p-2 text-right text-slate-600 text-sm border-r border-slate-100">Total Neto:</td>
+                <td className="p-2 text-right text-slate-900 font-mono text-base px-2">
                   ${totalNeto.toLocaleString()}
+                </td>
+                <td></td>
+              </tr>
+              <tr>
+                <td colSpan={8} className="p-2 text-right text-slate-600 text-sm border-r border-slate-100">IVA (19%):</td>
+                <td className="p-2 text-right text-slate-900 font-mono text-base px-2">
+                  ${Math.round(totalNeto * 0.19).toLocaleString()}
+                </td>
+                <td></td>
+              </tr>
+              <tr className="bg-slate-100/50">
+                <td colSpan={8} className="p-3 text-right text-slate-800 text-sm border-r border-slate-100">Total:</td>
+                <td className="p-3 text-right text-[#7a5973] font-mono text-lg font-bold px-2">
+                  ${Math.round(totalNeto * 1.19).toLocaleString()}
                 </td>
                 <td></td>
               </tr>
@@ -438,6 +643,33 @@ function CotizadorMonoliticoContent() {
           <Plus size={18} /> Agregar Fila
         </button>
       </div>
+
+      {/* Footer Fijo con Resumen de Metros Cuadrados */}
+      <footer className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-200 shadow-[0_-8px_30px_rgb(0,0,0,0.04)] p-4 z-40">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-50 text-[#7a5973] rounded-lg">
+              <ClipboardList size={20} />
+            </div>
+            <div>
+              <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Metraje Total</p>
+              <p className="text-sm sm:text-base font-bold text-slate-800">
+                Total Metros Cuadrados: <span className="text-[#7a5973] font-mono">{totalM2.toFixed(2)} m²</span>
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="text-right">
+              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Total Neto</p>
+              <p className="text-sm font-bold text-slate-800 font-mono">${totalNeto.toLocaleString()}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Total (con IVA)</p>
+              <p className="text-sm font-bold text-[#7a5973] font-mono">${Math.round(totalNeto * 1.19).toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }
