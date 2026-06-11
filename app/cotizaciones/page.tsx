@@ -7,6 +7,7 @@ import {
   obtenerDetalleCotizacion,
   actualizarLineaCotizacion,
   cancelarCotizacion,
+  confirmarCotizacionOdoo,
 } from "@/app/actions/odoo";
 import {
   Search,
@@ -168,6 +169,32 @@ function updateDescriptionDimensions(name: string, ancho: number, alto: number):
   return name;
 }
 
+function updateDescriptionCristal(name: string, num: 1 | 2, tipo: string, espesor: number): string {
+  const regex = new RegExp(`(Cristal ${num}:\\s*)(.+?)(\\s+\\d+mm)`, 'i');
+  if (regex.test(name)) {
+    return name.replace(regex, `Cristal ${num}: ${tipo} ${espesor}mm`);
+  }
+  return name;
+}
+
+function updateDescriptionSeparador(name: string, espesor: number, color: string): string {
+  const regex = /Separador:\s*\d+mm\s+color\s+[^|]+/i;
+  if (regex.test(name)) {
+    return name.replace(regex, `Separador: ${espesor}mm color ${color}`);
+  }
+  return name;
+}
+
+// Opciones para los selectores de cristal y separador (extraidas de configService / vidrios)
+const CRISTAL_TIPOS = [
+  'Incoloro', 'Bronce', 'Espejo', 'Saten', 'Semilla', 'Semilla Bronce',
+  'Laminado', 'Solar Cool BR.', 'Solar Green', 'Reflex Bronce',
+  'Bluegreen', 'Templado', 'Empavonado',
+];
+const CRISTAL_ESPESORES = [4, 5, 6, 8, 10];
+const SEP_ESPESORES = [6, 8, 10, 12];
+const SEP_COLORES = ['Mate', 'Negro', 'Bronce'];
+
 const STATE_LABELS: Record<string, { label: string; color: string; bg: string; dot: string }> = {
   draft: { label: "Borrador", color: "text-amber-700", bg: "bg-amber-50 border-amber-200", dot: "bg-amber-400" },
   sent: { label: "Enviado", color: "text-blue-700", bg: "bg-blue-50 border-blue-200", dot: "bg-blue-400" },
@@ -220,18 +247,27 @@ export default function CotizacionesPage() {
   const [detailError, setDetailError] = useState<string | null>(null);
 
   // Edición de líneas
-  const [editingLines, setEditingLines] = useState<Record<number, { 
+  const [editingLines, setEditingLines] = useState<Record<number, {
     name: string;
-    price_unit: number; 
+    price_unit: number;
     product_uom_qty: number;
     x_studio_ancho_m: number;
     x_studio_alto_m: number;
+    cristal1_tipo: string;
+    cristal1_espesor: number;
+    cristal2_tipo: string;
+    cristal2_espesor: number;
+    sep_espesor: number;
+    sep_color: string;
   }>>({});
   const [savingLine, setSavingLine] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // Cancelar orden
   const [cancelling, setCancelling] = useState(false);
+
+  // Confirmar orden y crear OTs
+  const [confirming, setConfirming] = useState(false);
 
   // ── Fetch list ──────────────────────────────────────────────────────────────
   const fetchOrders = useCallback(async (s: string, st: string, p: number) => {
@@ -312,14 +348,41 @@ export default function CotizacionesPage() {
 
   // ── Edit lines ──────────────────────────────────────────────────────────────
   const startEditing = (line: OrderLine) => {
+    const name = line.name || "";
+    const parts = name.split(' | ').map(p => p.trim());
+
+    // Parsear Cristal 1
+    const c1Part  = parts.find(p => /^cristal 1:/i.test(p));
+    const c1Match = c1Part?.match(/cristal 1:\s*(.+?)\s+(\d+)mm/i);
+    const cristal1_tipo    = c1Match ? c1Match[1].trim() : 'Incoloro';
+    const cristal1_espesor = c1Match ? parseInt(c1Match[2]) : 6;
+
+    // Parsear Cristal 2
+    const c2Part  = parts.find(p => /^cristal 2:/i.test(p));
+    const c2Match = c2Part?.match(/cristal 2:\s*(.+?)\s+(\d+)mm/i);
+    const cristal2_tipo    = c2Match ? c2Match[1].trim() : 'Incoloro';
+    const cristal2_espesor = c2Match ? parseInt(c2Match[2]) : 6;
+
+    // Parsear Separador
+    const sepPart  = parts.find(p => /^separador:/i.test(p));
+    const sepMatch = sepPart?.match(/separador:\s*(\d+)mm\s+color\s+(.+)/i);
+    const sep_espesor = sepMatch ? parseInt(sepMatch[1]) : 12;
+    const sep_color   = sepMatch ? sepMatch[2].trim() : 'Negro';
+
     setEditingLines(prev => ({
       ...prev,
-      [line.id]: { 
-        name: line.name || "",
-        price_unit: line.price_unit, 
+      [line.id]: {
+        name,
+        price_unit:      line.price_unit,
         product_uom_qty: line.product_uom_qty,
         x_studio_ancho_m: line.x_studio_ancho_m ?? 0,
-        x_studio_alto_m: line.x_studio_alto_m ?? 0,
+        x_studio_alto_m:  line.x_studio_alto_m  ?? 0,
+        cristal1_tipo,
+        cristal1_espesor,
+        cristal2_tipo,
+        cristal2_espesor,
+        sep_espesor,
+        sep_color,
       },
     }));
   };
@@ -374,6 +437,29 @@ export default function CotizacionesPage() {
       alert(`Error de conexión: ${e.message}`);
     } finally {
       setCancelling(false);
+    }
+  };
+
+  // ── Confirm order ─────────────────────────────────────────────────────────────────────────
+  const handleConfirmar = async () => {
+    if (!detail) return;
+    if (!confirm(
+      `¿Confirmar la orden ${detail.name}?\n\nEsto creará las órdenes de fabricación y de trabajo en los talleres correspondientes.`
+    )) return;
+    setConfirming(true);
+    try {
+      const res = await confirmarCotizacionOdoo(detail.id);
+      if (res.exito) {
+        // Refrescar lista y detalle
+        fetchOrders(search, stateFilter, page);
+        openDetail(detail.id);
+      } else {
+        alert(`Error al confirmar: ${res.error}`);
+      }
+    } catch (e: any) {
+      alert(`Error de conexión: ${e.message}`);
+    } finally {
+      setConfirming(false);
     }
   };
 
@@ -823,6 +909,17 @@ export default function CotizacionesPage() {
 
                       {detail.state === 'draft' && (
                         <button
+                          onClick={handleConfirmar}
+                          disabled={confirming || cancelling}
+                          className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg font-semibold transition-colors disabled:opacity-60"
+                        >
+                          <Check size={12} />
+                          {confirming ? 'Confirmando y creando órdenes...' : 'Confirmar y Crear Órdenes de Taller'}
+                        </button>
+                      )}
+
+                      {detail.state === 'draft' && (
+                        <button
                           onClick={handleCancel}
                           disabled={cancelling}
                           className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg font-semibold transition-colors disabled:opacity-60"
@@ -871,7 +968,13 @@ export default function CotizacionesPage() {
                               price_unit: line.price_unit,
                               product_uom_qty: line.product_uom_qty,
                               x_studio_ancho_m: line.x_studio_ancho_m ?? 0,
-                              x_studio_alto_m: line.x_studio_alto_m ?? 0,
+                              x_studio_alto_m:  line.x_studio_alto_m  ?? 0,
+                              cristal1_tipo:    'Incoloro',
+                              cristal1_espesor: 6,
+                              cristal2_tipo:    'Incoloro',
+                              cristal2_espesor: 6,
+                              sep_espesor:      12,
+                              sep_color:        'Negro',
                             };
 
                             if (isNote) {
@@ -1069,6 +1172,128 @@ export default function CotizacionesPage() {
                                       )
                                     )}
                                   </div>
+
+                                  {/* Cristales & Separador (solo termopanel, en modo edición) */}
+                                  {isEditing && /termopanel/i.test(line.name || '') && (
+                                    <div className="flex flex-col gap-2 pt-2 border-t border-amber-200/60">
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cristales &amp; Separador</span>
+                                      <div className="flex items-end gap-3 flex-wrap">
+
+                                        {/* C1 tipo */}
+                                        <div className="flex flex-col gap-1">
+                                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">C1 Tipo</span>
+                                          <select
+                                            value={edits.cristal1_tipo}
+                                            onChange={(e) => {
+                                              const tipo = e.target.value;
+                                              setEditingLines(prev => {
+                                                const le = prev[line.id]; if (!le) return prev;
+                                                return { ...prev, [line.id]: { ...le, cristal1_tipo: tipo, name: updateDescriptionCristal(le.name, 1, tipo, le.cristal1_espesor) } };
+                                              });
+                                            }}
+                                            className="px-2 py-1 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
+                                          >
+                                            {CRISTAL_TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+                                          </select>
+                                        </div>
+
+                                        {/* C1 espesor */}
+                                        <div className="flex flex-col gap-1">
+                                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">C1 Esp.</span>
+                                          <select
+                                            value={edits.cristal1_espesor}
+                                            onChange={(e) => {
+                                              const esp = parseInt(e.target.value);
+                                              setEditingLines(prev => {
+                                                const le = prev[line.id]; if (!le) return prev;
+                                                return { ...prev, [line.id]: { ...le, cristal1_espesor: esp, name: updateDescriptionCristal(le.name, 1, le.cristal1_tipo, esp) } };
+                                              });
+                                            }}
+                                            className="w-20 px-2 py-1 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
+                                          >
+                                            {CRISTAL_ESPESORES.map(e => <option key={e} value={e}>{e}mm</option>)}
+                                          </select>
+                                        </div>
+
+                                        <div className="w-px self-stretch bg-amber-200" />
+
+                                        {/* C2 tipo */}
+                                        <div className="flex flex-col gap-1">
+                                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">C2 Tipo</span>
+                                          <select
+                                            value={edits.cristal2_tipo}
+                                            onChange={(e) => {
+                                              const tipo = e.target.value;
+                                              setEditingLines(prev => {
+                                                const le = prev[line.id]; if (!le) return prev;
+                                                return { ...prev, [line.id]: { ...le, cristal2_tipo: tipo, name: updateDescriptionCristal(le.name, 2, tipo, le.cristal2_espesor) } };
+                                              });
+                                            }}
+                                            className="px-2 py-1 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
+                                          >
+                                            {CRISTAL_TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+                                          </select>
+                                        </div>
+
+                                        {/* C2 espesor */}
+                                        <div className="flex flex-col gap-1">
+                                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">C2 Esp.</span>
+                                          <select
+                                            value={edits.cristal2_espesor}
+                                            onChange={(e) => {
+                                              const esp = parseInt(e.target.value);
+                                              setEditingLines(prev => {
+                                                const le = prev[line.id]; if (!le) return prev;
+                                                return { ...prev, [line.id]: { ...le, cristal2_espesor: esp, name: updateDescriptionCristal(le.name, 2, le.cristal2_tipo, esp) } };
+                                              });
+                                            }}
+                                            className="w-20 px-2 py-1 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
+                                          >
+                                            {CRISTAL_ESPESORES.map(e => <option key={e} value={e}>{e}mm</option>)}
+                                          </select>
+                                        </div>
+
+                                        <div className="w-px self-stretch bg-amber-200" />
+
+                                        {/* Separador espesor */}
+                                        <div className="flex flex-col gap-1">
+                                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Sep. Esp.</span>
+                                          <select
+                                            value={edits.sep_espesor}
+                                            onChange={(e) => {
+                                              const esp = parseInt(e.target.value);
+                                              setEditingLines(prev => {
+                                                const le = prev[line.id]; if (!le) return prev;
+                                                return { ...prev, [line.id]: { ...le, sep_espesor: esp, name: updateDescriptionSeparador(le.name, esp, le.sep_color) } };
+                                              });
+                                            }}
+                                            className="w-20 px-2 py-1 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
+                                          >
+                                            {SEP_ESPESORES.map(e => <option key={e} value={e}>{e}mm</option>)}
+                                          </select>
+                                        </div>
+
+                                        {/* Separador color */}
+                                        <div className="flex flex-col gap-1">
+                                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Sep. Color</span>
+                                          <select
+                                            value={edits.sep_color}
+                                            onChange={(e) => {
+                                              const color = e.target.value;
+                                              setEditingLines(prev => {
+                                                const le = prev[line.id]; if (!le) return prev;
+                                                return { ...prev, [line.id]: { ...le, sep_color: color, name: updateDescriptionSeparador(le.name, le.sep_espesor, color) } };
+                                              });
+                                            }}
+                                            className="px-2 py-1 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
+                                          >
+                                            {SEP_COLORES.map(c => <option key={c} value={c}>{c}</option>)}
+                                          </select>
+                                        </div>
+
+                                      </div>
+                                    </div>
+                                  )}
 
                                   {/* Edit controls (only for draft) */}
                                   {detail.state === 'draft' && (

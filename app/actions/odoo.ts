@@ -1,7 +1,7 @@
 'use server'
 
 import { odooCustomers, OdooCustomer, CustomerInput } from '@/lib/odoo-customers';
-import { odooSales, SaleOrderLineInput, TermopanelItemData, OrderSearchParams } from '@/lib/odoo-sales';
+import { odooSales, SaleOrderLineInput, TermopanelItemData, MonoliticoItemData, OrderSearchParams } from '@/lib/odoo-sales';
 import { getSession } from '@/app/actions/auth';
 
 
@@ -255,6 +255,160 @@ export async function cancelarCotizacion(orderId: number): Promise<{ exito: bool
     return { exito: true };
   } catch (error: any) {
     console.error('Error al cancelar cotización:', error);
+    return { exito: false, error: error.message || 'Error desconocido' };
+  }
+}
+
+// ─── Helpers de parseo de descripciones de línea ─────────────────────────────
+// Reconstruyen los datos estructurados a partir del texto guardado en Odoo.
+
+function parseTermopanelLine(name: string, idx: number): TermopanelItemData {
+  const parts = name.split(' | ').map(p => p.trim());
+
+  // Label: primera parte como "[V1]"
+  const labelMatch = parts[0]?.match(/^\[([^\]]+)\]/);
+  const label = labelMatch ? labelMatch[1] : `V${idx + 1}`;
+
+  // Cantidad
+  const cantPart = parts.find(p => /cantidad:/i.test(p));
+  const cantidad = parseInt(cantPart?.match(/cantidad:\s*(\d+)/i)?.[1] || '1') || 1;
+
+  // Dimensiones "Termopanel 800 x 1200 mm"
+  const dimPart = parts.find(p => /^termopanel\s+\d+/i.test(p));
+  const dimMatch = dimPart?.match(/(\d+)\s*x\s*(\d+)/i);
+  const ancho = parseInt(dimMatch?.[1] || '0') || 0;
+  const alto  = parseInt(dimMatch?.[2] || '0') || 0;
+
+  // Cristal 1
+  const c1Part  = parts.find(p => /^cristal 1:/i.test(p));
+  const c1Match = c1Part?.match(/cristal 1:\s*(.+?)\s+(\d+)mm/i);
+  const cristal1 = c1Match
+    ? { tipo: c1Match[1].trim(), espesor: parseInt(c1Match[2]) }
+    : { tipo: 'Float', espesor: 6 };
+
+  // Cristal 2
+  const c2Part  = parts.find(p => /^cristal 2:/i.test(p));
+  const c2Match = c2Part?.match(/cristal 2:\s*(.+?)\s+(\d+)mm/i);
+  const cristal2 = c2Match
+    ? { tipo: c2Match[1].trim(), espesor: parseInt(c2Match[2]) }
+    : { tipo: 'Float', espesor: 6 };
+
+  // Separador "Separador: 12mm color Negro"
+  const sepPart  = parts.find(p => /^separador:/i.test(p));
+  const sepMatch = sepPart?.match(/separador:\s*(\d+)mm\s+color\s+(.+)/i);
+  const separador = sepMatch
+    ? { espesor: parseInt(sepMatch[1]), color: sepMatch[2].trim() }
+    : { espesor: 12, color: 'Negro' };
+
+  // Extras (opcional)
+  const extrasPart = parts.find(p => /^extras:/i.test(p));
+  const extrasStr  = (extrasPart || '').toLowerCase();
+
+  return {
+    label,
+    cantidad,
+    ancho,
+    alto,
+    cristal1,
+    cristal2,
+    separador,
+    pulido:        extrasStr.includes('pulido'),
+    micropersiana: extrasStr.includes('micropersiana'),
+    palillaje:     extrasStr.includes('palillaje'),
+  };
+}
+
+function parseMonoliticoLine(name: string, idx: number): MonoliticoItemData {
+  const parts = name.split(' | ').map(p => p.trim());
+
+  // Primera parte: "[V1] Cantidad: 2"
+  const firstPart  = parts[0] || '';
+  const labelMatch = firstPart.match(/^\[([^\]]+)\]/);
+  const label      = labelMatch ? labelMatch[1] : `V${idx + 1}`;
+  const cantMatch  = firstPart.match(/cantidad:\s*(\d+)/i);
+  const cantidad   = parseInt(cantMatch?.[1] || '1') || 1;
+
+  // Dimensiones "Cristal Monolítico 800 x 1200 mm"
+  const dimPart  = parts.find(p => /cristal mon/i.test(p));
+  const dimMatch = dimPart?.match(/(\d+)\s*x\s*(\d+)/i);
+  const ancho    = parseInt(dimMatch?.[1] || '0') || 0;
+  const alto     = parseInt(dimMatch?.[2] || '0') || 0;
+
+  // Cristal "Cristal: Float 6mm"
+  const cristalPart  = parts.find(p => /^cristal:/i.test(p));
+  const cristalMatch = cristalPart?.match(/cristal:\s*(.+?)\s+(\d+)mm/i);
+  const cristal = cristalMatch
+    ? { tipo: cristalMatch[1].trim(), espesor: parseInt(cristalMatch[2]) }
+    : { tipo: 'Float', espesor: 6 };
+
+  return { label, cantidad, ancho, alto, cristal };
+}
+
+// ─── Confirmar Cotización y Crear Órdenes de Taller ──────────────────────────
+
+/**
+ * Confirma una cotización en estado borrador (draft → sale) y crea automáticamente
+ * las órdenes de fabricación (mrp.production) y órdenes de trabajo (mrp.workorder)
+ * en los talleres correspondientes, reconstruyendo los datos estructurados a partir
+ * de las descripciones de texto guardadas en las líneas de la orden.
+ */
+export async function confirmarCotizacionOdoo(
+  orderId: number
+): Promise<{ exito: boolean; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session) return { exito: false, error: 'No autorizado' };
+
+    // 1. Obtener detalle completo de la orden
+    const order = await odooSales.getOrderDetail(orderId);
+    if (!order) return { exito: false, error: 'Orden no encontrada' };
+    if (order.state !== 'draft') {
+      return { exito: false, error: `La orden ya está en estado "${order.state}" y no puede confirmarse desde aquí.` };
+    }
+
+    const clientName = Array.isArray(order.partner_id) ? order.partner_id[1] : '';
+
+    // 2. Filtrar líneas de producto (excluir notas y secciones)
+    const productOrderLines = order.order_line.filter(
+      l => !l.display_type && l.product_id && l.product_uom_qty > 0
+    );
+
+    // 3. Confirmar la orden en Odoo
+    await odooSales.confirmOrder(orderId);
+
+    // Si no hay líneas parseables, confirmamos sin crear OTs
+    if (productOrderLines.length === 0) {
+      return { exito: true };
+    }
+
+    // 4. Determinar tipo (termopanel vs monolítico) por contenido de la primera línea
+    const firstLineName = productOrderLines[0]?.name || '';
+    const isMonolitico  = /monol[íi]tico/i.test(firstLineName);
+
+    // 5. Reconstruir SaleOrderLineInput[] desde las líneas de Odoo
+    const lines: SaleOrderLineInput[] = productOrderLines.map(line => ({
+      product_id:      Array.isArray(line.product_id) ? (line.product_id as [number, string])[0] : undefined,
+      name:            line.name,
+      product_uom_qty: line.product_uom_qty,
+      price_unit:      line.price_unit,
+    }));
+
+    // 6. Parsear y crear órdenes de fabricación y trabajo según el tipo
+    if (isMonolitico) {
+      const rawItems: MonoliticoItemData[] = productOrderLines.map((line, i) =>
+        parseMonoliticoLine(line.name, i)
+      );
+      await odooSales.createMonoliticManufacturingOrders(orderId, lines, rawItems, clientName);
+    } else {
+      const rawItems: TermopanelItemData[] = productOrderLines.map((line, i) =>
+        parseTermopanelLine(line.name, i)
+      );
+      await odooSales.createManufacturingOrders(orderId, lines, rawItems, clientName);
+    }
+
+    return { exito: true };
+  } catch (error: any) {
+    console.error('Error al confirmar cotización en Odoo:', error);
     return { exito: false, error: error.message || 'Error desconocido' };
   }
 }

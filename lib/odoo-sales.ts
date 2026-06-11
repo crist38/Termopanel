@@ -353,26 +353,28 @@ export class OdooSalesService {
     let uomUnitsId: number | null = null;
 
     try {
-      [uomMetrosId, uomUnitsId] = await Promise.all([
-        this.getUomId(['m', 'Metro', 'Metros', 'Meter', 'Meters', 'metro(s)']),
-        this.getUomId(['u', 'Units', 'Unit', 'Unidades', 'Unidad', 'uom_unit']),
-      ]);
+      // Buscar UOMs de forma secuencial para no disparar 429
+      uomMetrosId = await this.getUomId(['m', 'Metro', 'Metros', 'Meter', 'Meters', 'metro(s)']);
+      await new Promise(r => setTimeout(r, 300));
+      uomUnitsId  = await this.getUomId(['u', 'Units', 'Unit', 'Unidades', 'Unidad', 'uom_unit']);
 
       if (uomMetrosId && uomUnitsId) {
         const sepKeys = [...new Set(rawItems.map(i => `Separador ${i.separador.espesor}mm ${i.separador.color}`))];
 
-        const [hm, sal, but, esc, ...seps] = await Promise.all([
-          this.findOrCreateProduct('Hotmelt', uomMetrosId),
-          this.findOrCreateProduct('Sal Deshidratante', uomMetrosId),
-          this.findOrCreateProduct('Butilo', uomMetrosId),
-          this.findOrCreateProduct('Escuadras', uomUnitsId),
-          ...sepKeys.map(k => this.findOrCreateProduct(k, uomMetrosId!)),
-        ]);
-        hotmeltId  = hm;
-        salId      = sal;
-        builoId    = but;
-        escuadrasId = esc;
-        sepKeys.forEach((k, i) => { if (seps[i]) separadorProductMap[k] = seps[i]!; });
+        // Buscar/crear productos de insumos de forma secuencial con pausa
+        hotmeltId   = await this.findOrCreateProduct('Hotmelt', uomMetrosId);
+        await new Promise(r => setTimeout(r, 300));
+        salId       = await this.findOrCreateProduct('Sal Deshidratante', uomMetrosId);
+        await new Promise(r => setTimeout(r, 300));
+        builoId     = await this.findOrCreateProduct('Butilo', uomMetrosId);
+        await new Promise(r => setTimeout(r, 300));
+        escuadrasId = await this.findOrCreateProduct('Escuadras', uomUnitsId);
+        await new Promise(r => setTimeout(r, 300));
+        for (const k of sepKeys) {
+          const sepId = await this.findOrCreateProduct(k, uomMetrosId!);
+          if (sepId) separadorProductMap[k] = sepId;
+          await new Promise(r => setTimeout(r, 300));
+        }
       } else {
         console.warn('No se encontraron UOMs de metros o unidades en Odoo. Los insumos no se vincularán como componentes.');
       }
@@ -494,9 +496,9 @@ export class OdooSalesService {
       }
     }
 
-    // 3. Helper para calcular insumos de cada ítem
+    // 4. Publicar notas en el chatter de cada MO de forma secuencial (evita 429)
     const calcInsumos = (item: TermopanelItemData, idx: number) => {
-      const perimMl = 2 * (item.ancho + item.alto) / 1000; // metros lineales de perímetro
+      const perimMl = 2 * (item.ancho + item.alto) / 1000;
       const totalMl = perimMl * item.cantidad;
       return {
         label: item.label || `V${idx + 1}`,
@@ -506,8 +508,8 @@ export class OdooSalesService {
       };
     };
 
-    // 4. Publicar notas en el chatter de cada MO en paralelo (specs + insumos del ítem)
-    const notePromises = moIds.map((moId, i) => {
+    for (let i = 0; i < moIds.length; i++) {
+      const moId = moIds[i];
       const item = rawItems[i];
       const itemLabel = item.label || `V${i + 1}`;
       const ins = calcInsumos(item, i);
@@ -527,16 +529,18 @@ export class OdooSalesService {
         `<b>Escuadras:</b> ${ins.escuadras} unidades`,
       ].join('<br/>');
 
-      return odoo.executeKw('mrp.production', 'message_post', [[moId]], {
-        body: body,
-        message_type: 'comment',
-        subtype_xmlid: 'mail.mt_note',
-      }).catch(e => {
+      try {
+        await odoo.executeKw('mrp.production', 'message_post', [[moId]], {
+          body,
+          message_type: 'comment',
+          subtype_xmlid: 'mail.mt_note',
+        });
+      } catch (e) {
         console.error(`Error al publicar nota en MO ${moId}:`, e);
-      });
-    });
-
-    await Promise.allSettled(notePromises);
+      }
+      // Pausa entre notas para no saturar Odoo
+      if (i < moIds.length - 1) await new Promise(r => setTimeout(r, 300));
+    }
 
     // 5. Publicar resumen total de insumos en la Orden de Venta
     try {
