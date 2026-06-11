@@ -120,7 +120,7 @@ export async function guardarCotizacionEnOdoo(data: {
     // autoConfirm=true asegura que todo quede creado antes de responder al usuario.
     const session = await getSession();
     const userId = session?.uid;
-    const odooQuote = await odooSales.createQuote(clienteId, lineas, rawItems, true, data.clientName, userId);
+    const odooQuote = await odooSales.createQuote(clienteId, lineas, rawItems, false, data.clientName, userId);
 
     return { exito: true, cotizacionId: odooQuote.id, cotizacionName: odooQuote.name };
   } catch (error: any) {
@@ -182,7 +182,7 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
 
     const session = await getSession();
     const userId = session?.uid;
-    const odooQuote = await odooSales.createMonoliticQuote(clienteId, lineas, rawItems, true, data.clientName, userId);
+    const odooQuote = await odooSales.createMonoliticQuote(clienteId, lineas, rawItems, false, data.clientName, userId);
     return { exito: true, cotizacionId: odooQuote.id, cotizacionName: odooQuote.name };
   } catch (error: any) {
     console.error('Error en Server Action Odoo (Monolítico):', error);
