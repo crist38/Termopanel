@@ -655,9 +655,18 @@ export class OdooSalesService {
   }
 
   /**
-   * Actualiza precio unitario y/o cantidad de una línea de pedido (solo en órdenes draft).
+   * Actualiza precio unitario, cantidad, descripción y dimensiones de una línea de pedido (solo en órdenes draft).
    */
-  async updateOrderLine(lineId: number, data: { price_unit?: number; product_uom_qty?: number }): Promise<void> {
+  async updateOrderLine(
+    lineId: number, 
+    data: { 
+      price_unit?: number; 
+      product_uom_qty?: number;
+      name?: string;
+      x_studio_ancho_m?: number;
+      x_studio_alto_m?: number;
+    }
+  ): Promise<void> {
     await odoo.executeKw('sale.order.line', 'write', [[lineId], data]);
   }
 
