@@ -121,6 +121,53 @@ function parseOdooLine(line: OrderLine, index: number) {
   return { ref, cant, dim, config };
 }
 
+function parsePiezas(name: string): number {
+  const parts = name.split(" | ").map(p => p.trim());
+  const cantPart = parts.find(p => p.toLowerCase().includes("cantidad:"));
+  if (cantPart) {
+    const match = cantPart.match(/cantidad:\s*(\d+)/i);
+    if (match) {
+      const val = parseInt(match[1], 10);
+      return val > 0 ? val : 1;
+    }
+  }
+  return 1;
+}
+
+function parseDimensions(name: string): { ancho: number; alto: number } | null {
+  const parts = name.split(" | ").map(p => p.trim());
+  const dimPart = parts.find(p => p.toLowerCase().includes("termopanel") || p.toLowerCase().includes("cristal monolítico") || p.toLowerCase().includes("cristal"));
+  if (dimPart) {
+    const match = dimPart.match(/(\d+)\s*x\s*(\d+)/i);
+    if (match) {
+      return {
+        ancho: parseInt(match[1], 10) || 0,
+        alto: parseInt(match[2], 10) || 0
+      };
+    }
+  }
+  const match = name.match(/(\d+)\s*x\s*(\d+)/i);
+  if (match) {
+    return {
+      ancho: parseInt(match[1], 10) || 0,
+      alto: parseInt(match[2], 10) || 0
+    };
+  }
+  return null;
+}
+
+function updateDescriptionDimensions(name: string, ancho: number, alto: number): string {
+  const regex = /(Termopanel|Cristal Monolítico|Cristal)\s+(\d+)\s*x\s*(\d+)(\s*mm)?/i;
+  if (regex.test(name)) {
+    return name.replace(regex, `$1 ${ancho} x ${alto} mm`);
+  }
+  const genericRegex = /(\d+)\s*x\s*(\d+)/;
+  if (genericRegex.test(name)) {
+    return name.replace(genericRegex, `${ancho} x ${alto}`);
+  }
+  return name;
+}
+
 const STATE_LABELS: Record<string, { label: string; color: string; bg: string; dot: string }> = {
   draft: { label: "Borrador", color: "text-amber-700", bg: "bg-amber-50 border-amber-200", dot: "bg-amber-400" },
   sent: { label: "Enviado", color: "text-blue-700", bg: "bg-blue-50 border-blue-200", dot: "bg-blue-400" },
@@ -844,12 +891,38 @@ export default function CotizacionesPage() {
                                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Descripción</span>
                                       <textarea
                                         value={edits.name}
-                                        onChange={(e) =>
-                                          setEditingLines(prev => ({
-                                            ...prev,
-                                            [line.id]: { ...prev[line.id], name: e.target.value }
-                                          }))
-                                        }
+                                        onChange={(e) => {
+                                          const newText = e.target.value;
+                                          setEditingLines(prev => {
+                                            const lineEdits = prev[line.id];
+                                            if (!lineEdits) return prev;
+                                            const piezas = parsePiezas(newText);
+                                            const dims = parseDimensions(newText);
+                                            
+                                            let anchoM = lineEdits.x_studio_ancho_m;
+                                            let altoIndividualM = lineEdits.x_studio_alto_m / parsePiezas(lineEdits.name);
+                                            
+                                            if (dims) {
+                                              anchoM = dims.ancho / 1000;
+                                              altoIndividualM = dims.alto / 1000;
+                                            }
+                                            
+                                            const nuevoXStudioAnchoM = anchoM;
+                                            const nuevoXStudioAltoM = altoIndividualM * piezas;
+                                            const nuevoProductUomQty = Math.round(nuevoXStudioAnchoM * nuevoXStudioAltoM * 100) / 100;
+                                            
+                                            return {
+                                              ...prev,
+                                              [line.id]: {
+                                                ...lineEdits,
+                                                name: newText,
+                                                x_studio_ancho_m: nuevoXStudioAnchoM,
+                                                x_studio_alto_m: nuevoXStudioAltoM,
+                                                product_uom_qty: nuevoProductUomQty
+                                              }
+                                            };
+                                          });
+                                        }}
                                         className="w-full p-2 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white leading-relaxed"
                                         rows={2}
                                       />
@@ -926,10 +999,25 @@ export default function CotizacionesPage() {
                                             value={Math.round(edits.x_studio_ancho_m * 1000) || ""}
                                             onChange={(e) => {
                                               const val = parseFloat(e.target.value) || 0;
-                                              setEditingLines(prev => ({
-                                                ...prev,
-                                                [line.id]: { ...prev[line.id], x_studio_ancho_m: val / 1000 }
-                                              }));
+                                              setEditingLines(prev => {
+                                                const lineEdits = prev[line.id];
+                                                if (!lineEdits) return prev;
+                                                const piezas = parsePiezas(lineEdits.name);
+                                                const altoIndividualM = lineEdits.x_studio_alto_m / piezas;
+                                                const altoIndividualMm = Math.round(altoIndividualM * 1000);
+                                                const nuevoAnchoM = val / 1000;
+                                                const nuevoProductUomQty = Math.round(nuevoAnchoM * lineEdits.x_studio_alto_m * 100) / 100;
+                                                const nuevoName = updateDescriptionDimensions(lineEdits.name, val, altoIndividualMm);
+                                                return {
+                                                  ...prev,
+                                                  [line.id]: {
+                                                    ...lineEdits,
+                                                    x_studio_ancho_m: nuevoAnchoM,
+                                                    product_uom_qty: nuevoProductUomQty,
+                                                    name: nuevoName
+                                                  }
+                                                };
+                                              });
                                             }}
                                             className="w-24 px-2 py-1 border border-amber-300 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
                                             placeholder="Ancho"
@@ -942,13 +1030,28 @@ export default function CotizacionesPage() {
                                             type="number"
                                             step="1"
                                             min="0"
-                                            value={Math.round(edits.x_studio_alto_m * 1000) || ""}
+                                            value={Math.round((edits.x_studio_alto_m / parsePiezas(edits.name)) * 1000) || ""}
                                             onChange={(e) => {
                                               const val = parseFloat(e.target.value) || 0;
-                                              setEditingLines(prev => ({
-                                                ...prev,
-                                                [line.id]: { ...prev[line.id], x_studio_alto_m: val / 1000 }
-                                              }));
+                                              setEditingLines(prev => {
+                                                const lineEdits = prev[line.id];
+                                                if (!lineEdits) return prev;
+                                                const piezas = parsePiezas(lineEdits.name);
+                                                const anchoMm = Math.round(lineEdits.x_studio_ancho_m * 1000);
+                                                const nuevoAltoIndividualM = val / 1000;
+                                                const nuevoXStudioAltoM = nuevoAltoIndividualM * piezas;
+                                                const nuevoProductUomQty = Math.round(lineEdits.x_studio_ancho_m * nuevoXStudioAltoM * 100) / 100;
+                                                const nuevoName = updateDescriptionDimensions(lineEdits.name, anchoMm, val);
+                                                return {
+                                                  ...prev,
+                                                  [line.id]: {
+                                                    ...lineEdits,
+                                                    x_studio_alto_m: nuevoXStudioAltoM,
+                                                    product_uom_qty: nuevoProductUomQty,
+                                                    name: nuevoName
+                                                  }
+                                                };
+                                              });
                                             }}
                                             className="w-24 px-2 py-1 border border-amber-300 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
                                             placeholder="Alto"
