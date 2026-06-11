@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import jsPDF from "jspdf";
 import {
   listarCotizacionesOdoo,
   obtenerDetalleCotizacion,
@@ -28,6 +29,7 @@ import {
   Calendar,
   DollarSign,
   Layers,
+  Printer,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -62,6 +64,62 @@ interface OrderDetail extends SaleOrder {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function stripHtml(htmlStr: string) {
+  if (!htmlStr) return "";
+  return htmlStr.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+}
+
+function parseOdooLine(line: OrderLine, index: number) {
+  const name = line.name || "";
+  
+  let ref = `L${index + 1}`;
+  let cant = line.product_uom_qty.toString(); 
+  let dim = "—";
+  let config = name;
+  
+  const parts = name.split(" | ").map(p => p.trim());
+  
+  const refMatch = parts[0]?.match(/^\[([^\]]+)\]$/);
+  if (refMatch) {
+    ref = refMatch[1];
+  }
+  
+  const cantPart = parts.find(p => p.toLowerCase().includes("cantidad:"));
+  if (cantPart) {
+    const match = cantPart.match(/cantidad:\s*(\d+)/i);
+    if (match) {
+      cant = match[1];
+    }
+  }
+  
+  const dimPart = parts.find(p => p.toLowerCase().includes("termopanel") || p.toLowerCase().includes("cristal monolítico"));
+  if (dimPart) {
+    const match = dimPart.match(/(\d+)\s*x\s*(\d+)/i);
+    if (match) {
+      dim = `${match[1]} x ${match[2]}`;
+    }
+  } else if (line.x_studio_ancho_m != null && line.x_studio_alto_m != null) {
+    const w = Math.round(line.x_studio_ancho_m * 1000);
+    const h = Math.round(line.x_studio_alto_m * 1000);
+    if (w > 0 && h > 0) {
+      dim = `${w} x ${h}`;
+    }
+  }
+  
+  const configParts = parts.filter(p => 
+    !p.startsWith("[") && 
+    !p.toLowerCase().includes("cantidad:") && 
+    !p.toLowerCase().startsWith("termopanel") &&
+    !p.toLowerCase().startsWith("cristal monolítico")
+  );
+  
+  if (configParts.length > 0) {
+    config = configParts.join(" | ");
+  }
+  
+  return { ref, cant, dim, config };
+}
 
 const STATE_LABELS: Record<string, { label: string; color: string; bg: string; dot: string }> = {
   draft: { label: "Borrador", color: "text-amber-700", bg: "bg-amber-50 border-amber-200", dot: "bg-amber-400" },
@@ -258,6 +316,153 @@ export default function CotizacionesPage() {
     } finally {
       setCancelling(false);
     }
+  };
+
+  const handlePrintPDF = async () => {
+    if (!detail) return;
+    const doc = new jsPDF();
+
+    // Cargar logo de la empresa
+    try {
+      const res = await fetch('/logo.png');
+      const blob = await res.blob();
+      const logoBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      doc.addImage(logoBase64, 'PNG', 14, 10, 30, 30);
+    } catch (e) {
+      console.error("Error al cargar el logo en el PDF", e);
+    }
+
+    // Encabezado
+    doc.setFontSize(20);
+    doc.text("Presupuesto Termopaneles", 50, 25);
+
+    doc.setFontSize(10);
+    doc.text(`N° Presupuesto: ${detail.name}`, 150, 22);
+    doc.text(`Fecha: ${formatDate(detail.date_order)}`, 150, 28);
+
+    // Información del Cliente
+    doc.setFontSize(12);
+    doc.text("Información del Cliente", 14, 45);
+    doc.setFontSize(10);
+    doc.text(`Nombre: ${detail.partner_id?.[1] ?? "—"}`, 14, 53);
+    
+    let currentY = 53;
+    currentY += 8;
+
+    // Calcular total m2 de las líneas que no son notas o secciones
+    const productLines = detail.order_line.filter(line => line.display_type !== 'line_note' && line.display_type !== 'line_section');
+    const totalM2 = productLines.reduce((acc, line) => acc + line.product_uom_qty, 0);
+    doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} m²`, 14, currentY);
+
+    // Encabezado de Tabla
+    let yPos = currentY + 14;
+    doc.setFillColor(240, 240, 240);
+    doc.rect(14, yPos - 5, 182, 8, 'F');
+    doc.setFont("helvetica", "bold");
+    doc.text("Ref", 16, yPos);
+    doc.text("Cant.", 43, yPos);
+    doc.text("Dim. (mm)", 57, yPos);
+    doc.text("Configuración", 84, yPos);
+    doc.text("Unitario", 152, yPos);
+    doc.text("Total", 176, yPos);
+    doc.setFont("helvetica", "normal");
+
+    yPos += 10;
+
+    productLines.forEach((line, index) => {
+      const parsed = parseOdooLine(line, index);
+      const splitLabel = doc.splitTextToSize(parsed.ref, 25);
+      const splitConfig = doc.splitTextToSize(parsed.config, 66);
+
+      const lineCount = Math.max(splitLabel.length, splitConfig.length);
+
+      // Verificar salto de página
+      if (yPos + (lineCount * 5) > 275) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      doc.text(splitLabel, 16, yPos);
+      doc.text(parsed.cant, 43, yPos);
+      doc.text(parsed.dim, 57, yPos);
+      doc.text(splitConfig, 84, yPos);
+      doc.text(`$${line.price_unit.toLocaleString('es-CL')}`, 152, yPos);
+      doc.text(`$${line.price_subtotal.toLocaleString('es-CL')}`, 176, yPos);
+
+      yPos += (lineCount * 5) + 5;
+    });
+
+    // Total
+    doc.line(14, yPos, 196, yPos);
+    yPos += 10;
+
+    const net = detail.amount_untaxed;
+    const tax = detail.amount_tax;
+    const total = detail.amount_total;
+
+    doc.setFont("helvetica", "bold");
+    doc.text(`Total Neto: $${net.toLocaleString('es-CL')}`, 140, yPos);
+    yPos += 6;
+    doc.text(`IVA (19%): $${tax.toLocaleString('es-CL')}`, 140, yPos);
+    yPos += 6;
+    doc.setFontSize(11);
+    doc.text(`Total: $${total.toLocaleString('es-CL')}`, 140, yPos);
+
+    // Verificar espacio para notas y firmas
+    if (yPos > 200) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    yPos += 15;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("NOTAS:", 14, yPos);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(80, 80, 80);
+
+    const notas = [
+      "Este presupuesto tiene una validez de 10 días. Cualquier cambio generará otro presupuesto.",
+      "Estos valores quedan sujetos a cualquier cambio en el mercado.",
+      "Plazo de entrega a contar de 48 horas para Termopaneles, una vez recibida Orden de Compra.",
+      "PROWINDOWS LTDA. no responde por los daños de quiebres, rayaduras o picaduras en los cristales aportados por los clientes para recibir servicio de maquila, siendo de responsabilidad del cliente su reposición.",
+      "Esperando este Presupuesto sea de su agrado le saluda atentamente:",
+      "Una vez emitida la factura, el cliente tiene 24 horas para objetarla, de lo contrario esta se dará por aceptada."
+    ];
+
+    if (detail.note) {
+      const strippedNote = stripHtml(detail.note);
+      if (strippedNote) {
+        // Añadir nota al principio de la lista de notas
+        notas.unshift(`Observaciones Odoo: ${strippedNote}`);
+      }
+    }
+
+    notas.forEach((nota) => {
+      yPos += 5.5;
+      const splitNota = doc.splitTextToSize(nota, 182);
+      doc.text(splitNota, 14, yPos);
+      yPos += (splitNota.length - 1) * 4.5;
+    });
+
+    // Firmas y Modalidad de Pago
+    yPos += 20;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(0, 0, 0);
+
+    doc.text("Firma de aceptación del Cliente: ___________________________", 14, yPos);
+    doc.text("Modalidad de Pago: __________________", 120, yPos);
+
+    const sanitizedClientName = detail.partner_id?.[1] ? detail.partner_id[1].trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
+    doc.save(`Presupuesto_Odoo_${detail.name}_${sanitizedClientName}.pdf`);
   };
 
   // ── Pagination ──────────────────────────────────────────────────────────────
@@ -534,36 +739,50 @@ export default function CotizacionesPage() {
                   )}
 
                   {/* Action buttons */}
-                  {detail.state === 'draft' && (
+                  <div className="flex items-center justify-between gap-3 flex-wrap bg-slate-50 border border-slate-200 rounded-xl p-3.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
-                        <Edit3 size={12} />
-                        Borrador — puedes editar precios y cantidades
-                      </div>
-                      <button
-                        onClick={handleCancel}
-                        disabled={cancelling}
-                        className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg font-semibold transition-colors disabled:opacity-60"
-                      >
-                        <Ban size={12} />
-                        {cancelling ? "Cancelando..." : "Cancelar Orden"}
-                      </button>
-                    </div>
-                  )}
+                      {detail.state === 'draft' && (
+                        <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
+                          <Edit3 size={12} />
+                          Borrador — puedes editar precios y cantidades
+                        </div>
+                      )}
 
-                  {detail.state === 'cancel' && (
-                    <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg w-fit">
-                      <XCircle size={12} />
-                      Esta orden fue cancelada
-                    </div>
-                  )}
+                      {detail.state === 'cancel' && (
+                        <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg">
+                          <XCircle size={12} />
+                          Esta orden fue cancelada
+                        </div>
+                      )}
 
-                  {(detail.state === 'sale' || detail.state === 'done') && (
-                    <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg w-fit">
-                      <Check size={12} />
-                      Orden confirmada — solo lectura
+                      {(detail.state === 'sale' || detail.state === 'done') && (
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg">
+                          <Check size={12} />
+                          Orden confirmada — solo lectura
+                        </div>
+                      )}
+
+                      {detail.state === 'draft' && (
+                        <button
+                          onClick={handleCancel}
+                          disabled={cancelling}
+                          className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg font-semibold transition-colors disabled:opacity-60"
+                        >
+                          <Ban size={12} />
+                          {cancelling ? "Cancelando..." : "Cancelar Orden"}
+                        </button>
+                      )}
                     </div>
-                  )}
+
+                    <button
+                      onClick={handlePrintPDF}
+                      className="flex items-center gap-2 bg-[#7a5973] hover:bg-[#6b4c64] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all duration-200"
+                      title="Volver a generar e imprimir el PDF de este presupuesto"
+                    >
+                      <Printer size={13} />
+                      Imprimir PDF
+                    </button>
+                  </div>
 
                   {saveError && (
                     <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 flex gap-1.5 items-center">
