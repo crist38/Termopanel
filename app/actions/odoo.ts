@@ -228,7 +228,13 @@ export async function obtenerDetalleCotizacion(orderId: number): Promise<{
 
 export async function actualizarLineaCotizacion(
   lineId: number,
-  data: { price_unit?: number; product_uom_qty?: number }
+  data: { 
+    price_unit?: number; 
+    product_uom_qty?: number;
+    name?: string;
+    x_studio_ancho_m?: number;
+    x_studio_alto_m?: number;
+  }
 ): Promise<{ exito: boolean; error?: string }> {
   try {
     const session = await getSession();

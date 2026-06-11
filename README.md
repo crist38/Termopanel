@@ -105,6 +105,7 @@ La integración se maneja desde el servidor (Next.js Server Actions), garantizan
 - ✅ **Fórmula de Maquila Detallada**: La fórmula de cálculo ahora integra los costos de estos insumos individuales de manera dinámica.
 - ✅ **Matriz de Precios de Separadores**: Nueva interfaz en la configuración para visualizar y editar el precio por metro lineal de los separadores por combinación de color y espesor.
 - ✅ **Re-impresión de Cotizaciones a PDF**: Botón "Imprimir PDF" en la vista de detalle de cotizaciones históricas para volver a generar y descargar presupuestos con formato oficial, firmas, condiciones de pago y notas comerciales.
+- ✅ **Edición Completa de Cotizaciones**: Posibilidad de modificar la descripción (`name`), cantidad, precio unitario y dimensiones de ancho/alto (en mm) directamente en las líneas de pedido desde `/cotizaciones`.
 
 ### v2.2 - Junio 2026
 - ✅ **Gestión de Cotizaciones de Odoo**: Nueva página `/cotizaciones` para listar, buscar, filtrar por estado y ver el detalle de cotizaciones almacenadas en Odoo.

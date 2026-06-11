@@ -173,7 +173,13 @@ export default function CotizacionesPage() {
   const [detailError, setDetailError] = useState<string | null>(null);
 
   // Edición de líneas
-  const [editingLines, setEditingLines] = useState<Record<number, { price_unit: number; product_uom_qty: number }>>({});
+  const [editingLines, setEditingLines] = useState<Record<number, { 
+    name: string;
+    price_unit: number; 
+    product_uom_qty: number;
+    x_studio_ancho_m: number;
+    x_studio_alto_m: number;
+  }>>({});
   const [savingLine, setSavingLine] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -261,7 +267,13 @@ export default function CotizacionesPage() {
   const startEditing = (line: OrderLine) => {
     setEditingLines(prev => ({
       ...prev,
-      [line.id]: { price_unit: line.price_unit, product_uom_qty: line.product_uom_qty },
+      [line.id]: { 
+        name: line.name || "",
+        price_unit: line.price_unit, 
+        product_uom_qty: line.product_uom_qty,
+        x_studio_ancho_m: line.x_studio_ancho_m ?? 0,
+        x_studio_alto_m: line.x_studio_alto_m ?? 0,
+      },
     }));
   };
 
@@ -807,7 +819,13 @@ export default function CotizacionesPage() {
                             const isNote = line.display_type === 'line_note' || line.display_type === 'line_section';
                             const isEditing = !!editingLines[line.id];
                             const isSaving = savingLine === line.id;
-                            const edits = editingLines[line.id] ?? { price_unit: line.price_unit, product_uom_qty: line.product_uom_qty };
+                            const edits = editingLines[line.id] ?? {
+                              name: line.name || "",
+                              price_unit: line.price_unit,
+                              product_uom_qty: line.product_uom_qty,
+                              x_studio_ancho_m: line.x_studio_ancho_m ?? 0,
+                              x_studio_alto_m: line.x_studio_alto_m ?? 0,
+                            };
 
                             if (isNote) {
                               return (
@@ -821,7 +839,24 @@ export default function CotizacionesPage() {
                               <div key={line.id} className={`p-4 ${isEditing ? "bg-amber-50/30" : "hover:bg-slate-50/50"} transition-colors`}>
                                 <div className="flex flex-col gap-3">
                                   {/* Description */}
-                                  <p className="text-xs text-slate-700 leading-relaxed">{line.name}</p>
+                                  {isEditing ? (
+                                    <div className="flex flex-col gap-1 w-full">
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Descripción</span>
+                                      <textarea
+                                        value={edits.name}
+                                        onChange={(e) =>
+                                          setEditingLines(prev => ({
+                                            ...prev,
+                                            [line.id]: { ...prev[line.id], name: e.target.value }
+                                          }))
+                                        }
+                                        className="w-full p-2 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white leading-relaxed"
+                                        rows={2}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-slate-700 leading-relaxed">{line.name}</p>
+                                  )}
 
                                   {/* Metrics row */}
                                   <div className="flex items-start gap-4 flex-wrap">
@@ -880,13 +915,55 @@ export default function CotizacionesPage() {
                                     </div>
 
                                     {/* Dimensions */}
-                                    {line.x_studio_ancho_m != null && (
-                                      <div className="flex flex-col gap-1">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Medidas (m)</span>
-                                        <span className="text-xs text-slate-600 font-mono">
-                                          {line.x_studio_ancho_m?.toFixed(3)} × {line.x_studio_alto_m?.toFixed(3)}
-                                        </span>
-                                      </div>
+                                    {isEditing ? (
+                                      <>
+                                        <div className="flex flex-col gap-1 min-w-[90px]">
+                                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ancho (mm)</span>
+                                          <input
+                                            type="number"
+                                            step="1"
+                                            min="0"
+                                            value={Math.round(edits.x_studio_ancho_m * 1000) || ""}
+                                            onChange={(e) => {
+                                              const val = parseFloat(e.target.value) || 0;
+                                              setEditingLines(prev => ({
+                                                ...prev,
+                                                [line.id]: { ...prev[line.id], x_studio_ancho_m: val / 1000 }
+                                              }));
+                                            }}
+                                            className="w-24 px-2 py-1 border border-amber-300 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
+                                            placeholder="Ancho"
+                                          />
+                                        </div>
+
+                                        <div className="flex flex-col gap-1 min-w-[90px]">
+                                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Alto (mm)</span>
+                                          <input
+                                            type="number"
+                                            step="1"
+                                            min="0"
+                                            value={Math.round(edits.x_studio_alto_m * 1000) || ""}
+                                            onChange={(e) => {
+                                              const val = parseFloat(e.target.value) || 0;
+                                              setEditingLines(prev => ({
+                                                ...prev,
+                                                [line.id]: { ...prev[line.id], x_studio_alto_m: val / 1000 }
+                                              }));
+                                            }}
+                                            className="w-24 px-2 py-1 border border-amber-300 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
+                                            placeholder="Alto"
+                                          />
+                                        </div>
+                                      </>
+                                    ) : (
+                                      line.x_studio_ancho_m != null && (
+                                        <div className="flex flex-col gap-1">
+                                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Medidas (m)</span>
+                                          <span className="text-xs text-slate-600 font-mono">
+                                            {line.x_studio_ancho_m?.toFixed(3)} × {line.x_studio_alto_m?.toFixed(3)}
+                                          </span>
+                                        </div>
+                                      )
                                     )}
                                   </div>
 
