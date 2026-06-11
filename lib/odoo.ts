@@ -17,53 +17,73 @@ export class OdooClient {
   }
 
   /**
-   * Método interno para realizar peticiones JSON-RPC a Odoo
+   * Pausa la ejecución por los milisegundos indicados.
+   */
+  static sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Método interno para realizar peticiones JSON-RPC a Odoo.
+   * Reintenta automáticamente ante errores 429 (Too Many Requests)
+   * usando backoff exponencial: 1s → 2s → 4s (hasta 3 reintentos).
    */
   private async rpcCall(service: 'common' | 'object', method: string, args: any[]): Promise<any> {
     const payload = {
       jsonrpc: '2.0',
       method: 'call',
-      params: {
-        service,
-        method,
-        args,
-      },
+      params: { service, method, args },
       id: Math.floor(Math.random() * 1000000000),
     };
 
-    // Timeout de 120 segundos por llamada (las operaciones batch de Odoo pueden tardar)
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 120_000);
+    const MAX_RETRIES = 3;
 
-    let response: Response;
-    try {
-      response = await fetch(`${this.url}/jsonrpc`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-    } catch (err: any) {
-      clearTimeout(timer);
-      if (err?.name === 'AbortError') {
-        throw new Error('Timeout: Odoo no respondió en 120 segundos. Intente nuevamente.');
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      // Timeout de 120 segundos por llamada (las operaciones batch de Odoo pueden tardar)
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 120_000);
+
+      let response: Response;
+      try {
+        response = await fetch(`${this.url}/jsonrpc`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } catch (err: any) {
+        clearTimeout(timer);
+        if (err?.name === 'AbortError') {
+          throw new Error('Timeout: Odoo no respondió en 120 segundos. Intente nuevamente.');
+        }
+        throw new Error(`Error de red al conectar con Odoo (${this.url}): ${err?.message ?? err}`);
+      } finally {
+        clearTimeout(timer);
       }
-      throw new Error(`Error de red al conectar con Odoo (${this.url}): ${err?.message ?? err}`);
-    } finally {
-      clearTimeout(timer);
+
+      // Reintento con backoff exponencial ante 429 Too Many Requests
+      if (response.status === 429) {
+        if (attempt < MAX_RETRIES) {
+          const waitMs = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+          console.warn(`Odoo 429 Too Many Requests — reintentando en ${waitMs}ms (intento ${attempt + 1}/${MAX_RETRIES})`);
+          await OdooClient.sleep(waitMs);
+          continue;
+        }
+        throw new Error(`Error HTTP 429 desde Odoo: Too Many Requests (se agotaron los reintentos)`);
+      }
+
+      if (!response.ok) {
+        throw new Error(`Error HTTP ${response.status} desde Odoo: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(`Odoo RPC Error: ${data.error.data?.message || data.error.message}`);
+      }
+
+      return data.result;
     }
-
-    if (!response.ok) {
-      throw new Error(`Error HTTP ${response.status} desde Odoo: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-
-    if (data.error) {
-      throw new Error(`Odoo RPC Error: ${data.error.data?.message || data.error.message}`);
-    }
-
-    return data.result;
   }
 
   /**
