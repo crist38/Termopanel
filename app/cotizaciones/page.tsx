@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import jsPDF from "jspdf";
@@ -77,7 +77,7 @@ function parseOdooLine(line: OrderLine, index: number) {
   
   let ref = `L${index + 1}`;
   let cant = line.product_uom_qty.toString(); 
-  let dim = "â€”";
+  let dim = "—";
   let config = name;
   
   const parts = name.split(" | ").map(p => p.trim());
@@ -95,7 +95,7 @@ function parseOdooLine(line: OrderLine, index: number) {
     }
   }
   
-  const dimPart = parts.find(p => p.toLowerCase().includes("termopanel") || p.toLowerCase().includes("cristal monolÃ­tico"));
+  const dimPart = parts.find(p => p.toLowerCase().includes("termopanel") || p.toLowerCase().includes("cristal monolítico"));
   if (dimPart) {
     const match = dimPart.match(/(\d+)\s*x\s*(\d+)/i);
     if (match) {
@@ -113,7 +113,7 @@ function parseOdooLine(line: OrderLine, index: number) {
     !p.startsWith("[") && 
     !p.toLowerCase().includes("cantidad:") && 
     !p.toLowerCase().startsWith("termopanel") &&
-    !p.toLowerCase().startsWith("cristal monolÃ­tico")
+    !p.toLowerCase().startsWith("cristal monolítico")
   );
   
   if (configParts.length > 0) {
@@ -138,7 +138,7 @@ function parsePiezas(name: string): number {
 
 function parseDimensions(name: string): { ancho: number; alto: number } | null {
   const parts = name.split(" | ").map(p => p.trim());
-  const dimPart = parts.find(p => p.toLowerCase().includes("termopanel") || p.toLowerCase().includes("cristal monolÃ­tico") || p.toLowerCase().includes("cristal"));
+  const dimPart = parts.find(p => p.toLowerCase().includes("termopanel") || p.toLowerCase().includes("cristal monolítico") || p.toLowerCase().includes("cristal"));
   if (dimPart) {
     const match = dimPart.match(/(\d+)\s*x\s*(\d+)/i);
     if (match) {
@@ -159,7 +159,7 @@ function parseDimensions(name: string): { ancho: number; alto: number } | null {
 }
 
 function updateDescriptionDimensions(name: string, ancho: number, alto: number): string {
-  const regex = /(Termopanel|Cristal MonolÃ­tico|Cristal)\s+(\d+)\s*x\s*(\d+)(\s*mm)?/i;
+  const regex = /(Termopanel|Cristal Monolítico|Cristal)\s+(\d+)\s*x\s*(\d+)(\s*mm)?/i;
   if (regex.test(name)) {
     return name.replace(regex, `$1 ${ancho} x ${alto} mm`);
   }
@@ -247,7 +247,7 @@ export default function CotizacionesPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  // EdiciÃ³n de lÃ­neas
+  // Edición de líneas
   const [editingLines, setEditingLines] = useState<Record<number, {
     name: string;
     price_unit: number;
@@ -284,7 +284,7 @@ export default function CotizacionesPage() {
         setError(res.error ?? "Error desconocido");
       }
     } catch (e: any) {
-      setError(e.message ?? "Error de conexiÃ³n");
+      setError(e.message ?? "Error de conexión");
     } finally {
       setLoading(false);
     }
@@ -295,7 +295,7 @@ export default function CotizacionesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  // Debounce de bÃºsqueda
+  // Debounce de búsqueda
   const handleSearchChange = (val: string) => {
     setSearch(val);
     if (searchRef.current) clearTimeout(searchRef.current);
@@ -334,7 +334,7 @@ export default function CotizacionesPage() {
         setDetailError(res.error ?? "No se pudo cargar el detalle");
       }
     } catch (e: any) {
-      setDetailError(e.message ?? "Error de conexiÃ³n");
+      setDetailError(e.message ?? "Error de conexión");
     } finally {
       setDetailLoading(false);
     }
@@ -423,7 +423,7 @@ export default function CotizacionesPage() {
         setSaveError(res.error ?? "Error al guardar");
       }
     } catch (e: any) {
-      setSaveError(e.message ?? "Error de conexiÃ³n");
+      setSaveError(e.message ?? "Error de conexión");
     } finally {
       setSavingLine(null);
     }
@@ -432,7 +432,7 @@ export default function CotizacionesPage() {
   // â”€â”€ Cancel order â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleCancel = async () => {
     if (!detail) return;
-    if (!confirm(`Â¿Seguro que deseas cancelar la orden ${detail.name}? Esta acciÃ³n no se puede deshacer fÃ¡cilmente.`)) return;
+    if (!confirm(`¿Seguro que deseas cancelar la orden ${detail.name}? Esta acción no se puede deshacer fácilmente.`)) return;
     setCancelling(true);
     try {
       const res = await cancelarCotizacion(detail.id);
@@ -444,7 +444,7 @@ export default function CotizacionesPage() {
         alert(`Error al cancelar: ${res.error}`);
       }
     } catch (e: any) {
-      alert(`Error de conexiÃ³n: ${e.message}`);
+      alert(`Error de conexión: ${e.message}`);
     } finally {
       setCancelling(false);
     }
@@ -454,7 +454,7 @@ export default function CotizacionesPage() {
   const handleConfirmar = async () => {
     if (!detail) return;
     if (!confirm(
-      `Â¿Confirmar la orden ${detail.name}?\n\nEsto crearÃ¡ las Ã³rdenes de fabricaciÃ³n y de trabajo en los talleres correspondientes.`
+      `¿Confirmar la orden ${detail.name}?\n\nEsto creará las órdenes de fabricación y de trabajo en los talleres correspondientes.`
     )) return;
     setConfirming(true);
     try {
@@ -467,7 +467,7 @@ export default function CotizacionesPage() {
         alert(`Error al confirmar: ${res.error}`);
       }
     } catch (e: any) {
-      alert(`Error de conexiÃ³n: ${e.message}`);
+      alert(`Error de conexión: ${e.message}`);
     } finally {
       setConfirming(false);
     }
@@ -497,22 +497,22 @@ export default function CotizacionesPage() {
     doc.text("Presupuesto Termopaneles", 50, 25);
 
     doc.setFontSize(10);
-    doc.text(`NÂ° Presupuesto: ${detail.name}`, 150, 22);
+    doc.text(`N° Presupuesto: ${detail.name}`, 150, 22);
     doc.text(`Fecha: ${formatDate(detail.date_order)}`, 150, 28);
 
-    // InformaciÃ³n del Cliente
+    // Información del Cliente
     doc.setFontSize(12);
-    doc.text("InformaciÃ³n del Cliente", 14, 45);
+    doc.text("Información del Cliente", 14, 45);
     doc.setFontSize(10);
-    doc.text(`Nombre: ${detail.partner_id?.[1] ?? "â€”"}`, 14, 53);
+    doc.text(`Nombre: ${detail.partner_id?.[1] ?? "—"}`, 14, 53);
     
     let currentY = 53;
     currentY += 8;
 
-    // Calcular total m2 de las lÃ­neas que no son notas o secciones
+    // Calcular total m2 de las líneas que no son notas o secciones
     const productLines = detail.order_line.filter(line => line.display_type !== 'line_note' && line.display_type !== 'line_section');
     const totalM2 = productLines.reduce((acc, line) => acc + line.product_uom_qty, 0);
-    doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} mÂ²`, 14, currentY);
+    doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} m²`, 14, currentY);
 
     // Encabezado de Tabla
     let yPos = currentY + 14;
@@ -522,7 +522,7 @@ export default function CotizacionesPage() {
     doc.text("Ref", 16, yPos);
     doc.text("Cant.", 43, yPos);
     doc.text("Dim. (mm)", 57, yPos);
-    doc.text("ConfiguraciÃ³n", 84, yPos);
+    doc.text("Configuración", 84, yPos);
     doc.text("Unitario", 152, yPos);
     doc.text("Total", 176, yPos);
     doc.setFont("helvetica", "normal");
@@ -536,7 +536,7 @@ export default function CotizacionesPage() {
 
       const lineCount = Math.max(splitLabel.length, splitConfig.length);
 
-      // Verificar salto de pÃ¡gina
+      // Verificar salto de página
       if (yPos + (lineCount * 5) > 275) {
         doc.addPage();
         yPos = 20;
@@ -584,18 +584,18 @@ export default function CotizacionesPage() {
     doc.setTextColor(80, 80, 80);
 
     const notas = [
-      "Este presupuesto tiene una validez de 10 dÃ­as. Cualquier cambio generarÃ¡ otro presupuesto.",
+      "Este presupuesto tiene una validez de 10 días. Cualquier cambio generará otro presupuesto.",
       "Estos valores quedan sujetos a cualquier cambio en el mercado.",
       "Plazo de entrega a contar de 48 horas para Termopaneles, una vez recibida Orden de Compra.",
-      "PROWINDOWS LTDA. no responde por los daÃ±os de quiebres, rayaduras o picaduras en los cristales aportados por los clientes para recibir servicio de maquila, siendo de responsabilidad del cliente su reposiciÃ³n.",
+      "PROWINDOWS LTDA. no responde por los daños de quiebres, rayaduras o picaduras en los cristales aportados por los clientes para recibir servicio de maquila, siendo de responsabilidad del cliente su reposición.",
       "Esperando este Presupuesto sea de su agrado le saluda atentamente:",
-      "Una vez emitida la factura, el cliente tiene 24 horas para objetarla, de lo contrario esta se darÃ¡ por aceptada."
+      "Una vez emitida la factura, el cliente tiene 24 horas para objetarla, de lo contrario esta se dará por aceptada."
     ];
 
     if (detail.note) {
       const strippedNote = stripHtml(detail.note);
       if (strippedNote) {
-        // AÃ±adir nota al principio de la lista de notas
+        // Añadir nota al principio de la lista de notas
         notas.unshift(`Observaciones Odoo: ${strippedNote}`);
       }
     }
@@ -613,7 +613,7 @@ export default function CotizacionesPage() {
     doc.setFontSize(9.5);
     doc.setTextColor(0, 0, 0);
 
-    doc.text("Firma de aceptaciÃ³n del Cliente: ___________________________", 14, yPos);
+    doc.text("Firma de aceptación del Cliente: ___________________________", 14, yPos);
     doc.text("Modalidad de Pago: __________________", 120, yPos);
 
     const sanitizedClientName = detail.partner_id?.[1] ? detail.partner_id[1].trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
@@ -643,7 +643,7 @@ export default function CotizacionesPage() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-slate-800 leading-tight">Cotizaciones Odoo</h1>
-              <p className="text-xs text-slate-400">Listado de Ã³rdenes de venta almacenadas en el sistema</p>
+              <p className="text-xs text-slate-400">Listado de órdenes de venta almacenadas en el sistema</p>
             </div>
           </div>
         </div>
@@ -670,7 +670,7 @@ export default function CotizacionesPage() {
                 type="text"
                 value={search}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Buscar por NÂ° orden o cliente..."
+                placeholder="Buscar por N° orden o cliente..."
                 className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#7a5973]/30 focus:border-[#7a5973] text-slate-700 placeholder-slate-400 bg-slate-50/50"
               />
             </div>
@@ -700,10 +700,10 @@ export default function CotizacionesPage() {
           {/* Stats bar */}
           <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>
-              {loading ? "Cargando..." : `${total} cotizaciÃ³n${total !== 1 ? "es" : ""} encontrada${total !== 1 ? "s" : ""}`}
+              {loading ? "Cargando..." : `${total} cotización${total !== 1 ? "es" : ""} encontrada${total !== 1 ? "s" : ""}`}
             </span>
             {totalPages > 1 && (
-              <span>PÃ¡gina {page + 1} de {totalPages}</span>
+              <span>Página {page + 1} de {totalPages}</span>
             )}
           </div>
 
@@ -736,7 +736,7 @@ export default function CotizacionesPage() {
               <div className="flex flex-col items-center justify-center py-20 gap-2 text-slate-400">
                 <FileText size={40} strokeWidth={1.2} />
                 <p className="text-sm font-medium">No se encontraron cotizaciones</p>
-                <p className="text-xs">Prueba cambiando los filtros de bÃºsqueda</p>
+                <p className="text-xs">Prueba cambiando los filtros de búsqueda</p>
               </div>
             )}
 
@@ -924,7 +924,7 @@ export default function CotizacionesPage() {
                           className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg font-semibold transition-colors disabled:opacity-60"
                         >
                           <Check size={12} />
-                          {confirming ? 'Confirmando y creando Ã³rdenes...' : 'Confirmar y Crear Ã“rdenes de Taller'}
+                          {confirming ? 'Confirmando y creando órdenes...' : 'Confirmar y Crear Órdenes de Taller'}
                         </button>
                       )}
 
@@ -960,13 +960,13 @@ export default function CotizacionesPage() {
                   <div>
                     <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
                       <Layers size={15} className="text-[#7a5973]" />
-                      LÃ­neas del Pedido
-                      <span className="text-xs font-normal text-slate-400">({detail.order_line.length} lÃ­nea{detail.order_line.length !== 1 ? "s" : ""})</span>
+                      Líneas del Pedido
+                      <span className="text-xs font-normal text-slate-400">({detail.order_line.length} línea{detail.order_line.length !== 1 ? "s" : ""})</span>
                     </h3>
 
                     <div className="border border-slate-200 rounded-xl overflow-hidden">
                       {detail.order_line.length === 0 ? (
-                        <p className="p-4 text-sm text-slate-400 italic text-center">Sin lÃ­neas de pedido</p>
+                        <p className="p-4 text-sm text-slate-400 italic text-center">Sin líneas de pedido</p>
                       ) : (
                         <div className="divide-y divide-slate-100">
                           {detail.order_line.map((line) => {
@@ -1002,7 +1002,7 @@ export default function CotizacionesPage() {
                                   {/* Description */}
                                   {isEditing ? (
                                     <div className="flex flex-col gap-1 w-full">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">DescripciÃ³n</span>
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Descripción</span>
                                       <textarea
                                         value={edits.name}
                                         onChange={(e) => {
@@ -1048,7 +1048,7 @@ export default function CotizacionesPage() {
                                   <div className="flex items-start gap-4 flex-wrap">
                                     {/* Quantity */}
                                     <div className="flex flex-col gap-1 min-w-[90px]">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cantidad (mÂ²)</span>
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cantidad (m²)</span>
                                       {isEditing ? (
                                         <input
                                           type="number"
@@ -1221,14 +1221,14 @@ export default function CotizacionesPage() {
                                         <div className="flex flex-col gap-1">
                                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Medidas (m)</span>
                                           <span className="text-xs text-slate-600 font-mono">
-                                            {line.x_studio_ancho_m?.toFixed(3)} Ã— {line.x_studio_alto_m?.toFixed(3)}
+                                            {line.x_studio_ancho_m?.toFixed(3)} × {line.x_studio_alto_m?.toFixed(3)}
                                           </span>
                                         </div>
                                       )
                                     )}
                                   </div>
 
-                                  {/* Cristales & Separador (solo termopanel, en modo ediciÃ³n) */}
+                                  {/* Cristales & Separador (solo termopanel, en modo edición) */}
                                   {isEditing && /termopanel/i.test(line.name || '') && (
                                     <div className="flex flex-col gap-2 pt-2 border-t border-amber-200/60">
                                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cristales &amp; Separador</span>
@@ -1409,7 +1409,7 @@ export default function CotizacionesPage() {
             <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm">
               <Eye size={40} strokeWidth={1.2} className="text-slate-300" />
             </div>
-            <p className="text-sm font-medium">Selecciona una cotizaciÃ³n para ver su detalle</p>
+            <p className="text-sm font-medium">Selecciona una cotización para ver su detalle</p>
             <p className="text-xs">Haz clic en cualquier fila de la lista</p>
           </div>
         )}
