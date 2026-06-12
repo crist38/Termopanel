@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import jsPDF from "jspdf";
@@ -33,7 +33,7 @@ import {
   Printer,
 } from "lucide-react";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface SaleOrder {
   id: number;
@@ -54,6 +54,7 @@ interface OrderLine {
   product_uom_qty: number;
   price_unit: number;
   price_subtotal: number;
+  discount?: number;
   display_type: string | false;
   x_studio_ancho_m?: number;
   x_studio_alto_m?: number;
@@ -64,7 +65,7 @@ interface OrderDetail extends SaleOrder {
   order_line: OrderLine[];
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function stripHtml(htmlStr: string) {
   if (!htmlStr) return "";
@@ -76,7 +77,7 @@ function parseOdooLine(line: OrderLine, index: number) {
   
   let ref = `L${index + 1}`;
   let cant = line.product_uom_qty.toString(); 
-  let dim = "—";
+  let dim = "â€”";
   let config = name;
   
   const parts = name.split(" | ").map(p => p.trim());
@@ -94,7 +95,7 @@ function parseOdooLine(line: OrderLine, index: number) {
     }
   }
   
-  const dimPart = parts.find(p => p.toLowerCase().includes("termopanel") || p.toLowerCase().includes("cristal monolítico"));
+  const dimPart = parts.find(p => p.toLowerCase().includes("termopanel") || p.toLowerCase().includes("cristal monolÃ­tico"));
   if (dimPart) {
     const match = dimPart.match(/(\d+)\s*x\s*(\d+)/i);
     if (match) {
@@ -112,7 +113,7 @@ function parseOdooLine(line: OrderLine, index: number) {
     !p.startsWith("[") && 
     !p.toLowerCase().includes("cantidad:") && 
     !p.toLowerCase().startsWith("termopanel") &&
-    !p.toLowerCase().startsWith("cristal monolítico")
+    !p.toLowerCase().startsWith("cristal monolÃ­tico")
   );
   
   if (configParts.length > 0) {
@@ -137,7 +138,7 @@ function parsePiezas(name: string): number {
 
 function parseDimensions(name: string): { ancho: number; alto: number } | null {
   const parts = name.split(" | ").map(p => p.trim());
-  const dimPart = parts.find(p => p.toLowerCase().includes("termopanel") || p.toLowerCase().includes("cristal monolítico") || p.toLowerCase().includes("cristal"));
+  const dimPart = parts.find(p => p.toLowerCase().includes("termopanel") || p.toLowerCase().includes("cristal monolÃ­tico") || p.toLowerCase().includes("cristal"));
   if (dimPart) {
     const match = dimPart.match(/(\d+)\s*x\s*(\d+)/i);
     if (match) {
@@ -158,7 +159,7 @@ function parseDimensions(name: string): { ancho: number; alto: number } | null {
 }
 
 function updateDescriptionDimensions(name: string, ancho: number, alto: number): string {
-  const regex = /(Termopanel|Cristal Monolítico|Cristal)\s+(\d+)\s*x\s*(\d+)(\s*mm)?/i;
+  const regex = /(Termopanel|Cristal MonolÃ­tico|Cristal)\s+(\d+)\s*x\s*(\d+)(\s*mm)?/i;
   if (regex.test(name)) {
     return name.replace(regex, `$1 ${ancho} x ${alto} mm`);
   }
@@ -218,14 +219,14 @@ function formatCLP(amount: number) {
 }
 
 function formatDate(dateStr: string) {
-  if (!dateStr) return "—";
+  if (!dateStr) return "â€”";
   const d = new Date(dateStr);
   return d.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 const PAGE_SIZE = 15;
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function CotizacionesPage() {
   // Listado
@@ -246,20 +247,21 @@ export default function CotizacionesPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  // Edición de líneas
+  // EdiciÃ³n de lÃ­neas
   const [editingLines, setEditingLines] = useState<Record<number, {
     name: string;
     price_unit: number;
     product_uom_qty: number;
     x_studio_ancho_m: number;
     x_studio_alto_m: number;
+    discount: number;
     cristal1_tipo: string;
     cristal1_espesor: number;
     cristal2_tipo: string;
     cristal2_espesor: number;
     sep_espesor: number;
     sep_color: string;
-  }>>({});
+  }>>({}); 
   const [savingLine, setSavingLine] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -269,7 +271,7 @@ export default function CotizacionesPage() {
   // Confirmar orden y crear OTs
   const [confirming, setConfirming] = useState(false);
 
-  // ── Fetch list ──────────────────────────────────────────────────────────────
+  // â”€â”€ Fetch list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fetchOrders = useCallback(async (s: string, st: string, p: number) => {
     setLoading(true);
     setError(null);
@@ -282,7 +284,7 @@ export default function CotizacionesPage() {
         setError(res.error ?? "Error desconocido");
       }
     } catch (e: any) {
-      setError(e.message ?? "Error de conexión");
+      setError(e.message ?? "Error de conexiÃ³n");
     } finally {
       setLoading(false);
     }
@@ -293,7 +295,7 @@ export default function CotizacionesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
-  // Debounce de búsqueda
+  // Debounce de bÃºsqueda
   const handleSearchChange = (val: string) => {
     setSearch(val);
     if (searchRef.current) clearTimeout(searchRef.current);
@@ -316,7 +318,7 @@ export default function CotizacionesPage() {
     setDetail(null);
   };
 
-  // ── Fetch detail ────────────────────────────────────────────────────────────
+  // â”€â”€ Fetch detail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const openDetail = async (id: number) => {
     setSelectedId(id);
     setDetail(null);
@@ -332,7 +334,7 @@ export default function CotizacionesPage() {
         setDetailError(res.error ?? "No se pudo cargar el detalle");
       }
     } catch (e: any) {
-      setDetailError(e.message ?? "Error de conexión");
+      setDetailError(e.message ?? "Error de conexiÃ³n");
     } finally {
       setDetailLoading(false);
     }
@@ -346,7 +348,7 @@ export default function CotizacionesPage() {
     setSaveError(null);
   };
 
-  // ── Edit lines ──────────────────────────────────────────────────────────────
+  // â”€â”€ Edit lines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const startEditing = (line: OrderLine) => {
     const name = line.name || "";
     const parts = name.split(' | ').map(p => p.trim());
@@ -373,10 +375,11 @@ export default function CotizacionesPage() {
       ...prev,
       [line.id]: {
         name,
-        price_unit:      line.price_unit,
-        product_uom_qty: line.product_uom_qty,
+        price_unit:       line.price_unit,
+        product_uom_qty:  line.product_uom_qty,
         x_studio_ancho_m: line.x_studio_ancho_m ?? 0,
         x_studio_alto_m:  line.x_studio_alto_m  ?? 0,
+        discount:         line.discount ?? 0,
         cristal1_tipo,
         cristal1_espesor,
         cristal2_tipo,
@@ -401,7 +404,14 @@ export default function CotizacionesPage() {
     setSavingLine(lineId);
     setSaveError(null);
     try {
-      const res = await actualizarLineaCotizacion(lineId, edits);
+      const res = await actualizarLineaCotizacion(lineId, {
+        price_unit:       edits.price_unit,
+        product_uom_qty:  edits.product_uom_qty,
+        name:             edits.name,
+        x_studio_ancho_m: edits.x_studio_ancho_m,
+        x_studio_alto_m:  edits.x_studio_alto_m,
+        discount:         edits.discount,
+      });
       if (res.exito) {
         // Refrescar detalle
         if (detail) {
@@ -413,16 +423,16 @@ export default function CotizacionesPage() {
         setSaveError(res.error ?? "Error al guardar");
       }
     } catch (e: any) {
-      setSaveError(e.message ?? "Error de conexión");
+      setSaveError(e.message ?? "Error de conexiÃ³n");
     } finally {
       setSavingLine(null);
     }
   };
 
-  // ── Cancel order ────────────────────────────────────────────────────────────
+  // â”€â”€ Cancel order â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleCancel = async () => {
     if (!detail) return;
-    if (!confirm(`¿Seguro que deseas cancelar la orden ${detail.name}? Esta acción no se puede deshacer fácilmente.`)) return;
+    if (!confirm(`Â¿Seguro que deseas cancelar la orden ${detail.name}? Esta acciÃ³n no se puede deshacer fÃ¡cilmente.`)) return;
     setCancelling(true);
     try {
       const res = await cancelarCotizacion(detail.id);
@@ -434,17 +444,17 @@ export default function CotizacionesPage() {
         alert(`Error al cancelar: ${res.error}`);
       }
     } catch (e: any) {
-      alert(`Error de conexión: ${e.message}`);
+      alert(`Error de conexiÃ³n: ${e.message}`);
     } finally {
       setCancelling(false);
     }
   };
 
-  // ── Confirm order ─────────────────────────────────────────────────────────────────────────
+  // â”€â”€ Confirm order â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleConfirmar = async () => {
     if (!detail) return;
     if (!confirm(
-      `¿Confirmar la orden ${detail.name}?\n\nEsto creará las órdenes de fabricación y de trabajo en los talleres correspondientes.`
+      `Â¿Confirmar la orden ${detail.name}?\n\nEsto crearÃ¡ las Ã³rdenes de fabricaciÃ³n y de trabajo en los talleres correspondientes.`
     )) return;
     setConfirming(true);
     try {
@@ -457,7 +467,7 @@ export default function CotizacionesPage() {
         alert(`Error al confirmar: ${res.error}`);
       }
     } catch (e: any) {
-      alert(`Error de conexión: ${e.message}`);
+      alert(`Error de conexiÃ³n: ${e.message}`);
     } finally {
       setConfirming(false);
     }
@@ -487,22 +497,22 @@ export default function CotizacionesPage() {
     doc.text("Presupuesto Termopaneles", 50, 25);
 
     doc.setFontSize(10);
-    doc.text(`N° Presupuesto: ${detail.name}`, 150, 22);
+    doc.text(`NÂ° Presupuesto: ${detail.name}`, 150, 22);
     doc.text(`Fecha: ${formatDate(detail.date_order)}`, 150, 28);
 
-    // Información del Cliente
+    // InformaciÃ³n del Cliente
     doc.setFontSize(12);
-    doc.text("Información del Cliente", 14, 45);
+    doc.text("InformaciÃ³n del Cliente", 14, 45);
     doc.setFontSize(10);
-    doc.text(`Nombre: ${detail.partner_id?.[1] ?? "—"}`, 14, 53);
+    doc.text(`Nombre: ${detail.partner_id?.[1] ?? "â€”"}`, 14, 53);
     
     let currentY = 53;
     currentY += 8;
 
-    // Calcular total m2 de las líneas que no son notas o secciones
+    // Calcular total m2 de las lÃ­neas que no son notas o secciones
     const productLines = detail.order_line.filter(line => line.display_type !== 'line_note' && line.display_type !== 'line_section');
     const totalM2 = productLines.reduce((acc, line) => acc + line.product_uom_qty, 0);
-    doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} m²`, 14, currentY);
+    doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} mÂ²`, 14, currentY);
 
     // Encabezado de Tabla
     let yPos = currentY + 14;
@@ -512,7 +522,7 @@ export default function CotizacionesPage() {
     doc.text("Ref", 16, yPos);
     doc.text("Cant.", 43, yPos);
     doc.text("Dim. (mm)", 57, yPos);
-    doc.text("Configuración", 84, yPos);
+    doc.text("ConfiguraciÃ³n", 84, yPos);
     doc.text("Unitario", 152, yPos);
     doc.text("Total", 176, yPos);
     doc.setFont("helvetica", "normal");
@@ -526,7 +536,7 @@ export default function CotizacionesPage() {
 
       const lineCount = Math.max(splitLabel.length, splitConfig.length);
 
-      // Verificar salto de página
+      // Verificar salto de pÃ¡gina
       if (yPos + (lineCount * 5) > 275) {
         doc.addPage();
         yPos = 20;
@@ -574,18 +584,18 @@ export default function CotizacionesPage() {
     doc.setTextColor(80, 80, 80);
 
     const notas = [
-      "Este presupuesto tiene una validez de 10 días. Cualquier cambio generará otro presupuesto.",
+      "Este presupuesto tiene una validez de 10 dÃ­as. Cualquier cambio generarÃ¡ otro presupuesto.",
       "Estos valores quedan sujetos a cualquier cambio en el mercado.",
       "Plazo de entrega a contar de 48 horas para Termopaneles, una vez recibida Orden de Compra.",
-      "PROWINDOWS LTDA. no responde por los daños de quiebres, rayaduras o picaduras en los cristales aportados por los clientes para recibir servicio de maquila, siendo de responsabilidad del cliente su reposición.",
+      "PROWINDOWS LTDA. no responde por los daÃ±os de quiebres, rayaduras o picaduras en los cristales aportados por los clientes para recibir servicio de maquila, siendo de responsabilidad del cliente su reposiciÃ³n.",
       "Esperando este Presupuesto sea de su agrado le saluda atentamente:",
-      "Una vez emitida la factura, el cliente tiene 24 horas para objetarla, de lo contrario esta se dará por aceptada."
+      "Una vez emitida la factura, el cliente tiene 24 horas para objetarla, de lo contrario esta se darÃ¡ por aceptada."
     ];
 
     if (detail.note) {
       const strippedNote = stripHtml(detail.note);
       if (strippedNote) {
-        // Añadir nota al principio de la lista de notas
+        // AÃ±adir nota al principio de la lista de notas
         notas.unshift(`Observaciones Odoo: ${strippedNote}`);
       }
     }
@@ -603,20 +613,20 @@ export default function CotizacionesPage() {
     doc.setFontSize(9.5);
     doc.setTextColor(0, 0, 0);
 
-    doc.text("Firma de aceptación del Cliente: ___________________________", 14, yPos);
+    doc.text("Firma de aceptaciÃ³n del Cliente: ___________________________", 14, yPos);
     doc.text("Modalidad de Pago: __________________", 120, yPos);
 
     const sanitizedClientName = detail.partner_id?.[1] ? detail.partner_id[1].trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
     doc.save(`Presupuesto_Odoo_${detail.name}_${sanitizedClientName}.pdf`);
   };
 
-  // ── Pagination ──────────────────────────────────────────────────────────────
+  // â”€â”€ Pagination â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
-      {/* ── Header ── */}
+      {/* â”€â”€ Header â”€â”€ */}
       <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <a
@@ -633,7 +643,7 @@ export default function CotizacionesPage() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-slate-800 leading-tight">Cotizaciones Odoo</h1>
-              <p className="text-xs text-slate-400">Listado de órdenes de venta almacenadas en el sistema</p>
+              <p className="text-xs text-slate-400">Listado de Ã³rdenes de venta almacenadas en el sistema</p>
             </div>
           </div>
         </div>
@@ -649,7 +659,7 @@ export default function CotizacionesPage() {
       </div>
 
       <div className="flex h-[calc(100vh-73px)]">
-        {/* ── Left panel: List ── */}
+        {/* â”€â”€ Left panel: List â”€â”€ */}
         <div className={`flex flex-col ${selectedId ? "hidden lg:flex lg:w-[52%]" : "w-full"} border-r border-slate-200 bg-white`}>
           
           {/* Filters */}
@@ -660,7 +670,7 @@ export default function CotizacionesPage() {
                 type="text"
                 value={search}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Buscar por N° orden o cliente..."
+                placeholder="Buscar por NÂ° orden o cliente..."
                 className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#7a5973]/30 focus:border-[#7a5973] text-slate-700 placeholder-slate-400 bg-slate-50/50"
               />
             </div>
@@ -690,10 +700,10 @@ export default function CotizacionesPage() {
           {/* Stats bar */}
           <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>
-              {loading ? "Cargando..." : `${total} cotización${total !== 1 ? "es" : ""} encontrada${total !== 1 ? "s" : ""}`}
+              {loading ? "Cargando..." : `${total} cotizaciÃ³n${total !== 1 ? "es" : ""} encontrada${total !== 1 ? "s" : ""}`}
             </span>
             {totalPages > 1 && (
-              <span>Página {page + 1} de {totalPages}</span>
+              <span>PÃ¡gina {page + 1} de {totalPages}</span>
             )}
           </div>
 
@@ -726,7 +736,7 @@ export default function CotizacionesPage() {
               <div className="flex flex-col items-center justify-center py-20 gap-2 text-slate-400">
                 <FileText size={40} strokeWidth={1.2} />
                 <p className="text-sm font-medium">No se encontraron cotizaciones</p>
-                <p className="text-xs">Prueba cambiando los filtros de búsqueda</p>
+                <p className="text-xs">Prueba cambiando los filtros de bÃºsqueda</p>
               </div>
             )}
 
@@ -751,7 +761,7 @@ export default function CotizacionesPage() {
                             <StateBadge state={order.state} />
                           </div>
                           <p className="text-xs text-slate-500 truncate mt-0.5">
-                            {order.partner_id?.[1] ?? "—"}
+                            {order.partner_id?.[1] ?? "â€”"}
                           </p>
                         </div>
                       </div>
@@ -790,7 +800,7 @@ export default function CotizacionesPage() {
           )}
         </div>
 
-        {/* ── Right panel: Detail ── */}
+        {/* â”€â”€ Right panel: Detail â”€â”€ */}
         {selectedId && (
           <div className="flex-1 flex flex-col bg-white overflow-hidden">
             {/* Detail header */}
@@ -840,7 +850,7 @@ export default function CotizacionesPage() {
                         <User size={11} /> Cliente
                       </div>
                       <p className="text-sm font-semibold text-slate-700 leading-snug">
-                        {detail.partner_id?.[1] ?? "—"}
+                        {detail.partner_id?.[1] ?? "â€”"}
                       </p>
                     </div>
 
@@ -889,7 +899,7 @@ export default function CotizacionesPage() {
                       {detail.state === 'draft' && (
                         <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
                           <Edit3 size={12} />
-                          Borrador — puedes editar precios y cantidades
+                          Borrador â€” puedes editar precios y cantidades
                         </div>
                       )}
 
@@ -903,7 +913,7 @@ export default function CotizacionesPage() {
                       {(detail.state === 'sale' || detail.state === 'done') && (
                         <div className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg">
                           <Check size={12} />
-                          Orden confirmada — solo lectura
+                          Orden confirmada â€” solo lectura
                         </div>
                       )}
 
@@ -914,7 +924,7 @@ export default function CotizacionesPage() {
                           className="flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg font-semibold transition-colors disabled:opacity-60"
                         >
                           <Check size={12} />
-                          {confirming ? 'Confirmando y creando órdenes...' : 'Confirmar y Crear Órdenes de Taller'}
+                          {confirming ? 'Confirmando y creando Ã³rdenes...' : 'Confirmar y Crear Ã“rdenes de Taller'}
                         </button>
                       )}
 
@@ -950,13 +960,13 @@ export default function CotizacionesPage() {
                   <div>
                     <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
                       <Layers size={15} className="text-[#7a5973]" />
-                      Líneas del Pedido
-                      <span className="text-xs font-normal text-slate-400">({detail.order_line.length} línea{detail.order_line.length !== 1 ? "s" : ""})</span>
+                      LÃ­neas del Pedido
+                      <span className="text-xs font-normal text-slate-400">({detail.order_line.length} lÃ­nea{detail.order_line.length !== 1 ? "s" : ""})</span>
                     </h3>
 
                     <div className="border border-slate-200 rounded-xl overflow-hidden">
                       {detail.order_line.length === 0 ? (
-                        <p className="p-4 text-sm text-slate-400 italic text-center">Sin líneas de pedido</p>
+                        <p className="p-4 text-sm text-slate-400 italic text-center">Sin lÃ­neas de pedido</p>
                       ) : (
                         <div className="divide-y divide-slate-100">
                           {detail.order_line.map((line) => {
@@ -965,10 +975,11 @@ export default function CotizacionesPage() {
                             const isSaving = savingLine === line.id;
                             const edits = editingLines[line.id] ?? {
                               name: line.name || "",
-                              price_unit: line.price_unit,
-                              product_uom_qty: line.product_uom_qty,
+                              price_unit:       line.price_unit,
+                              product_uom_qty:  line.product_uom_qty,
                               x_studio_ancho_m: line.x_studio_ancho_m ?? 0,
                               x_studio_alto_m:  line.x_studio_alto_m  ?? 0,
+                              discount:         line.discount ?? 0,
                               cristal1_tipo:    'Incoloro',
                               cristal1_espesor: 6,
                               cristal2_tipo:    'Incoloro',
@@ -991,7 +1002,7 @@ export default function CotizacionesPage() {
                                   {/* Description */}
                                   {isEditing ? (
                                     <div className="flex flex-col gap-1 w-full">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Descripción</span>
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">DescripciÃ³n</span>
                                       <textarea
                                         value={edits.name}
                                         onChange={(e) => {
@@ -1033,12 +1044,11 @@ export default function CotizacionesPage() {
                                   ) : (
                                     <p className="text-xs text-slate-700 leading-relaxed">{line.name}</p>
                                   )}
-
                                   {/* Metrics row */}
                                   <div className="flex items-start gap-4 flex-wrap">
                                     {/* Quantity */}
                                     <div className="flex flex-col gap-1 min-w-[90px]">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cantidad (m²)</span>
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cantidad (mÂ²)</span>
                                       {isEditing ? (
                                         <input
                                           type="number"
@@ -1058,37 +1068,82 @@ export default function CotizacionesPage() {
                                       )}
                                     </div>
 
-                                    {/* Price unit */}
-                                    <div className="flex flex-col gap-1 min-w-[120px]">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Precio Unit.</span>
-                                      {isEditing ? (
-                                        <input
-                                          type="number"
-                                          step="1"
-                                          min="0"
-                                          value={edits.price_unit}
-                                          onChange={(e) =>
-                                            setEditingLines(prev => ({
-                                              ...prev,
-                                              [line.id]: { ...prev[line.id], price_unit: parseFloat(e.target.value) || 0 }
-                                            }))
-                                          }
-                                          className="w-32 px-2 py-1 border border-amber-300 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
-                                        />
-                                      ) : (
-                                        <span className="text-sm font-bold text-slate-700 font-mono">{formatCLP(line.price_unit)}</span>
-                                      )}
-                                    </div>
+                                     {/* Price unit */}
+                                     <div className="flex flex-col gap-1 min-w-[120px]">
+                                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Precio Unit.</span>
+                                       {isEditing ? (
+                                         <input
+                                           type="number"
+                                           step="1"
+                                           min="0"
+                                           value={edits.price_unit}
+                                           onChange={(e) =>
+                                             setEditingLines(prev => ({
+                                               ...prev,
+                                               [line.id]: { ...prev[line.id], price_unit: parseFloat(e.target.value) || 0 }
+                                             }))
+                                           }
+                                           className="w-32 px-2 py-1 border border-amber-300 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
+                                         />
+                                       ) : (
+                                         <span className="text-sm font-bold text-slate-700 font-mono">{formatCLP(line.price_unit)}</span>
+                                       )}
+                                     </div>
 
-                                    {/* Subtotal */}
-                                    <div className="flex flex-col gap-1">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Subtotal</span>
-                                      <span className="text-sm font-black text-slate-800 font-mono">
-                                        {isEditing
-                                          ? formatCLP(edits.price_unit * edits.product_uom_qty)
-                                          : formatCLP(line.price_subtotal)}
-                                      </span>
-                                    </div>
+                                     {/* Valor Neto */}
+                                     <div className="flex flex-col gap-1 min-w-[120px]">
+                                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Valor Neto</span>
+                                       {isEditing ? (
+                                         <input
+                                           type="number"
+                                           step="1"
+                                           min="0"
+                                           value={Math.round(edits.price_unit * edits.product_uom_qty * (1 - edits.discount / 100))}
+                                           onChange={(e) => {
+                                             const valorNeto = parseFloat(e.target.value) || 0;
+                                             setEditingLines(prev => {
+                                               const le = prev[line.id];
+                                               if (!le) return prev;
+                                               const factor = 1 - (le.discount / 100);
+                                               const newPriceUnit = (le.product_uom_qty > 0 && factor > 0)
+                                                 ? valorNeto / (le.product_uom_qty * factor)
+                                                 : le.price_unit;
+                                               return { ...prev, [line.id]: { ...le, price_unit: Math.round(newPriceUnit) } };
+                                             });
+                                           }}
+                                           className="w-32 px-2 py-1 border border-amber-300 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
+                                         />
+                                       ) : (
+                                         <span className="text-sm font-black text-slate-800 font-mono">
+                                           {formatCLP(line.price_subtotal)}
+                                         </span>
+                                       )}
+                                     </div>
+
+                                     {/* % Descuento */}
+                                     <div className="flex flex-col gap-1 min-w-[80px]">
+                                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">% Desc.</span>
+                                       {isEditing ? (
+                                         <input
+                                           type="number"
+                                           step="0.5"
+                                           min="0"
+                                           max="100"
+                                           value={edits.discount}
+                                           onChange={(e) =>
+                                             setEditingLines(prev => ({
+                                               ...prev,
+                                               [line.id]: { ...prev[line.id], discount: parseFloat(e.target.value) || 0 }
+                                             }))
+                                           }
+                                           className="w-20 px-2 py-1 border border-amber-300 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
+                                         />
+                                       ) : (
+                                         <span className="text-sm font-bold text-slate-700 font-mono">
+                                            {(line.discount ?? 0) > 0 ? `${(line.discount ?? 0).toFixed(1)}%` : <span className="text-slate-300">—</span>}
+                                         </span>
+                                       )}
+                                     </div>
 
                                     {/* Dimensions */}
                                     {isEditing ? (
@@ -1166,14 +1221,14 @@ export default function CotizacionesPage() {
                                         <div className="flex flex-col gap-1">
                                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Medidas (m)</span>
                                           <span className="text-xs text-slate-600 font-mono">
-                                            {line.x_studio_ancho_m?.toFixed(3)} × {line.x_studio_alto_m?.toFixed(3)}
+                                            {line.x_studio_ancho_m?.toFixed(3)} Ã— {line.x_studio_alto_m?.toFixed(3)}
                                           </span>
                                         </div>
                                       )
                                     )}
                                   </div>
 
-                                  {/* Cristales & Separador (solo termopanel, en modo edición) */}
+                                  {/* Cristales & Separador (solo termopanel, en modo ediciÃ³n) */}
                                   {isEditing && /termopanel/i.test(line.name || '') && (
                                     <div className="flex flex-col gap-2 pt-2 border-t border-amber-200/60">
                                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cristales &amp; Separador</span>
@@ -1348,13 +1403,13 @@ export default function CotizacionesPage() {
           </div>
         )}
 
-        {/* ── Empty detail state (desktop) ── */}
+        {/* â”€â”€ Empty detail state (desktop) â”€â”€ */}
         {!selectedId && (
           <div className="hidden lg:flex flex-1 flex-col items-center justify-center gap-4 bg-slate-50/30 text-slate-400">
             <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm">
               <Eye size={40} strokeWidth={1.2} className="text-slate-300" />
             </div>
-            <p className="text-sm font-medium">Selecciona una cotización para ver su detalle</p>
+            <p className="text-sm font-medium">Selecciona una cotizaciÃ³n para ver su detalle</p>
             <p className="text-xs">Haz clic en cualquier fila de la lista</p>
           </div>
         )}
