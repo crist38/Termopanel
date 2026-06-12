@@ -234,6 +234,7 @@ export async function actualizarLineaCotizacion(
     name?: string;
     x_studio_ancho_m?: number;
     x_studio_alto_m?: number;
+    discount?: number;
   }
 ): Promise<{ exito: boolean; error?: string }> {
   try {

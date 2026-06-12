@@ -25,6 +25,7 @@ export interface OrderLine {
   product_uom_qty: number;
   price_unit: number;
   price_subtotal: number;
+  discount?: number;
   display_type: string | false;
   product_id: [number, string] | false;
   x_studio_ancho_m?: number;
@@ -650,7 +651,7 @@ export class OdooSalesService {
         'read',
         [lineIds],
         {
-          fields: ['id', 'name', 'product_id', 'product_uom_qty', 'price_unit', 'price_subtotal', 'display_type', 'x_studio_ancho_m', 'x_studio_alto_m'],
+          fields: ['id', 'name', 'product_id', 'product_uom_qty', 'price_unit', 'price_subtotal', 'discount', 'display_type', 'x_studio_ancho_m', 'x_studio_alto_m'],
         }
       );
     }
@@ -662,13 +663,14 @@ export class OdooSalesService {
    * Actualiza precio unitario, cantidad, descripción y dimensiones de una línea de pedido (solo en órdenes draft).
    */
   async updateOrderLine(
-    lineId: number, 
-    data: { 
-      price_unit?: number; 
+    lineId: number,
+    data: {
+      price_unit?: number;
       product_uom_qty?: number;
       name?: string;
       x_studio_ancho_m?: number;
       x_studio_alto_m?: number;
+      discount?: number;
     }
   ): Promise<void> {
     await odoo.executeKw('sale.order.line', 'write', [[lineId], data]);
