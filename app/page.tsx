@@ -785,10 +785,7 @@ function CotizadorTermopanelContent() {
             <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
             {isSyncingOdoo ? 'Enviando a Odoo (puede tardar ~1-2 min)...' : 'Procesar Todo (Odoo + PDFs)'}
           </button>
-          <a href="/formas" className="flex items-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors" title="Cotizador con formas especiales (Triángulo, Trapecio, Arco, etc.)">
-            <Triangle size={16} className="text-amber-600 fill-amber-600/10" />
-            Formas
-          </a>
+
           <button
             onClick={() => handleExportPDF()}
             className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
