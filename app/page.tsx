@@ -8,7 +8,7 @@ import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, BarChart2 } from 'lucide-react';
+import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, BarChart2, Triangle } from 'lucide-react';
 import { guardarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { logoutFromOdoo } from '@/app/actions/auth';
 import { ClientSelector } from '@/components/ClientSelector';
@@ -31,6 +31,10 @@ function CotizadorTermopanelContent() {
       pulido: false,
       micropersiana: false,
       palillaje: false,
+      palillajeColor: "Blanco",
+      palillajeHorizontales: 0,
+      palillajeVerticales: 0,
+      conForma: false,
       descuento: 0,
       precioUnitario: 0
     }
@@ -94,7 +98,11 @@ function CotizadorTermopanelContent() {
           setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
           const loadedItems = (data.items || []).map((item: any) => ({
             ...item,
-            pulido: item.pulido !== undefined ? item.pulido : (item.gas || false)
+            pulido: item.pulido !== undefined ? item.pulido : (item.gas || false),
+            palillajeColor: item.palillajeColor || "Blanco",
+            palillajeHorizontales: item.palillajeHorizontales || 0,
+            palillajeVerticales: item.palillajeVerticales || 0,
+            conForma: item.conForma || false
           }));
           setItems(loadedItems);
         }
@@ -227,6 +235,10 @@ function CotizadorTermopanelContent() {
       pulido: false,
       micropersiana: false,
       palillaje: false,
+      palillajeColor: "Blanco",
+      palillajeHorizontales: 0,
+      palillajeVerticales: 0,
+      conForma: false,
       descuento: 0,
       precioUnitario: 0
     }
@@ -285,6 +297,10 @@ function CotizadorTermopanelContent() {
             pulido: false,
             micropersiana: false,
             palillaje: false,
+            palillajeColor: "Blanco",
+            palillajeHorizontales: 0,
+            palillajeVerticales: 0,
+            conForma: false,
             descuento: 0,
             precioUnitario: 0
           }
@@ -360,7 +376,17 @@ function CotizadorTermopanelContent() {
       const calculo = calcularItem(item);
       const labelVal = item.label || `V${index + 1}`;
       const splitLabel = doc.splitTextToSize(labelVal, 25);
-      const configDesc = `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm | C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm | Sep: ${item.separador.espesor}mm ${item.separador.color}`;
+      let configDesc = `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm | C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm | Sep: ${item.separador.espesor}mm ${item.separador.color}`;
+      const extrasList: string[] = [];
+      if (item.pulido) extrasList.push("Pulido");
+      if (item.micropersiana) extrasList.push("Micropersiana");
+      if (item.palillaje) {
+        extrasList.push(`Palillaje (${item.palillajeColor || 'Blanco'}, H:${item.palillajeHorizontales || 0}, V:${item.palillajeVerticales || 0})`);
+      }
+      if (item.conForma) extrasList.push("Con Forma");
+      if (extrasList.length > 0) {
+        configDesc += ` | Extras: ${extrasList.join(", ")}`;
+      }
       const splitConfig = doc.splitTextToSize(configDesc, 66);
 
       const lineCount = Math.max(splitLabel.length, splitConfig.length);
@@ -515,7 +541,18 @@ function CotizadorTermopanelContent() {
     items.forEach((item, index) => {
       const labelVal = item.label || `V${index + 1}`;
       const splitLabel = pdf.splitTextToSize(labelVal, 28);
-      const rowHeight = Math.max(8, (splitLabel.length * 4) + 4);
+      
+      let extrasText = "";
+      const extrasParts = [];
+      if (item.pulido) extrasParts.push("Pulido");
+      if (item.micropersiana) extrasParts.push("Micropersiana");
+      if (item.palillaje) extrasParts.push(`Palillaje (${item.palillajeColor || 'Blanco'}, H:${item.palillajeHorizontales || 0}, V:${item.palillajeVerticales || 0})`);
+      if (item.conForma) extrasParts.push("Con Forma");
+      if (extrasParts.length > 0) {
+        extrasText = `Extras: ${extrasParts.join(", ")}`;
+      }
+
+      const rowHeight = extrasText ? 14 : Math.max(8, (splitLabel.length * 4) + 4);
 
       if (yPos + rowHeight > 275) {
         pdf.addPage();
@@ -552,6 +589,13 @@ function CotizadorTermopanelContent() {
       pdf.setFont("helvetica", "normal");
       pdf.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 110, yPos);
       pdf.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 152, yPos);
+
+      if (extrasText) {
+        pdf.setFontSize(8);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text(extrasText, 110, yPos + 4.5);
+        pdf.setTextColor(0, 0, 0);
+      }
 
       yPos += rowHeight;
     });
@@ -628,7 +672,18 @@ function CotizadorTermopanelContent() {
     items.forEach((item, index) => {
       const labelVal = item.label || `V${index + 1}`;
       const splitLabel = pdf.splitTextToSize(labelVal, 28);
-      const rowHeight = Math.max(8, (splitLabel.length * 4) + 4);
+      
+      let extrasText = "";
+      const extrasParts = [];
+      if (item.pulido) extrasParts.push("Pulido");
+      if (item.micropersiana) extrasParts.push("Micropersiana");
+      if (item.palillaje) extrasParts.push(`Palillaje (${item.palillajeColor || 'Blanco'}, H:${item.palillajeHorizontales || 0}, V:${item.palillajeVerticales || 0})`);
+      if (item.conForma) extrasParts.push("Con Forma");
+      if (extrasParts.length > 0) {
+        extrasText = `Extras: ${extrasParts.join(", ")}`;
+      }
+
+      const rowHeight = extrasText ? 14 : Math.max(8, (splitLabel.length * 4) + 4);
 
       if (yPos + rowHeight > 275) {
         pdf.addPage();
@@ -672,7 +727,14 @@ function CotizadorTermopanelContent() {
       pdf.text(`${item.separador.color}`, 175, yPos);
       pdf.setFont("helvetica", "normal");
 
-      yPos += 8;
+      if (extrasText) {
+        pdf.setFontSize(8);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text(extrasText, 88, yPos + 4.5);
+        pdf.setTextColor(0, 0, 0);
+      }
+
+      yPos += rowHeight;
     });
 
     // Línea de cierre
@@ -723,6 +785,10 @@ function CotizadorTermopanelContent() {
             <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
             {isSyncingOdoo ? 'Enviando a Odoo (puede tardar ~1-2 min)...' : 'Procesar Todo (Odoo + PDFs)'}
           </button>
+          <a href="/formas" className="flex items-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors" title="Cotizador con formas especiales (Triángulo, Trapecio, Arco, etc.)">
+            <Triangle size={16} className="text-amber-600 fill-amber-600/10" />
+            Formas
+          </a>
           <a href="/reports" className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
             <BarChart2 size={16} />
             Reportes
@@ -906,10 +972,51 @@ function CotizadorTermopanelContent() {
                   </td>
 
                   {/* Extras (Condensados) */}
-                  <td className="p-1 border-r border-slate-100 text-center space-x-2">
-                    <label title="Pulido" className="cursor-pointer text-xs"><input type="checkbox" checked={item.pulido} onChange={e => updateItem(item.id, 'pulido', e.target.checked)} className="accent-teal-600" /> Pu</label>
-                    <label title="Micropersiana" className="cursor-pointer text-xs"><input type="checkbox" checked={item.micropersiana} onChange={e => updateItem(item.id, 'micropersiana', e.target.checked)} className="accent-teal-600" /> M</label>
-                    <label title="Palillaje" className="cursor-pointer text-xs"><input type="checkbox" checked={item.palillaje} onChange={e => updateItem(item.id, 'palillaje', e.target.checked)} className="accent-teal-600" /> P</label>
+                  <td className="p-1 border-r border-slate-100 text-center">
+                    <div className="flex justify-center gap-1.5 mb-1 flex-wrap">
+                      <label title="Pulido" className="cursor-pointer text-xs flex items-center gap-0.5"><input type="checkbox" checked={item.pulido} onChange={e => updateItem(item.id, 'pulido', e.target.checked)} className="accent-teal-600" /> Pu</label>
+                      <label title="Micropersiana" className="cursor-pointer text-xs flex items-center gap-0.5"><input type="checkbox" checked={item.micropersiana} onChange={e => updateItem(item.id, 'micropersiana', e.target.checked)} className="accent-teal-600" /> M</label>
+                      <label title="Palillaje" className="cursor-pointer text-xs flex items-center gap-0.5"><input type="checkbox" checked={item.palillaje} onChange={e => updateItem(item.id, 'palillaje', e.target.checked)} className="accent-teal-600" /> P</label>
+                    </div>
+                    {item.palillaje && (
+                      <div className="mt-1 flex flex-col gap-1 text-[10px] bg-slate-50 p-1.5 rounded border border-slate-200 text-left max-w-[110px] mx-auto shadow-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="font-semibold text-slate-500">Color:</span>
+                          <select
+                            value={item.palillajeColor || 'Blanco'}
+                            onChange={e => updateItem(item.id, 'palillajeColor', e.target.value)}
+                            className="bg-white border border-slate-200 rounded px-1 py-0.5 text-[9px] text-slate-700 outline-none w-[60px]"
+                          >
+                            <option value="Blanco">Blanco</option>
+                            <option value="Negro">Negro</option>
+                            <option value="Marron">Marron</option>
+                            <option value="Toffe">Toffe</option>
+                          </select>
+                        </div>
+                        <div className="flex gap-2 justify-between">
+                          <div className="flex items-center">
+                            <span className="font-semibold text-slate-500 mr-0.5">H:</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.palillajeHorizontales ?? 0}
+                              onChange={e => updateItem(item.id, 'palillajeHorizontales', parseInt(e.target.value) || 0)}
+                              className="bg-white border border-slate-200 rounded w-7 py-0.5 text-center text-[9px] text-slate-700 outline-none"
+                            />
+                          </div>
+                          <div className="flex items-center">
+                            <span className="font-semibold text-slate-500 mr-0.5">V:</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.palillajeVerticales ?? 0}
+                              onChange={e => updateItem(item.id, 'palillajeVerticales', parseInt(e.target.value) || 0)}
+                              className="bg-white border border-slate-200 rounded w-7 py-0.5 text-center text-[9px] text-slate-700 outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </td>
 
                   {/* Descuento */}

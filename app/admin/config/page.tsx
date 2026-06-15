@@ -491,6 +491,70 @@ export default function ConfigPage() {
                   <p className="text-[11px] text-slate-400">Costo del sellante hotmelt por metro lineal.</p>
                 </div>
 
+                {/* Costo Tira Palillaje */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Costo Tira Palillaje (CLP)</label>
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                    <span className="text-slate-400 font-mono font-medium">$</span>
+                    <input
+                      type="number"
+                      value={config.parametrosCalculo?.costoTiraPalillaje || ''}
+                      onChange={e => updateParamCalculo('costoTiraPalillaje', e.target.value)}
+                      className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium text-sm"
+                      placeholder="Ej: 30000"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">Costo por tira entera de perfil de palillaje.</p>
+                </div>
+
+                {/* Largo Tira Palillaje */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Largo Tira Palillaje (mm)</label>
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                    <span className="text-slate-400 font-mono font-medium">L</span>
+                    <input
+                      type="number"
+                      value={config.parametrosCalculo?.largoTiraPalillaje || ''}
+                      onChange={e => updateParamCalculo('largoTiraPalillaje', e.target.value)}
+                      className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium text-sm"
+                      placeholder="Ej: 5000"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">Longitud estándar en milímetros de una tira.</p>
+                </div>
+
+                {/* Costo Mano de Obra Palillaje */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Mano de Obra Palillaje (CLP)</label>
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                    <span className="text-slate-400 font-mono font-medium">$</span>
+                    <input
+                      type="number"
+                      value={config.parametrosCalculo?.costoManoObraPalillaje || ''}
+                      onChange={e => updateParamCalculo('costoManoObraPalillaje', e.target.value)}
+                      className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium text-sm"
+                      placeholder="Ej: 10000"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">Costo de mano de obra extra por complejidad del palillaje.</p>
+                </div>
+
+                {/* Recargo Con Forma */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Recargo Con Forma (%)</label>
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                    <span className="text-slate-400 font-mono font-medium">%</span>
+                    <input
+                      type="number"
+                      value={config.parametrosCalculo?.recargoPorcentajeForma !== undefined ? config.parametrosCalculo.recargoPorcentajeForma : ''}
+                      onChange={e => updateParamCalculo('recargoPorcentajeForma', e.target.value)}
+                      className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium text-sm"
+                      placeholder="Ej: 50"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400">Recargo porcentual para termopaneles con formas especiales.</p>
+                </div>
+
               </div>
             </div>
           </section>

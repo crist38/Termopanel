@@ -10,6 +10,12 @@ export interface TermopanelItem {
   pulido: boolean
   micropersiana: boolean
   palillaje: boolean
+  palillajeColor?: string
+  palillajeHorizontales?: number
+  palillajeVerticales?: number
+  conForma?: boolean
+  tipoFigura?: 'rectangulo' | 'triangulo' | 'trapecio' | 'arco'
+  medidasFigura?: { a: number; b: number; b1?: number; b2?: number }
   descuento?: number // Porcentaje de descuento (0-100)
   precioUnitario: number
 }
@@ -39,6 +45,14 @@ export interface ParametrosCalculo {
   costoPulido: number                 // default: 1300 CLP
   /** Costo de mano de obra (por m2) */
   costoManoDeObra: number             // default: 1650 CLP
+  /** Costo de la tira de palillaje (CLP) */
+  costoTiraPalillaje?: number
+  /** Largo de la tira de palillaje (mm) */
+  largoTiraPalillaje?: number
+  /** Costo extra de mano de obra por complejidad del palillaje (CLP) */
+  costoManoObraPalillaje?: number
+  /** Recargo porcentual por fabricar termopanel con forma (ej: 50 para +50%) */
+  recargoPorcentajeForma?: number
 }
 
 export const PARAMETROS_DEFAULT: ParametrosCalculo = {
@@ -51,6 +65,10 @@ export const PARAMETROS_DEFAULT: ParametrosCalculo = {
   factorVenta: 1.9584,
   costoPulido: 1300,
   costoManoDeObra: 1650,
+  costoTiraPalillaje: 30000,
+  largoTiraPalillaje: 5000,
+  costoManoObraPalillaje: 10000,
+  recargoPorcentajeForma: 50,
 }
 
 /**
@@ -65,8 +83,29 @@ export function calcularPrecioUnitario(
 ): number {
   if (item.ancho <= 0 || item.alto <= 0) return 0
 
-  const m2 = (item.ancho * item.alto) / 1_000_000
-  const ml = 2 * (item.ancho + item.alto) / 1_000
+  let m2 = (item.ancho * item.alto) / 1_000_000
+  let ml = 2 * (item.ancho + item.alto) / 1_000
+
+  if (item.tipoFigura && item.medidasFigura) {
+    const med = item.medidasFigura
+    if (item.tipoFigura === 'triangulo') {
+      const a = med.a || 0
+      const b = med.b || 0
+      m2 = (a * b) / 2_000_000
+      ml = (a + b + Math.sqrt(a * a + b * b)) / 1000
+    } else if (item.tipoFigura === 'trapecio') {
+      const a = med.a || 0
+      const b1 = med.b1 || 0
+      const b2 = med.b2 || 0
+      m2 = a * ((b1 + b2) / 2) / 1_000_000
+      ml = (a + b1 + b2 + Math.sqrt(a * a + Math.pow(Math.abs(b1 - b2), 2))) / 1000
+    } else if (item.tipoFigura === 'arco') {
+      const a = med.a || 0
+      const b = med.b || 0
+      m2 = (a * b + (Math.PI * Math.pow(a / 2, 2)) / 2) / 1_000_000
+      ml = (a + 2 * b + (Math.PI * a) / 2) / 1000
+    }
+  }
 
   const C1 = precioCristal1 * m2
   const C2 = precioCristal2 * m2
@@ -88,6 +127,26 @@ export function calcularPrecioUnitario(
     base += params.costoPulido !== undefined ? params.costoPulido : 1300
   }
 
+  // Extra Palillaje
+  if (item.palillaje) {
+    const h = item.palillajeHorizontales || 0
+    const v = item.palillajeVerticales || 0
+    const longMm = (h * item.ancho) + (v * item.alto)
+    const largoTira = params.largoTiraPalillaje || 5000
+    const costoTira = params.costoTiraPalillaje || 30000
+    const manoObraPali = params.costoManoObraPalillaje || 10000
+
+    const tiras = Math.ceil(longMm / largoTira)
+    const costoPalillaje = (tiras * costoTira) + manoObraPali
+    base += costoPalillaje
+  }
+
+  // Recargo Con Forma
+  if (item.conForma) {
+    const recargoFactor = 1 + (params.recargoPorcentajeForma !== undefined ? params.recargoPorcentajeForma : 50) / 100
+    base = base * recargoFactor
+  }
+
   const colGG = base * params.factorGG
   let pu = colGG * params.factorVenta
 
@@ -102,7 +161,17 @@ export function calcularItem(item: TermopanelItem): {
   metrosCuadrados: number
   totalLinea: number
 } {
-  const metrosCuadrados = (item.ancho * item.alto) / 1_000_000
+  let metrosCuadrados = (item.ancho * item.alto) / 1_000_000
+  if (item.tipoFigura && item.medidasFigura) {
+    const med = item.medidasFigura
+    if (item.tipoFigura === 'triangulo') {
+      metrosCuadrados = ((med.a || 0) * (med.b || 0)) / 2_000_000
+    } else if (item.tipoFigura === 'trapecio') {
+      metrosCuadrados = (med.a || 0) * (((med.b1 || 0) + (med.b2 || 0)) / 2) / 1_000_000
+    } else if (item.tipoFigura === 'arco') {
+      metrosCuadrados = ((med.a || 0) * (med.b || 0) + (Math.PI * Math.pow((med.a || 0) / 2, 2)) / 2) / 1_000_000
+    }
+  }
   const totalLinea = item.precioUnitario * item.cantidad
   return { metrosCuadrados, totalLinea }
 }
