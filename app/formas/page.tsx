@@ -7,7 +7,7 @@ import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Plus, Trash2, Cloud, ArrowLeft, BarChart2, Triangle, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Cloud, ArrowLeft, BarChart2, Triangle, RotateCcw, Printer } from 'lucide-react';
 import { guardarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { ClientSelector } from '@/components/ClientSelector';
 
@@ -340,7 +340,7 @@ function ShapesCADCotizadorContent() {
       const extrasList: string[] = [];
       if (item.pulido) extrasList.push("Pulido");
       if (item.micropersiana) extrasList.push("Micropersiana");
-      if (item.palillaje) extrasList.push(`Palillaje (${item.palillajeColor || 'Blanco'}, H:${item.palillajeHorizontales || 0}, V:${item.palillajeVerticales || 0})`);
+      if (item.palillaje) extrasList.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales y ${item.palillajeVerticales || 0} verticales)`);
       if (extrasList.length > 0) {
         configDesc += ` | Extras: ${extrasList.join(", ")}`;
       }
@@ -587,7 +587,7 @@ function ShapesCADCotizadorContent() {
       if (item.tipoFigura === 'rectangulo') extrasText += `Rectángulo (Ancho:${med.a}, Alt:${med.b})`;
 
       if (item.palillaje) {
-        extrasText += ` | Palillaje (${item.palillajeColor}, H:${item.palillajeHorizontales}, V:${item.palillajeVerticales})`;
+        extrasText += ` | Palillaje (${item.palillajeColor}, ${item.palillajeHorizontales} horizontales y ${item.palillajeVerticales} verticales)`;
       }
 
       const rowHeight = 14;
@@ -747,6 +747,24 @@ function ShapesCADCotizadorContent() {
           {sessionName && (
             <span className="text-xs text-slate-400 mr-2 hidden sm:inline">{sessionName}</span>
           )}
+          <button
+            onClick={() => handleExportPDF()}
+            className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+            disabled={items.length === 0}
+            title="Imprimir Presupuesto Comercial en PDF"
+          >
+            <Printer size={16} />
+            Presupuesto PDF
+          </button>
+          <button
+            onClick={() => handleExportWorkOrders()}
+            className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+            disabled={items.length === 0}
+            title="Imprimir Órdenes de Trabajo en PDF"
+          >
+            <Printer size={16} />
+            Taller PDF
+          </button>
           <button
             onClick={handleProcessQuote}
             className="flex items-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95"
@@ -1191,7 +1209,7 @@ function ShapesCADCotizadorContent() {
                           <div className="text-[10px] text-slate-400">
                             {item.pulido && <span className="bg-slate-100 px-1 py-0.5 rounded mr-1">Pulido</span>}
                             {item.micropersiana && <span className="bg-slate-100 px-1 py-0.5 rounded mr-1">Micropersiana</span>}
-                            {item.palillaje && <span className="bg-slate-100 px-1 py-0.5 rounded mr-1">Palillaje ({item.palillajeColor}, H:{item.palillajeHorizontales}, V:{item.palillajeVerticales})</span>}
+                            {item.palillaje && <span className="bg-slate-100 px-1 py-0.5 rounded mr-1">Palillaje ({item.palillajeColor}, {item.palillajeHorizontales} horizontales y {item.palillajeVerticales} verticales)</span>}
                           </div>
                         </div>
                       </td>
