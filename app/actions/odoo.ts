@@ -61,7 +61,21 @@ export async function guardarCotizacionEnOdoo(data: {
       const extras = [];
       if (item.pulido) extras.push('Pulido');
       if (item.micropersiana) extras.push('Micropersiana');
-      if (item.palillaje) extras.push('Palillaje');
+      if (item.palillaje) {
+        extras.push(`Palillaje (${item.palillajeColor || 'Blanco'}, H:${item.palillajeHorizontales || 0}, V:${item.palillajeVerticales || 0})`);
+      }
+      if (item.conForma) {
+        if (item.tipoFigura && item.tipoFigura !== 'rectangulo') {
+          const med = item.medidasFigura || {};
+          let shapeDesc = '';
+          if (item.tipoFigura === 'triangulo') shapeDesc = `Triángulo: Base:${med.a || 0}, Altura:${med.b || 0}`;
+          if (item.tipoFigura === 'trapecio') shapeDesc = `Trapecio: Ancho:${med.a || 0}, Alt.Izq:${med.b1 || 0}, Alt.Der:${med.b2 || 0}`;
+          if (item.tipoFigura === 'arco') shapeDesc = `Arco: Ancho:${med.a || 0}, Alt.Base:${med.b || 0}`;
+          extras.push(`Con Forma (${shapeDesc})`);
+        } else {
+          extras.push('Con Forma');
+        }
+      }
 
       const itemLabel = item.label || `V${index + 1}`;
 
@@ -114,6 +128,12 @@ export async function guardarCotizacionEnOdoo(data: {
       pulido: item.pulido,
       micropersiana: item.micropersiana,
       palillaje: item.palillaje,
+      palillajeColor: item.palillajeColor || 'Blanco',
+      palillajeHorizontales: item.palillajeHorizontales || 0,
+      palillajeVerticales: item.palillajeVerticales || 0,
+      conForma: item.conForma || false,
+      tipoFigura: item.tipoFigura || 'rectangulo',
+      medidasFigura: item.medidasFigura || { a: 0, b: 0 },
     }));
 
     // 4. Crear cotización, confirmarla y crear órdenes de fabricación de forma síncrona.
@@ -305,6 +325,47 @@ function parseTermopanelLine(name: string, idx: number): TermopanelItemData {
   const extrasPart = parts.find(p => /^extras:/i.test(p));
   const extrasStr  = (extrasPart || '').toLowerCase();
 
+  const palillaje     = extrasStr.includes('palillaje');
+  let palillajeColor = 'Blanco';
+  let palillajeHorizontales = 0;
+  let palillajeVerticales = 0;
+
+  if (palillaje) {
+    const match = extrasStr.match(/palillaje\s*\(\s*([^,)]+)\s*,\s*h:\s*(\d+)\s*,\s*v:\s*(\d+)\)/i);
+    if (match) {
+      const rawColor = match[1].trim();
+      palillajeColor = rawColor.charAt(0).toUpperCase() + rawColor.slice(1);
+      palillajeHorizontales = parseInt(match[2], 10) || 0;
+      palillajeVerticales = parseInt(match[3], 10) || 0;
+    }
+  }
+
+  const conForma = extrasStr.includes('con forma');
+  let tipoFigura: 'rectangulo' | 'triangulo' | 'trapecio' | 'arco' = 'rectangulo';
+  let medidasFigura: { a: number; b: number; b1?: number; b2?: number } = { a: 0, b: 0 };
+
+  if (conForma) {
+    if (extrasStr.includes('triángulo') || extrasStr.includes('triangulo')) {
+      tipoFigura = 'triangulo';
+      const m = extrasStr.match(/base:\s*(\d+)\s*,\s*altura:\s*(\d+)/i);
+      if (m) {
+        medidasFigura = { a: parseInt(m[1]), b: parseInt(m[2]) };
+      }
+    } else if (extrasStr.includes('trapecio')) {
+      tipoFigura = 'trapecio';
+      const m = extrasStr.match(/ancho:\s*(\d+)\s*,\s*alt.izq:\s*(\d+)\s*,\s*alt.der:\s*(\d+)/i);
+      if (m) {
+        medidasFigura = { a: parseInt(m[1]), b1: parseInt(m[2]), b2: parseInt(m[3]), b: Math.max(parseInt(m[2]), parseInt(m[3])) };
+      }
+    } else if (extrasStr.includes('arco')) {
+      tipoFigura = 'arco';
+      const m = extrasStr.match(/ancho:\s*(\d+)\s*,\s*alt.base:\s*(\d+)/i);
+      if (m) {
+        medidasFigura = { a: parseInt(m[1]), b: parseInt(m[2]) };
+      }
+    }
+  }
+
   return {
     label,
     cantidad,
@@ -315,7 +376,13 @@ function parseTermopanelLine(name: string, idx: number): TermopanelItemData {
     separador,
     pulido:        extrasStr.includes('pulido'),
     micropersiana: extrasStr.includes('micropersiana'),
-    palillaje:     extrasStr.includes('palillaje'),
+    palillaje,
+    palillajeColor,
+    palillajeHorizontales,
+    palillajeVerticales,
+    conForma,
+    tipoFigura,
+    medidasFigura,
   };
 }
 

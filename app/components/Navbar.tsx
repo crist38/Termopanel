@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Settings, Layers, Square, FileText } from 'lucide-react';
+import { Settings, Layers, Square, FileText, Triangle } from 'lucide-react';
 
 
 export function Navbar() {
@@ -42,6 +42,17 @@ export function Navbar() {
                 >
                   <Square size={16} />
                   Corte Vidrio Monolítico
+                </Link>
+                <Link
+                  href="/formas"
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    pathname === '/formas' 
+                      ? 'bg-[#6b4c64] text-white shadow-inner' 
+                      : 'text-white/80 hover:bg-[#8f6b88] hover:text-white'
+                  }`}
+                >
+                  <Triangle size={16} />
+                  Formas
                 </Link>
                 <Link
                   href="/cotizaciones"

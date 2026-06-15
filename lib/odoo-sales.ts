@@ -387,13 +387,20 @@ export class OdooSalesService {
     const moDataList = productLines.map((line, i) => {
       const item = rawItems[i];
       const itemLabel = item.label || `V${i + 1}`;
-      const fullDesc = [
+      const fullDescParts = [
         `[${itemLabel}]`,
         `Termopanel ${item.ancho} x ${item.alto} mm`,
         `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
         `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
         `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
-      ].join(' | ');
+      ];
+      if (item.pulido) fullDescParts.push('Pulido');
+      if (item.micropersiana) fullDescParts.push('Micropersiana');
+      if (item.palillaje) {
+        fullDescParts.push(`Palillaje: SI (Color: ${item.palillajeColor || 'Blanco'}, H: ${item.palillajeHorizontales || 0}, V: ${item.palillajeVerticales || 0})`);
+      }
+      if (item.conForma) fullDescParts.push('Con Forma: SI');
+      const fullDesc = fullDescParts.join(' | ');
 
       return {
         product_id: line.product_id,
@@ -462,12 +469,16 @@ export class OdooSalesService {
       const clientPrefix = clientName ? `${clientName} | ` : '';
 
       // Work Order 1: TALLER CORTE VIDRIO
+      const corteWoParts = [
+        `[${itemLabel}] ${clientPrefix}Corte Vidrio | ${item.ancho} x ${item.alto} mm`,
+        `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+        `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+      ];
+      if (item.conForma) {
+        corteWoParts.push('Con Forma (Plantilla)');
+      }
       woDataList.push({
-        name: [
-          `[${itemLabel}] ${clientPrefix}Corte Vidrio | ${item.ancho} x ${item.alto} mm`,
-          `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
-          `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
-        ].join(' | '),
+        name: corteWoParts.join(' | '),
         production_id: moId,
         workcenter_id: wcCorteId,
         product_uom_id: 1,
@@ -475,13 +486,20 @@ export class OdooSalesService {
       });
 
       // Work Order 2: TALLER TERMOPANELES
+      const termoWoParts = [
+        `[${itemLabel}] ${clientPrefix}Termopanel | ${item.ancho} x ${item.alto} mm`,
+        `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+        `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+        `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
+      ];
+      if (item.palillaje) {
+        termoWoParts.push(`Palillaje: ${item.palillajeColor || 'Blanco'} H:${item.palillajeHorizontales || 0} V:${item.palillajeVerticales || 0}`);
+      }
+      if (item.conForma) {
+        termoWoParts.push('Con Forma (Plantilla)');
+      }
       woDataList.push({
-        name: [
-          `[${itemLabel}] ${clientPrefix}Termopanel | ${item.ancho} x ${item.alto} mm`,
-          `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
-          `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
-          `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
-        ].join(' | '),
+        name: termoWoParts.join(' | '),
         production_id: moId,
         workcenter_id: wcTermoId,
         product_uom_id: 1,
@@ -514,21 +532,30 @@ export class OdooSalesService {
       const item = rawItems[i];
       const itemLabel = item.label || `V${i + 1}`;
       const ins = calcInsumos(item, i);
-      const body = [
+      const bodyParts = [
         `<b>📋 Especificaciones del Termopanel [${itemLabel}]</b>`,
         `<b>Cantidad:</b> ${item.cantidad}`,
         `<b>Medida:</b> ${item.ancho} x ${item.alto} mm`,
         `<b>Cristal 1:</b> ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
         `<b>Cristal 2:</b> ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
         `<b>Separador:</b> ${item.separador.espesor}mm - Color: ${item.separador.color}`,
+      ];
+      if (item.pulido) bodyParts.push(`<b>Pulido:</b> SI`);
+      if (item.micropersiana) bodyParts.push(`<b>Micropersiana:</b> SI`);
+      if (item.palillaje) {
+        bodyParts.push(`<b>Palillaje:</b> SI (Color: ${item.palillajeColor || 'Blanco'}, H: ${item.palillajeHorizontales || 0}, V: ${item.palillajeVerticales || 0})`);
+      }
+      if (item.conForma) bodyParts.push(`<b>Con Forma Especial:</b> SI`);
+      bodyParts.push(
         `&nbsp;`,
         `<b>📦 Insumos [${itemLabel}] — ${item.cantidad} ud × ${ins.perimMl.toFixed(3)} ml/ud</b>`,
         `<b>Separador ${item.separador.espesor}mm ${item.separador.color}:</b> ${ins.totalMl.toFixed(3)} ml`,
         `<b>Hotmelt:</b> ${ins.totalMl.toFixed(3)} ml`,
         `<b>Sal deshidratante:</b> ${ins.totalMl.toFixed(3)} ml`,
         `<b>Butilo:</b> ${ins.totalMl.toFixed(3)} ml`,
-        `<b>Escuadras:</b> ${ins.escuadras} unidades`,
-      ].join('<br/>');
+        `<b>Escuadras:</b> ${ins.escuadras} unidades`
+      );
+      const body = bodyParts.join('<br/>');
 
       try {
         await odoo.executeKw('mrp.production', 'message_post', [[moId]], {
@@ -796,6 +823,12 @@ export interface TermopanelItemData {
   pulido: boolean;
   micropersiana: boolean;
   palillaje: boolean;
+  palillajeColor?: string;
+  palillajeHorizontales?: number;
+  palillajeVerticales?: number;
+  conForma?: boolean;
+  tipoFigura?: 'rectangulo' | 'triangulo' | 'trapecio' | 'arco';
+  medidasFigura?: { a: number; b: number; b1?: number; b2?: number };
 }
 
 export interface MonoliticoItemData {
