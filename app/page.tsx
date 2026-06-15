@@ -381,7 +381,7 @@ function CotizadorTermopanelContent() {
       if (item.pulido) extrasList.push("Pulido");
       if (item.micropersiana) extrasList.push("Micropersiana");
       if (item.palillaje) {
-        extrasList.push(`Palillaje (${item.palillajeColor || 'Blanco'}, H:${item.palillajeHorizontales || 0}, V:${item.palillajeVerticales || 0})`);
+        extrasList.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales y ${item.palillajeVerticales || 0} verticales)`);
       }
       if (item.conForma) extrasList.push("Con Forma");
       if (extrasList.length > 0) {
@@ -546,7 +546,7 @@ function CotizadorTermopanelContent() {
       const extrasParts = [];
       if (item.pulido) extrasParts.push("Pulido");
       if (item.micropersiana) extrasParts.push("Micropersiana");
-      if (item.palillaje) extrasParts.push(`Palillaje (${item.palillajeColor || 'Blanco'}, H:${item.palillajeHorizontales || 0}, V:${item.palillajeVerticales || 0})`);
+      if (item.palillaje) extrasParts.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales y ${item.palillajeVerticales || 0} verticales)`);
       if (item.conForma) extrasParts.push("Con Forma");
       if (extrasParts.length > 0) {
         extrasText = `Extras: ${extrasParts.join(", ")}`;
@@ -677,7 +677,7 @@ function CotizadorTermopanelContent() {
       const extrasParts = [];
       if (item.pulido) extrasParts.push("Pulido");
       if (item.micropersiana) extrasParts.push("Micropersiana");
-      if (item.palillaje) extrasParts.push(`Palillaje (${item.palillajeColor || 'Blanco'}, H:${item.palillajeHorizontales || 0}, V:${item.palillajeVerticales || 0})`);
+      if (item.palillaje) extrasParts.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales y ${item.palillajeVerticales || 0} verticales)`);
       if (item.conForma) extrasParts.push("Con Forma");
       if (extrasParts.length > 0) {
         extrasText = `Extras: ${extrasParts.join(", ")}`;
@@ -789,6 +789,24 @@ function CotizadorTermopanelContent() {
             <Triangle size={16} className="text-amber-600 fill-amber-600/10" />
             Formas
           </a>
+          <button
+            onClick={() => handleExportPDF()}
+            className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            disabled={items.length === 0}
+            title="Imprimir Presupuesto Comercial en PDF"
+          >
+            <Printer size={16} />
+            Presupuesto PDF
+          </button>
+          <button
+            onClick={() => handleExportWorkOrders()}
+            className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            disabled={items.length === 0}
+            title="Imprimir Órdenes de Trabajo en PDF"
+          >
+            <Printer size={16} />
+            Taller PDF
+          </button>
           <a href="/reports" className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
             <BarChart2 size={16} />
             Reportes

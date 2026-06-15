@@ -62,7 +62,7 @@ export async function guardarCotizacionEnOdoo(data: {
       if (item.pulido) extras.push('Pulido');
       if (item.micropersiana) extras.push('Micropersiana');
       if (item.palillaje) {
-        extras.push(`Palillaje (${item.palillajeColor || 'Blanco'}, H:${item.palillajeHorizontales || 0}, V:${item.palillajeVerticales || 0})`);
+        extras.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales, ${item.palillajeVerticales || 0} verticales)`);
       }
       if (item.conForma) {
         if (item.tipoFigura && item.tipoFigura !== 'rectangulo') {
@@ -331,7 +331,7 @@ function parseTermopanelLine(name: string, idx: number): TermopanelItemData {
   let palillajeVerticales = 0;
 
   if (palillaje) {
-    const match = extrasStr.match(/palillaje\s*\(\s*([^,)]+)\s*,\s*h:\s*(\d+)\s*,\s*v:\s*(\d+)\)/i);
+    const match = extrasStr.match(/palillaje\s*\(\s*([^,)]+)\s*,\s*(?:h:\s*)?(\d+)\s*(?:horizontales)?\s*,?\s*(?:v:\s*)?(\d+)\s*(?:verticales)?/i);
     if (match) {
       const rawColor = match[1].trim();
       palillajeColor = rawColor.charAt(0).toUpperCase() + rawColor.slice(1);
