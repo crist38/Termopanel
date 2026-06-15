@@ -620,6 +620,416 @@ export default function CotizacionesPage() {
     doc.save(`Presupuesto_Odoo_${detail.name}_${sanitizedClientName}.pdf`);
   };
 
+  const handlePrintWorkOrders = async () => {
+    if (!detail) return;
+    const doc = new jsPDF();
+
+    // 1. Filter and parse the lines
+    const productLines = detail.order_line.filter(
+      line => line.display_type !== 'line_note' && line.display_type !== 'line_section'
+    );
+
+    if (productLines.length === 0) {
+      alert("No hay productos válidos en esta cotización para generar órdenes de trabajo.");
+      return;
+    }
+
+    const parsedItems = productLines.map((line, index) => {
+      const name = line.name || "";
+      const parts = name.split(" | ").map(p => p.trim());
+
+      // Cantidad
+      let cantidad = 1;
+      const cantPart = parts.find(p => p.toLowerCase().includes("cantidad:"));
+      if (cantPart) {
+        const match = cantPart.match(/cantidad:\s*(\d+)/i);
+        if (match) {
+          cantidad = parseInt(match[1], 10) || 1;
+        }
+      }
+
+      // Dimensiones
+      let ancho = 0;
+      let alto = 0;
+      const dimObj = parseDimensions(name);
+      if (dimObj) {
+        ancho = dimObj.ancho;
+        alto = dimObj.alto;
+      } else if (line.x_studio_ancho_m != null && line.x_studio_alto_m != null) {
+        ancho = Math.round(line.x_studio_ancho_m * 1000);
+        alto = Math.round((line.x_studio_alto_m * 1000) / cantidad);
+      }
+
+      // Cristal 1
+      const c1Part = parts.find(p => /^(cristal 1|c1|cristal):/i.test(p));
+      let cristal1_tipo = "Incoloro";
+      let cristal1_espesor = 6;
+      if (c1Part) {
+        const match = c1Part.match(/^(?:cristal 1|c1|cristal):\s*(.+?)\s+(\d+)\s*mm/i);
+        if (match) {
+          cristal1_tipo = match[1].trim();
+          cristal1_espesor = parseInt(match[2], 10) || 6;
+        }
+      } else {
+        // Fallback search for a pattern like "Incoloro 6mm"
+        for (const part of parts) {
+          const match = part.match(/^(.+?)\s+(\d+)\s*mm$/i);
+          if (
+            match &&
+            !part.toLowerCase().includes("separador") &&
+            !part.toLowerCase().includes("sep") &&
+            !part.toLowerCase().includes("termopanel") &&
+            !part.toLowerCase().includes("monolítico") &&
+            !part.toLowerCase().includes("monolitico")
+          ) {
+            cristal1_tipo = match[1].trim();
+            cristal1_espesor = parseInt(match[2], 10) || 6;
+            break;
+          }
+        }
+      }
+
+      // Cristal 2
+      const c2Part = parts.find(p => /^(cristal 2|c2):/i.test(p));
+      let cristal2_tipo = "";
+      let cristal2_espesor = 0;
+      if (c2Part) {
+        const match = c2Part.match(/^(?:cristal 2|c2):\s*(.+?)\s+(\d+)\s*mm/i);
+        if (match) {
+          cristal2_tipo = match[1].trim();
+          cristal2_espesor = parseInt(match[2], 10) || 6;
+        }
+      }
+
+      // Separador
+      const sepPart = parts.find(p => /^(separador|sep):/i.test(p));
+      let sep_espesor = 0;
+      let sep_color = "";
+      if (sepPart) {
+        const sepMatch1 = sepPart.match(/separador:\s*(\d+)mm\s+color\s+(.+)/i);
+        if (sepMatch1) {
+          sep_espesor = parseInt(sepMatch1[1]);
+          sep_color = sepMatch1[2].trim();
+        } else {
+          const sepMatch2 = sepPart.match(/sep:\s*(\d+)mm\s+(.+)/i);
+          if (sepMatch2) {
+            sep_espesor = parseInt(sepMatch2[1]);
+            sep_color = sepMatch2[2].trim();
+          }
+        }
+      }
+
+      // Label / Ref
+      let label = `L${index + 1}`;
+      const refMatch = parts[0]?.match(/^\[([^\]]+)\]$/);
+      if (refMatch) {
+        label = refMatch[1];
+      }
+
+      // Extras text
+      const extrasPart = parts.find(p => p.toLowerCase().startsWith("extras:"));
+      let extrasText = "";
+      if (extrasPart) {
+        extrasText = extrasPart.trim();
+      } else {
+        const otherParts = parts.filter(
+          p =>
+            !p.startsWith("[") &&
+            !p.toLowerCase().includes("cantidad:") &&
+            !p.toLowerCase().includes("termopanel") &&
+            !p.toLowerCase().includes("monolítico") &&
+            !p.toLowerCase().includes("monolitico") &&
+            !p.toLowerCase().startsWith("cristal 1") &&
+            !p.toLowerCase().startsWith("c1:") &&
+            !p.toLowerCase().startsWith("cristal 2") &&
+            !p.toLowerCase().startsWith("c2:") &&
+            !p.toLowerCase().startsWith("separador") &&
+            !p.toLowerCase().startsWith("sep:") &&
+            !p.toLowerCase().startsWith("cristal:")
+        );
+        if (otherParts.length > 0) {
+          extrasText = `Extras: ${otherParts.join(", ")}`;
+        }
+      }
+
+      const isTermopanel = name.toLowerCase().includes("termopanel") || cristal2_espesor > 0 || sep_espesor > 0;
+
+      return {
+        label,
+        cantidad,
+        ancho,
+        alto,
+        cristal1: { tipo: cristal1_tipo, espesor: cristal1_espesor },
+        cristal2: cristal2_espesor > 0 ? { tipo: cristal2_tipo, espesor: cristal2_espesor } : null,
+        separador: sep_espesor > 0 ? { espesor: sep_espesor, color: sep_color } : null,
+        extrasText,
+        isTermopanel,
+      };
+    });
+
+    const hasTermopaneles = parsedItems.some(item => item.isTermopanel);
+    const totalM2 = parsedItems.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
+
+    // Load logo
+    let logoBase64: string | null = null;
+    try {
+      const res = await fetch('/logo.png');
+      const blob = await res.blob();
+      logoBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      console.error("Error al cargar el logo en el PDF", e);
+    }
+
+    const clientName = detail.partner_id?.[1] ?? "Sin Cliente";
+
+    // ======================================================
+    // PÁGINA 1: TALLER CORTE VIDRIO
+    // ======================================================
+    if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 25, 25);
+
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("ORDEN DE TRABAJO", 45, 20);
+    doc.setFontSize(13);
+    doc.setTextColor(80, 80, 80);
+    doc.text("Taller Corte Vidrio", 45, 28);
+    doc.setTextColor(0, 0, 0);
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Ref: ${detail.name}`, 155, 18);
+    doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
+    doc.text(`Cliente: ${clientName}`, 155, 30);
+    let topHeaderOffset = 38;
+
+    // Line separator
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, topHeaderOffset, 196, topHeaderOffset);
+
+    // Header table Corte Vidrio
+    let yPos = topHeaderOffset + 10;
+    doc.setFillColor(51, 65, 85); // slate-700
+    doc.rect(14, yPos - 6, 182, 9, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("Ref", 17, yPos);
+    doc.text("Cant.", 47, yPos);
+    doc.text("Ancho (mm)", 60, yPos);
+    doc.text("Alto (mm)", 85, yPos);
+    doc.text("Cristal 1", 110, yPos);
+    doc.text("Cristal 2", 152, yPos);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "normal");
+
+    yPos += 8;
+
+    parsedItems.forEach((item, index) => {
+      const splitLabel = doc.splitTextToSize(item.label, 28);
+      const rowHeight = item.extrasText ? 14 : Math.max(8, (splitLabel.length * 4) + 4);
+
+      if (yPos + rowHeight > 275) {
+        doc.addPage();
+        yPos = 20;
+        // Repeat header
+        doc.setFillColor(51, 65, 85);
+        doc.rect(14, yPos - 6, 182, 9, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.text("Ref", 17, yPos);
+        doc.text("Cant.", 47, yPos);
+        doc.text("Ancho (mm)", 60, yPos);
+        doc.text("Alto (mm)", 85, yPos);
+        doc.text("Cristal 1", 110, yPos);
+        doc.text("Cristal 2", 152, yPos);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont("helvetica", "normal");
+        yPos += 8;
+      }
+
+      // Alternating row background
+      if (index % 2 === 0) {
+        doc.setFillColor(248, 250, 252); // slate-50
+        doc.rect(14, yPos - 5, 182, rowHeight, 'F');
+      }
+
+      doc.setFontSize(9);
+      doc.text(splitLabel, 17, yPos);
+      doc.text(`${item.cantidad}`, 47, yPos);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${item.ancho}`, 60, yPos);
+      doc.text(`${item.alto}`, 85, yPos);
+      doc.setFont("helvetica", "normal");
+      doc.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 110, yPos);
+      if (item.cristal2) {
+        doc.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 152, yPos);
+      } else {
+        doc.text("—", 152, yPos);
+      }
+
+      if (item.extrasText) {
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text(item.extrasText, 110, yPos + 4.5);
+        doc.setTextColor(0, 0, 0);
+      }
+
+      yPos += rowHeight;
+    });
+
+    // Close line
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, yPos, 196, yPos);
+
+    yPos += 8;
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Total a cortar: ${totalM2.toFixed(2)} m²`, 14, yPos);
+
+    // Footnote
+    yPos += 8;
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(120, 120, 120);
+    doc.text("* Las medidas de los cristales corresponden al termopanel completo. Ajustar descuentos según separador.", 14, yPos);
+
+    // ======================================================
+    // PÁGINA 2: TALLER TERMOPANELES
+    // ======================================================
+    if (hasTermopaneles) {
+      doc.addPage();
+
+      if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 25, 25);
+
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text("ORDEN DE TRABAJO", 45, 20);
+      doc.setFontSize(13);
+      doc.setTextColor(80, 80, 80);
+      doc.text("Taller Termopaneles", 45, 28);
+      doc.setTextColor(0, 0, 0);
+
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Ref: ${detail.name}`, 155, 18);
+      doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
+      doc.text(`Cliente: ${clientName}`, 155, 30);
+      topHeaderOffset = 38;
+
+      // Line separator
+      doc.setDrawColor(200, 200, 200);
+      doc.line(14, topHeaderOffset, 196, topHeaderOffset);
+
+      // Header table Termopaneles
+      yPos = topHeaderOffset + 10;
+      doc.setFillColor(15, 118, 110); // teal-700
+      doc.rect(14, yPos - 6, 182, 9, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text("Ref", 17, yPos);
+      doc.text("Cant.", 47, yPos);
+      doc.text("Ancho", 58, yPos);
+      doc.text("Alto", 73, yPos);
+      doc.text("Cristal 1", 88, yPos);
+      doc.text("Cristal 2", 121, yPos);
+      doc.text("Sep. (mm)", 154, yPos);
+      doc.text("Color Sep.", 175, yPos);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "normal");
+
+      yPos += 8;
+
+      const termopanelItems = parsedItems.filter(item => item.isTermopanel);
+      termopanelItems.forEach((item, index) => {
+        const splitLabel = doc.splitTextToSize(item.label, 28);
+        const rowHeight = item.extrasText ? 14 : Math.max(8, (splitLabel.length * 4) + 4);
+
+        if (yPos + rowHeight > 275) {
+          doc.addPage();
+          yPos = 20;
+          // Repeat header
+          doc.setFillColor(15, 118, 110);
+          doc.rect(14, yPos - 6, 182, 9, 'F');
+          doc.setTextColor(255, 255, 255);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9);
+          doc.text("Ref", 17, yPos);
+          doc.text("Cant.", 47, yPos);
+          doc.text("Ancho", 58, yPos);
+          doc.text("Alto", 73, yPos);
+          doc.text("Cristal 1", 88, yPos);
+          doc.text("Cristal 2", 121, yPos);
+          doc.text("Sep. (mm)", 154, yPos);
+          doc.text("Color Sep.", 175, yPos);
+          doc.setTextColor(0, 0, 0);
+          doc.setFont("helvetica", "normal");
+          yPos += 8;
+        }
+
+        // Alternating row background
+        if (index % 2 === 0) {
+          doc.setFillColor(240, 253, 250); // teal-50
+          doc.rect(14, yPos - 5, 182, rowHeight, 'F');
+        }
+
+        doc.setFontSize(9);
+        doc.text(splitLabel, 17, yPos);
+        doc.text(`${item.cantidad}`, 47, yPos);
+        doc.setFont("helvetica", "bold");
+        doc.text(`${item.ancho}`, 58, yPos);
+        doc.text(`${item.alto}`, 73, yPos);
+        doc.setFont("helvetica", "normal");
+        doc.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 88, yPos);
+        if (item.cristal2) {
+          doc.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 121, yPos);
+        } else {
+          doc.text("—", 121, yPos);
+        }
+        if (item.separador) {
+          doc.setFont("helvetica", "bold");
+          doc.text(`${item.separador.espesor}`, 154, yPos);
+          doc.text(`${item.separador.color}`, 175, yPos);
+          doc.setFont("helvetica", "normal");
+        } else {
+          doc.text("—", 154, yPos);
+          doc.text("—", 175, yPos);
+        }
+
+        if (item.extrasText) {
+          doc.setFontSize(8);
+          doc.setTextColor(100, 100, 100);
+          doc.text(item.extrasText, 88, yPos + 4.5);
+          doc.setTextColor(0, 0, 0);
+        }
+
+        yPos += rowHeight;
+      });
+
+      // Close line
+      doc.setDrawColor(200, 200, 200);
+      doc.line(14, yPos, 196, yPos);
+
+      yPos += 8;
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+      const termopanelM2 = termopanelItems.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
+      doc.text(`Total a armar: ${termopanelM2.toFixed(2)} m²`, 14, yPos);
+    }
+
+    const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
+    doc.save(`Ordenes_Trabajo_${detail.name}_${sanitizedClientName}.pdf`);
+  };
+
   // â”€â”€ Pagination â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -940,14 +1350,25 @@ export default function CotizacionesPage() {
                       )}
                     </div>
 
-                    <button
-                      onClick={handlePrintPDF}
-                      className="flex items-center gap-2 bg-[#7a5973] hover:bg-[#6b4c64] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all duration-200"
-                      title="Volver a generar e imprimir el PDF de este presupuesto"
-                    >
-                      <Printer size={13} />
-                      Imprimir PDF
-                    </button>
+                    <div className="flex gap-2 items-center">
+                      <button
+                        onClick={handlePrintPDF}
+                        className="flex items-center gap-2 bg-[#7a5973] hover:bg-[#6b4c64] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all duration-200"
+                        title="Volver a generar e imprimir el PDF de este presupuesto"
+                      >
+                        <Printer size={13} />
+                        Imprimir PDF
+                      </button>
+
+                      <button
+                        onClick={handlePrintWorkOrders}
+                        className="flex items-center gap-2 bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all duration-200"
+                        title="Generar e imprimir el PDF de las órdenes de trabajo (Taller)"
+                      >
+                        <Printer size={13} />
+                        Imprimir OTs (Taller)
+                      </button>
+                    </div>
                   </div>
 
                   {saveError && (
