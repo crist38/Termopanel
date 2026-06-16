@@ -18,7 +18,7 @@ export interface ReportStats {
     hotmelt: number;
     butilo: number;
     cristalTotalM2: number;
-    separadoresColor: Record<string, number>;
+    separadoresColor: Record<string, { neto: number; real: number }>;
     cristalesTipo: Record<string, number>;
   };
   clientesRanking: Array<{
@@ -34,6 +34,47 @@ export interface ReportStats {
     estado: string;
     total: number;
   }>;
+}
+
+function calcularConsumoSeparadorReal(ancho: number, alto: number, cantidad: number): { netoMl: number; realMl: number } {
+  const stripLength = 5000; // 5000 mm (5 metros)
+  const netoMl = (2 * (ancho + alto) / 1000) * cantidad;
+  
+  if (ancho <= 0 || alto <= 0 || cantidad <= 0) {
+    return { netoMl: 0, realMl: 0 };
+  }
+
+  // Si alguna dimensión excede 5000mm, no se puede optimizar, retornamos perimetro neto
+  if (ancho > stripLength || alto > stripLength) {
+    return { netoMl, realMl: netoMl };
+  }
+
+  const pieces: number[] = [];
+  for (let i = 0; i < cantidad; i++) {
+    pieces.push(ancho, ancho, alto, alto);
+  }
+  
+  // FFD: First Fit Decreasing
+  pieces.sort((a, b) => b - a);
+  const strips: number[][] = [];
+  
+  for (const piece of pieces) {
+    let placed = false;
+    for (const strip of strips) {
+      const used = strip.reduce((sum, v) => sum + v, 0);
+      if (stripLength - used >= piece) {
+        strip.push(piece);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      strips.push([piece]);
+    }
+  }
+  
+  const realMl = strips.length * 5; // cada tira usada son 5 metros
+  return { netoMl, realMl };
 }
 
 export async function obtenerDatosReportes(
@@ -155,7 +196,7 @@ export async function obtenerDatosReportes(
     let totalHotmelt = 0;
     let totalButilo = 0;
     let totalManoDeObra = 0;
-    const separadoresColor: Record<string, number> = {};
+    const separadoresColor: Record<string, { neto: number; real: number }> = {};
     const cristalesTipo: Record<string, number> = {};
 
     lines.forEach((line) => {
@@ -208,7 +249,13 @@ export async function obtenerDatosReportes(
           const color = sepMatch[2].trim();
           const thickness = sepMatch[1];
           const key = `Separador ${thickness}mm ${color}`;
-          separadoresColor[key] = (separadoresColor[key] || 0) + totalMl;
+          
+          const sepConsumo = calcularConsumoSeparadorReal(ancho, alto, cantidad);
+          if (!separadoresColor[key]) {
+            separadoresColor[key] = { neto: 0, real: 0 };
+          }
+          separadoresColor[key].neto += sepConsumo.netoMl;
+          separadoresColor[key].real += sepConsumo.realMl;
         }
 
         // Cristales del termopanel (Cristal 1 y Cristal 2)

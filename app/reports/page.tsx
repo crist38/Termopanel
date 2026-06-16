@@ -418,12 +418,24 @@ function ReportsDashboardContent() {
                   {Object.keys(stats.insumos.separadoresColor).length === 0 ? (
                     <p className="text-xs text-slate-400 italic">Sin registros en el período.</p>
                   ) : (
-                    Object.entries(stats.insumos.separadoresColor).map(([color, ml]) => (
-                      <div key={color} className="flex justify-between items-center text-xs p-2 bg-slate-50 rounded-lg hover:bg-slate-100/70 transition-colors">
-                        <span className="text-slate-600 font-medium">{color}</span>
-                        <span className="font-bold text-slate-800 font-mono">{ml.toFixed(2)} ml</span>
-                      </div>
-                    ))
+                    Object.entries(stats.insumos.separadoresColor).map(([color, sepData]) => {
+                      const desperdicio = sepData.real > 0 ? ((sepData.real - sepData.neto) / sepData.real) * 100 : 0;
+                      const tiras = Math.round(sepData.real / 5);
+                      return (
+                        <div key={color} className="p-3 bg-slate-50 rounded-xl hover:bg-slate-100/70 transition-colors space-y-1.5 border border-slate-100">
+                          <div className="flex justify-between items-start text-xs font-semibold text-slate-700">
+                            <span className="max-w-[70%] truncate" title={color}>{color}</span>
+                            <span className="font-bold font-mono text-indigo-600 text-right whitespace-nowrap">
+                              {sepData.real.toFixed(1)} ml ({tiras} tiras)
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium">
+                            <span>Neto: {sepData.neto.toFixed(1)} ml</span>
+                            <span>Desperdicio: <strong className="text-amber-600 font-mono">{desperdicio.toFixed(1)}%</strong></span>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
