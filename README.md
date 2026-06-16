@@ -50,16 +50,22 @@ Una aplicación web moderna y dinámica diseñada para facilitar el cálculo, co
    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="tu_sender_id"
    NEXT_PUBLIC_FIREBASE_APP_ID="tu_app_id"
 
-   # Odoo Config (Servidor - Mantener seguro)
-   ODOO_URL="https://tu-empresa.odoo.com"
-   ODOO_DB="nombre_base_de_datos"
-   ODOO_USERNAME="tu_correo_admin_odoo"
-   ODOO_API_KEY="tu_clave_api_odoo"
+    # Odoo Config (Servidor - Mantener seguro)
+    ODOO_URL="https://tu-empresa.odoo.com"
+    ODOO_DB="nombre_base_de_datos"
+    ODOO_USERNAME="tu_correo_admin_odoo"
+    ODOO_API_KEY="tu_clave_api_odoo"
 
-   # ID del producto genérico en Odoo para las líneas de cotización
-   # Debe ser un producto de tipo "service" que genere órdenes de fabricación
-   ODOO_DEFAULT_PRODUCT_ID=12345
-   ```
+    # ID del producto genérico en Odoo para las líneas de cotización de termopaneles (DVH)
+    # Debe ser un producto de tipo "service" que genere órdenes de fabricación
+    ODOO_DEFAULT_PRODUCT_ID=12345
+
+    # ID del producto genérico en Odoo para las líneas de cotización monolíticas
+    ODOO_MONOLITIC_PRODUCT_ID=67890
+
+    # Nombre de la etiqueta (Tags / Etiquetas) en Odoo para clasificar y diferenciar las cotizaciones del taller
+    ODOO_TAG_NAME="Taller PVC"
+    ```
 
 4. **Logo de empresa**
    Coloca el archivo `logo.png` dentro de la carpeta `/public` del proyecto.

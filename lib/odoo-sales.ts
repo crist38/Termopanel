@@ -63,6 +63,47 @@ export interface SaleOrderLineInput {
 }
 
 export class OdooSalesService {
+  private termopanelTagId: number | null = null;
+
+  /**
+   * Obtiene o crea la etiqueta configurada (ej: "Taller PVC") en Odoo.
+   * Retorna el ID de la etiqueta, o null si hay algún error.
+   */
+  async getOrCreateTermopanelTagId(): Promise<number | null> {
+    if (this.termopanelTagId !== null) {
+      return this.termopanelTagId;
+    }
+    try {
+      const tagName = process.env.ODOO_TAG_NAME || 'Taller PVC';
+      // 1. Buscar si ya existe una etiqueta con el nombre
+      const tags = await odoo.executeKw(
+        'crm.tag',
+        'search_read',
+        [[['name', '=', tagName]]],
+        { fields: ['id'], limit: 1 }
+      );
+
+      if (tags && tags.length > 0) {
+        this.termopanelTagId = tags[0].id;
+        return this.termopanelTagId;
+      }
+
+      // 2. Si no existe, crearla
+      const newTagId = await odoo.executeKw(
+        'crm.tag',
+        'create',
+        [[{ name: tagName }]]
+      );
+      
+      const tagId = Array.isArray(newTagId) ? newTagId[0] : newTagId;
+      this.termopanelTagId = tagId;
+      return tagId;
+    } catch (error) {
+      console.error(`Error al obtener o crear la etiqueta "${process.env.ODOO_TAG_NAME || 'Taller PVC'}" en Odoo:`, error);
+      return null;
+    }
+  }
+
   /**
    * Obtiene las cotizaciones/órdenes más recientes
    * @param limit Cantidad de registros a traer (por defecto 10)
@@ -135,11 +176,15 @@ export class OdooSalesService {
       }];
     });
 
+    const tagId = await this.getOrCreateTermopanelTagId();
     const orderData: any = {
       partner_id: partnerId,
       order_line: orderLinesTuples,
     };
     if (userId) orderData.user_id = userId;
+    if (tagId) {
+      orderData.tag_ids = [[6, 0, [tagId]]];
+    }
 
     const newOrderId = await odoo.executeKw('sale.order', 'create', [[orderData]]);
     const orderId = Array.isArray(newOrderId) ? newOrderId[0] : newOrderId;
@@ -360,7 +405,9 @@ export class OdooSalesService {
       uomUnitsId  = await this.getUomId(['u', 'Units', 'Unit', 'Unidades', 'Unidad', 'uom_unit']);
 
       if (uomMetrosId && uomUnitsId) {
-        const sepKeys = [...new Set(rawItems.map(i => `Separador ${i.separador.espesor}mm ${i.separador.color}`))];
+        const sepKeys = rawItems
+          .map(i => `Separador ${i.separador.espesor}mm ${i.separador.color}`)
+          .filter((val, idx, self) => self.indexOf(val) === idx);
 
         // Buscar/crear productos de insumos de forma secuencial con pausa
         hotmeltId   = await this.findOrCreateProduct('Hotmelt', uomMetrosId);
@@ -734,8 +781,12 @@ export class OdooSalesService {
       }];
     });
 
+    const tagId = await this.getOrCreateTermopanelTagId();
     const orderData: any = { partner_id: partnerId, order_line: orderLinesTuples };
     if (userId) orderData.user_id = userId;
+    if (tagId) {
+      orderData.tag_ids = [[6, 0, [tagId]]];
+    }
     const newOrderId = await odoo.executeKw('sale.order', 'create', [[orderData]]);
     const orderId = Array.isArray(newOrderId) ? newOrderId[0] : newOrderId;
 
