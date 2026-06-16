@@ -96,6 +96,7 @@ La integración se maneja desde el servidor (Next.js Server Actions), garantizan
    - Precio por pieza exacto de la app (forzado vía `write()` antes de confirmar)
    - Campos personalizados `x_studio_ancho_m` y `x_studio_alto_m` para visualización
    - Línea de nota con dirección y observaciones
+   - Etiquetas de clasificación/taller (`tag_ids`) configuradas vía la variable `ODOO_TAG_NAME` (crea la etiqueta automáticamente si no existe)
 3. **Confirmación**: Llama a `action_confirm` para pasar la orden a estado "Orden de Venta".
 4. **Orden de Fabricación**: Crea `mrp.production` por cada línea con:
    - Descripción completa: cantidad, dimensiones, cristales, separador y extras
@@ -103,6 +104,9 @@ La integración se maneja desde el servidor (Next.js Server Actions), garantizan
    - Nota detallada en el chatter con las especificaciones del termopanel
 
 ## 📋 Changelog
+
+### v2.4 - Junio 2026
+- ✅ **Clasificación por Taller (Etiquetas Odoo)**: Se agregó soporte para asignar automáticamente etiquetas (Tags) a los pedidos creados en Odoo (ej. `"Taller PVC"` o `"Termopanel"`). El nombre de la etiqueta es completamente parametrizable usando la variable `ODOO_TAG_NAME` en `.env.local`, y la app se encarga de crearla en Odoo de manera transparente si no existe.
 
 ### v2.3 - Junio 2026
 - ✅ **Reemplazo de Gas Argón por Pulido**: Se sustituyó el extra "Gas Argón" por la opción de "Pulido" en el cotizador y en las especificaciones enviadas a Odoo.
