@@ -8,7 +8,9 @@ import {
   actualizarLineaCotizacion,
   cancelarCotizacion,
   confirmarCotizacionOdoo,
+  actualizarClienteCotizacion,
 } from "@/app/actions/odoo";
+import { ClientSelector } from "@/components/ClientSelector";
 import {
   Search,
   RefreshCw,
@@ -265,6 +267,13 @@ export default function CotizacionesPage() {
   const [savingLine, setSavingLine] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Edición de cliente
+  const [isEditingClient, setIsEditingClient] = useState(false);
+  const [tempClientName, setTempClientName] = useState("");
+  const [tempClientId, setTempClientId] = useState<number | undefined>(undefined);
+  const [updatingClient, setUpdatingClient] = useState(false);
+  const [clientUpdateError, setClientUpdateError] = useState<string | null>(null);
+
   // Cancelar orden
   const [cancelling, setCancelling] = useState(false);
 
@@ -326,6 +335,11 @@ export default function CotizacionesPage() {
     setDetailError(null);
     setEditingLines({});
     setSaveError(null);
+    setIsEditingClient(false);
+    setTempClientName("");
+    setTempClientId(undefined);
+    setUpdatingClient(false);
+    setClientUpdateError(null);
     try {
       const res = await obtenerDetalleCotizacion(id);
       if (res.exito && res.order) {
@@ -346,6 +360,42 @@ export default function CotizacionesPage() {
     setDetailError(null);
     setEditingLines({});
     setSaveError(null);
+    setIsEditingClient(false);
+    setTempClientName("");
+    setTempClientId(undefined);
+    setUpdatingClient(false);
+    setClientUpdateError(null);
+  };
+
+  const startEditingClient = () => {
+    if (!detail) return;
+    setTempClientName(detail.partner_id?.[1] ?? "");
+    setTempClientId(detail.partner_id?.[0]);
+    setIsEditingClient(true);
+    setClientUpdateError(null);
+  };
+
+  const saveClientEdit = async () => {
+    if (!detail || !tempClientId) return;
+    setUpdatingClient(true);
+    setClientUpdateError(null);
+    try {
+      const res = await actualizarClienteCotizacion(detail.id, tempClientId);
+      if (res.exito) {
+        const refreshed = await obtenerDetalleCotizacion(detail.id);
+        if (refreshed.exito && refreshed.order) {
+          setDetail(refreshed.order as OrderDetail);
+        }
+        setIsEditingClient(false);
+        fetchOrders(search, stateFilter, page);
+      } else {
+        setClientUpdateError(res.error ?? "No se pudo actualizar el cliente");
+      }
+    } catch (e: any) {
+      setClientUpdateError(e.message ?? "Error de conexión");
+    } finally {
+      setUpdatingClient(false);
+    }
   };
 
   // â”€â”€ Edit lines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1255,13 +1305,62 @@ export default function CotizacionesPage() {
                 <>
                   {/* Info cards */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                      <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1.5">
-                        <User size={11} /> Cliente
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 relative group">
+                      <div className="flex justify-between items-center mb-1.5">
+                        <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                          <User size={11} /> Cliente
+                        </div>
+                        {detail.state === 'draft' && !isEditingClient && (
+                          <button
+                            onClick={startEditingClient}
+                            className="text-[#7a5973] hover:text-[#5e4157] opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                            title="Editar cliente"
+                          >
+                            <Edit3 size={12} />
+                          </button>
+                        )}
                       </div>
-                      <p className="text-sm font-semibold text-slate-700 leading-snug">
-                        {detail.partner_id?.[1] ?? "â€”"}
-                      </p>
+                      
+                      {isEditingClient ? (
+                        <div className="space-y-2">
+                          <ClientSelector
+                            value={tempClientName}
+                            clientId={tempClientId}
+                            onChange={(name, id) => {
+                              setTempClientName(name);
+                              setTempClientId(id);
+                            }}
+                          />
+                          {clientUpdateError && (
+                            <p className="text-[10px] text-red-600 font-medium">{clientUpdateError}</p>
+                          )}
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              disabled={updatingClient}
+                              onClick={() => setIsEditingClient(false)}
+                              className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs rounded font-semibold transition-colors flex items-center gap-1"
+                            >
+                              <Ban size={10} /> Cancelar
+                            </button>
+                            <button
+                              disabled={updatingClient || !tempClientId}
+                              onClick={saveClientEdit}
+                              className="px-2 py-1 bg-[#7a5973] hover:bg-[#5e4157] text-white text-xs rounded font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
+                            >
+                              {updatingClient ? (
+                                <Loader2 size={10} className="animate-spin" />
+                              ) : (
+                                <Save size={10} />
+                              )}
+                              Guardar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm font-semibold text-slate-700 leading-snug">
+                          {detail.partner_id?.[1] ?? "—"}
+                        </p>
+                      )}
                     </div>
 
                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
