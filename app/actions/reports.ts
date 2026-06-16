@@ -26,9 +26,25 @@ export interface ReportStats {
     pedidos: number;
     total: number;
   }>;
+  pedidosDetalle: Array<{
+    id: number;
+    name: string;
+    cliente: string;
+    fecha: string;
+    estado: string;
+    total: number;
+  }>;
 }
 
-export async function obtenerDatosReportes(filtro: 'mes' | 'historico' = 'mes'): Promise<{ exito: boolean; data?: ReportStats; error?: string }> {
+export async function obtenerDatosReportes(
+  filtro: 'diario' | 'mes' | 'historico' = 'mes',
+  clienteId?: number
+): Promise<{
+  exito: boolean;
+  data?: ReportStats;
+  clientesDisponibles?: Array<{ id: number; name: string }>;
+  error?: string;
+}> {
   try {
     const session = await getSession();
     if (!session) {
@@ -56,14 +72,34 @@ export async function obtenerDatosReportes(filtro: 'mes' | 'historico' = 'mes'):
       return { exito: false, error: 'No se recibieron datos de pedidos desde Odoo.' };
     }
 
-    // Obtener fecha del mes actual
+    // Extraer todos los clientes únicos de los 500 pedidos originales (antes del filtrado)
+    const clientesDisponiblesMap = new Map<number, string>();
+    orders.forEach(o => {
+      if (o.partner_id && Array.isArray(o.partner_id)) {
+        clientesDisponiblesMap.set(o.partner_id[0], o.partner_id[1]);
+      }
+    });
+    const clientesDisponibles = Array.from(clientesDisponiblesMap.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    // Obtener fecha actual
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth(); // 0-indexed
+    const currentDay = now.getDate();
 
     // Filtrar pedidos según el filtro seleccionado
     let ordersFiltrados = orders;
-    if (filtro === 'mes') {
+    if (filtro === 'diario') {
+      ordersFiltrados = orders.filter(o => {
+        if (!o.date_order) return false;
+        const orderDate = new Date(o.date_order.replace(' ', 'T'));
+        return orderDate.getFullYear() === currentYear &&
+               orderDate.getMonth() === currentMonth &&
+               orderDate.getDate() === currentDay;
+      });
+    } else if (filtro === 'mes') {
       ordersFiltrados = orders.filter(o => {
         if (!o.date_order) return false;
         // date_order está en formato "YYYY-MM-DD HH:MM:SS"
@@ -72,14 +108,25 @@ export async function obtenerDatosReportes(filtro: 'mes' | 'historico' = 'mes'):
       });
     }
 
-    // Pedidos confirmados en el filtro
-    const confirmedOrders = ordersFiltrados.filter(o => o.state === 'sale' || o.state === 'done');
+    // Filtrar pedidos por cliente si aplica
+    if (clienteId) {
+      ordersFiltrados = ordersFiltrados.filter(o => o.partner_id && o.partner_id[0] === clienteId);
+    }
 
-    // Pedidos confirmados en este mes (para el KPI "Este Mes" que se muestra fijo)
+    // Pedidos/presupuestos a considerar en el filtro (para calcular insumos y producción, incluimos borradores y enviados)
+    const confirmedOrders = ordersFiltrados.filter(o => o.state === 'draft' || o.state === 'sent' || o.state === 'sale' || o.state === 'done');
+
+    // Pedidos/presupuestos en este mes (para el KPI "Este Mes" que se muestra fijo)
+    // También filtrados por cliente si se especifica
     const confirmedEsteMes = orders.filter(o => {
-      if (!o.date_order || (o.state !== 'sale' && o.state !== 'done')) return false;
+      if (!o.date_order || (o.state !== 'draft' && o.state !== 'sent' && o.state !== 'sale' && o.state !== 'done')) return false;
       const orderDate = new Date(o.date_order.replace(' ', 'T'));
-      return orderDate.getFullYear() === currentYear && orderDate.getMonth() === currentMonth;
+      const matchesMonth = orderDate.getFullYear() === currentYear && orderDate.getMonth() === currentMonth;
+      if (!matchesMonth) return false;
+      if (clienteId) {
+        return o.partner_id && o.partner_id[0] === clienteId;
+      }
+      return true;
     });
 
     // 3. Calcular KPIs principales del gráfico superior
@@ -209,6 +256,26 @@ export async function obtenerDatosReportes(filtro: 'mes' | 'historico' = 'mes'):
       .sort((a, b) => b.total - a.total)
       .slice(0, 10); // Top 10 clientes
 
+    // Detalle de Pedidos
+    const pedidosDetalle = ordersFiltrados.map(o => {
+      let estadoEsp = o.state;
+      switch (o.state) {
+        case 'draft': estadoEsp = 'Borrador'; break;
+        case 'sent': estadoEsp = 'Enviado'; break;
+        case 'sale': estadoEsp = 'Confirmado'; break;
+        case 'done': estadoEsp = 'Realizado'; break;
+        case 'cancel': estadoEsp = 'Cancelado'; break;
+      }
+      return {
+        id: o.id,
+        name: o.name || 'Sin número',
+        cliente: o.partner_id ? o.partner_id[1] : 'Cliente Desconocido',
+        fecha: o.date_order ? new Date(o.date_order.replace(' ', 'T')).toLocaleDateString('es-CL') : 'Sin fecha',
+        estado: estadoEsp,
+        total: o.amount_total || 0
+      };
+    });
+
     return {
       exito: true,
       data: {
@@ -228,8 +295,10 @@ export async function obtenerDatosReportes(filtro: 'mes' | 'historico' = 'mes'):
           separadoresColor,
           cristalesTipo
         },
-        clientesRanking
-      }
+        clientesRanking,
+        pedidosDetalle
+      },
+      clientesDisponibles
     };
   } catch (error: any) {
     console.error('Error al compilar reportes:', error);
