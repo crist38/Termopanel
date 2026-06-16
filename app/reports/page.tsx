@@ -18,7 +18,9 @@ import {
 } from 'lucide-react';
 
 function ReportsDashboardContent() {
-  const [filtro, setFiltro] = useState<'mes' | 'historico'>('mes');
+  const [filtro, setFiltro] = useState<'diario' | 'mes' | 'historico'>('mes');
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<number | null>(null);
+  const [clientes, setClientes] = useState<Array<{ id: number; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<ReportStats | null>(null);
@@ -43,13 +45,16 @@ function ReportsDashboardContent() {
   }, []);
 
   // Cargar datos de Odoo
-  const fetchReportData = async (filterVal: 'mes' | 'historico') => {
+  const fetchReportData = async (filterVal: 'diario' | 'mes' | 'historico', clientVal: number | null) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await obtenerDatosReportes(filterVal);
+      const res = await obtenerDatosReportes(filterVal, clientVal || undefined);
       if (res.exito && res.data) {
         setStats(res.data);
+        if (res.clientesDisponibles) {
+          setClientes(res.clientesDisponibles);
+        }
       } else {
         setError(res.error || 'Ocurrió un error al cargar los reportes.');
       }
@@ -62,12 +67,12 @@ function ReportsDashboardContent() {
   };
 
   useEffect(() => {
-    fetchReportData(filtro);
+    fetchReportData(filtro, clienteSeleccionado);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtro]);
+  }, [filtro, clienteSeleccionado]);
 
   const handleRefresh = () => {
-    fetchReportData(filtro);
+    fetchReportData(filtro, clienteSeleccionado);
   };
 
   return (
@@ -95,13 +100,37 @@ function ReportsDashboardContent() {
         </div>
 
         {/* Controles de Filtro */}
-        <div className="flex items-center gap-2 self-stretch md:self-auto">
-          <div className="relative flex-1 md:flex-initial">
+        <div className="flex flex-col sm:flex-row items-center gap-3 self-stretch md:self-auto w-full md:w-auto">
+          {/* Filtro por Cliente */}
+          <div className="relative w-full sm:w-64">
+            <select
+              value={clienteSeleccionado || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                setClienteSeleccionado(val ? parseInt(val, 10) : null);
+              }}
+              className="w-full appearance-none bg-white border border-slate-200 px-4 py-2.5 pr-10 rounded-xl text-slate-700 font-semibold shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all cursor-pointer text-sm truncate"
+            >
+              <option value="">Todos los Clientes</option>
+              {clientes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+              <Users size={16} />
+            </div>
+          </div>
+
+          {/* Filtro por Período */}
+          <div className="relative w-full sm:w-44">
             <select
               value={filtro}
-              onChange={(e) => setFiltro(e.target.value as 'mes' | 'historico')}
-              className="w-full md:w-40 appearance-none bg-white border border-slate-200 px-4 py-2.5 pr-10 rounded-xl text-slate-700 font-semibold shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all cursor-pointer text-sm"
+              onChange={(e) => setFiltro(e.target.value as 'diario' | 'mes' | 'historico')}
+              className="w-full appearance-none bg-white border border-slate-200 px-4 py-2.5 pr-10 rounded-xl text-slate-700 font-semibold shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all cursor-pointer text-sm"
             >
+              <option value="diario">Diario (Hoy)</option>
               <option value="mes">Este Mes</option>
               <option value="historico">Histórico</option>
             </select>
@@ -111,9 +140,10 @@ function ReportsDashboardContent() {
               </svg>
             </div>
           </div>
+
           <button
             onClick={handleRefresh}
-            className="flex items-center justify-center gap-2 bg-[#14b8a6] hover:bg-[#0d9488] text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-sm transition-all duration-200 transform active:scale-95 whitespace-nowrap"
+            className="flex items-center justify-center gap-2 bg-[#14b8a6] hover:bg-[#0d9488] text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-sm transition-all duration-200 transform active:scale-95 whitespace-nowrap w-full sm:w-auto"
             title="Refrescar reporte"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -443,6 +473,65 @@ function ReportsDashboardContent() {
                         </td>
                         <td className="py-3.5 text-right font-bold text-slate-800 font-mono">
                           ${cliente.total.toLocaleString('es-CL')}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Detalle de Presupuestos / Pedidos */}
+          <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <div className="flex items-center gap-2 mb-6">
+              <ClipboardList className="text-teal-600" size={18} />
+              <h2 className="text-lg font-bold text-slate-800">Detalle de Presupuestos y Pedidos</h2>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead>
+                  <tr className="border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    <th className="pb-3">N° Presupuesto / Pedido</th>
+                    <th className="pb-3">Cliente</th>
+                    <th className="pb-3 text-center w-32">Fecha</th>
+                    <th className="pb-3 text-center w-28">Estado</th>
+                    <th className="pb-3 text-right w-40">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {stats.pedidosDetalle.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-6 text-center text-xs text-slate-400 italic">
+                        No se encontraron registros en este período.
+                      </td>
+                    </tr>
+                  ) : (
+                    stats.pedidosDetalle.map((pedido) => (
+                      <tr key={pedido.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="py-3.5 font-bold text-slate-800">
+                          {pedido.name}
+                        </td>
+                        <td className="py-3.5">
+                          <span className="font-semibold text-slate-700">{pedido.cliente}</span>
+                        </td>
+                        <td className="py-3.5 text-center text-slate-500 text-xs font-medium">
+                          {pedido.fecha}
+                        </td>
+                        <td className="py-3.5 text-center">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            pedido.estado === 'Confirmado' || pedido.estado === 'Realizado'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                              : pedido.estado === 'Cancelado'
+                              ? 'bg-rose-50 text-rose-700 border border-rose-100'
+                              : 'bg-amber-50 text-amber-700 border border-amber-100'
+                          }`}>
+                            {pedido.estado}
+                          </span>
+                        </td>
+                        <td className="py-3.5 text-right font-bold text-slate-800 font-mono">
+                          ${pedido.total.toLocaleString('es-CL')}
                         </td>
                       </tr>
                     ))

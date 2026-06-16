@@ -51,6 +51,11 @@ function ShapesCADCotizadorContent() {
   const [budgetName, setBudgetName] = useState('Borrador');
   const [budgetDate, setBudgetDate] = useState('');
 
+  // Estados para guardado automático (Auto-save)
+  const [showDraftBanner, setShowDraftBanner] = useState(false);
+  const [draftData, setDraftData] = useState<any>(null);
+  const [draftTime, setDraftTime] = useState("");
+
   const searchParams = useSearchParams();
   const editId = searchParams.get('editId');
 
@@ -96,6 +101,68 @@ function ShapesCADCotizadorContent() {
       } catch {}
     }
   }, []);
+
+  // Detectar borrador guardado en localStorage al montar el componente
+  useEffect(() => {
+    if (editId) return;
+
+    const savedDraft = localStorage.getItem('formas_cotizacion_draft');
+    if (savedDraft) {
+      try {
+        const parsed = JSON.parse(savedDraft);
+        const hasData = parsed.clientName || parsed.obra || (parsed.items && parsed.items.length > 0);
+        if (hasData) {
+          setDraftData(parsed);
+          setDraftTime(new Date(parsed.timestamp).toLocaleString('es-CL'));
+          setShowDraftBanner(true);
+        }
+      } catch (e) {
+        console.error("Error al cargar borrador guardado:", e);
+      }
+    }
+  }, [editId]);
+
+  // Guardado automático en localStorage con debounce
+  useEffect(() => {
+    if (editId) return;
+
+    // Si los campos están vacíos/iniciales, no creamos/mantenemos borrador sucio
+    const hasAnyContent = clientName.trim() !== '' || obra.trim() !== '' || (items && items.length > 0);
+    if (!hasAnyContent) {
+      localStorage.removeItem('formas_cotizacion_draft');
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const draft = {
+        clientName,
+        obra,
+        clientId,
+        items,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('formas_cotizacion_draft', JSON.stringify(draft));
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [clientName, obra, clientId, items, editId]);
+
+  const handleRestoreDraft = () => {
+    if (!draftData) return;
+    setClientName(draftData.clientName || '');
+    setObra(draftData.obra || '');
+    setClientId(draftData.clientId);
+    if (draftData.items && draftData.items.length > 0) {
+      setItems(draftData.items);
+    }
+    setShowDraftBanner(false);
+  };
+
+  const handleDiscardDraft = () => {
+    localStorage.removeItem('formas_cotizacion_draft');
+    setShowDraftBanner(false);
+    setDraftData(null);
+  };
 
   // Update default espesor when tipo changes
   const getEspesores = (tipo: string) => {
@@ -253,6 +320,7 @@ function ShapesCADCotizadorContent() {
         await handleExportWorkOrders(finalBudgetName);
 
         // Reset
+        localStorage.removeItem('formas_cotizacion_draft');
         setClientName('');
         setObra('');
         setBudgetName('Borrador');
@@ -775,6 +843,32 @@ function ShapesCADCotizadorContent() {
           </button>
         </div>
       </header>
+
+      {showDraftBanner && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-sm animate-fade-in">
+          <div className="flex gap-2.5">
+            <span className="text-amber-500 font-bold text-lg">⚠️</span>
+            <div>
+              <h3 className="font-semibold text-amber-800 text-sm">Se encontró una cotización sin guardar</h3>
+              <p className="text-xs text-amber-700 mt-0.5">Guardada automáticamente el {draftTime}. ¿Deseas recuperarla?</p>
+            </div>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={handleRestoreDraft}
+              className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+            >
+              Recuperar Borrador
+            </button>
+            <button
+              onClick={handleDiscardDraft}
+              className="bg-transparent hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+            >
+              Descartar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Cliente y Obra */}
       <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6">
