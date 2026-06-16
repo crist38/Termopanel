@@ -3,6 +3,7 @@
 import { odooCustomers, OdooCustomer, CustomerInput } from '@/lib/odoo-customers';
 import { odooSales, SaleOrderLineInput, TermopanelItemData, MonoliticoItemData, OrderSearchParams } from '@/lib/odoo-sales';
 import { getSession } from '@/app/actions/auth';
+import { odoo } from '@/lib/odoo';
 
 
 export async function buscarClientesOdoo(query: string): Promise<{ exito: boolean; data?: OdooCustomer[]; error?: string }> {
@@ -477,6 +478,22 @@ export async function confirmarCotizacionOdoo(
     return { exito: true };
   } catch (error: any) {
     console.error('Error al confirmar cotización en Odoo:', error);
+    return { exito: false, error: error.message || 'Error desconocido' };
+  }
+}
+
+export async function actualizarClienteCotizacion(
+  orderId: number,
+  partnerId: number
+): Promise<{ exito: boolean; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session) return { exito: false, error: 'No autorizado' };
+
+    await odoo.executeKw('sale.order', 'write', [[orderId], { partner_id: partnerId }]);
+    return { exito: true };
+  } catch (error: any) {
+    console.error('Error al actualizar cliente de cotización en Odoo:', error);
     return { exito: false, error: error.message || 'Error desconocido' };
   }
 }
