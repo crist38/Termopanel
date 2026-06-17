@@ -8,7 +8,7 @@ import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { Plus, Trash2, Cloud, ArrowLeft, BarChart2, Triangle, RotateCcw, Printer } from 'lucide-react';
-import { guardarCotizacionEnOdoo } from '@/app/actions/odoo';
+import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { ClientSelector } from '@/components/ClientSelector';
 
 type ShapeType = 'rectangulo' | 'triangulo' | 'trapecio' | 'arco';
@@ -101,6 +101,32 @@ function ShapesCADCotizadorContent() {
       } catch {}
     }
   }, []);
+
+  // Cargar cotización para editar
+  useEffect(() => {
+    if (!editId) return;
+
+    const loadBudget = async () => {
+      try {
+        const isOdooId = /^\d+$/.test(editId);
+        if (isOdooId) {
+          const res = await obtenerCotizacionParaEditar(parseInt(editId));
+          if (res.exito) {
+            setClientName(res.clientName || '');
+            setClientId(res.clientId);
+            setObra(res.obra || '');
+            setBudgetName(res.budgetName || 'Borrador');
+            setItems(res.items || []);
+          } else {
+            alert(`Error al cargar cotización de Odoo: ${res.error}`);
+          }
+        }
+      } catch (e) {
+        console.error("Error loading budget:", e);
+      }
+    };
+    loadBudget();
+  }, [editId]);
 
   // Detectar borrador guardado en localStorage al montar el componente
   useEffect(() => {
@@ -302,16 +328,35 @@ function ShapesCADCotizadorContent() {
     }
     setIsSyncingOdoo(true);
     try {
-      const odooRes = await guardarCotizacionEnOdoo({
-        clientId,
-        clientName,
-        budgetNumber: 0,
-        items,
-        totalNeto
-      });
+      let odooRes;
+      const isOdooId = editId && /^\d+$/.test(editId);
+      if (isOdooId) {
+        odooRes = await actualizarCotizacionEnOdoo({
+          orderId: parseInt(editId),
+          clientId,
+          clientName,
+          obra,
+          items,
+          totalNeto,
+          isMonolitico: false
+        });
+      } else {
+        odooRes = await guardarCotizacionEnOdoo({
+          clientId,
+          clientName,
+          obra,
+          budgetNumber: 0,
+          items,
+          totalNeto
+        });
+      }
 
       if (odooRes.exito) {
-        alert(`✅ ¡Listo! Orden de venta ${odooRes.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
+        if (isOdooId) {
+          alert(`✅ ¡Listo! Cotización ${odooRes.cotizacionName} actualizada en Odoo. A continuación se descargarán los PDFs.`);
+        } else {
+          alert(`✅ ¡Listo! Orden de venta ${odooRes.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
+        }
         
         const finalBudgetName = odooRes.cotizacionName || 'Borrador';
         setBudgetName(finalBudgetName);
@@ -325,6 +370,10 @@ function ShapesCADCotizadorContent() {
         setObra('');
         setBudgetName('Borrador');
         setItems([]);
+
+        if (isOdooId) {
+          router.push('/cotizaciones');
+        }
       } else {
         alert(`Error desde Odoo: ${odooRes.error}`);
       }
@@ -838,11 +887,19 @@ function ShapesCADCotizadorContent() {
           </button>
           <button
             onClick={handleProcessQuote}
-            className="flex items-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95"
+            className={`flex items-center gap-2 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95 ${
+              editId && /^\d+$/.test(editId)
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700'
+                : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700'
+            }`}
             disabled={isSyncingOdoo || items.length === 0}
           >
             <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
-            {isSyncingOdoo ? 'Procesando en Odoo...' : 'Procesar Todo (Odoo + PDFs)'}
+            {isSyncingOdoo
+              ? 'Guardando en Odoo...'
+              : editId && /^\d+$/.test(editId)
+                ? `Actualizar ${budgetName} (Odoo + PDFs)`
+                : 'Procesar Todo (Odoo + PDFs)'}
           </button>
         </div>
       </header>

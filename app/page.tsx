@@ -9,7 +9,7 @@ import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, BarChart2, Triangle } from 'lucide-react';
-import { guardarCotizacionEnOdoo } from '@/app/actions/odoo';
+import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { logoutFromOdoo } from '@/app/actions/auth';
 import { ClientSelector } from '@/components/ClientSelector';
 
@@ -93,23 +93,38 @@ function CotizadorTermopanelContent() {
 
     const loadBudget = async () => {
       try {
-        const docRef = doc(db, 'presupuestos_termopaneles', editId);
-        const docSnap = await getDoc(docRef);
+        const isOdooId = /^\d+$/.test(editId);
+        if (isOdooId) {
+          const res = await obtenerCotizacionParaEditar(parseInt(editId));
+          if (res.exito) {
+            setClientName(res.clientName || '');
+            setClientId(res.clientId);
+            setObra(res.obra || '');
+            setBudgetName(res.budgetName || 'Borrador');
+            setItems(res.items || []);
+          } else {
+            alert(`Error al cargar cotización de Odoo: ${res.error}`);
+          }
+        } else {
+          // Fallback legacy a Firestore
+          const docRef = doc(db, 'presupuestos_termopaneles', editId);
+          const docSnap = await getDoc(docRef);
 
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setClientName(data.clientName || '');
-          setObra(data.obra || '');
-          setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
-          const loadedItems = (data.items || []).map((item: any) => ({
-            ...item,
-            pulido: item.pulido !== undefined ? item.pulido : (item.gas || false),
-            palillajeColor: item.palillajeColor || "Blanco",
-            palillajeHorizontales: item.palillajeHorizontales || 0,
-            palillajeVerticales: item.palillajeVerticales || 0,
-            conForma: item.conForma || false
-          }));
-          setItems(loadedItems);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setClientName(data.clientName || '');
+            setObra(data.obra || '');
+            setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
+            const loadedItems = (data.items || []).map((item: any) => ({
+              ...item,
+              pulido: item.pulido !== undefined ? item.pulido : (item.gas || false),
+              palillajeColor: item.palillajeColor || "Blanco",
+              palillajeHorizontales: item.palillajeHorizontales || 0,
+              palillajeVerticales: item.palillajeVerticales || 0,
+              conForma: item.conForma || false
+            }));
+            setItems(loadedItems);
+          }
         }
       } catch (e) {
         console.error("Error loading budget:", e);
@@ -329,16 +344,35 @@ function CotizadorTermopanelContent() {
     }
     setIsSyncingOdoo(true);
     try {
-      const odooRes = await guardarCotizacionEnOdoo({
-        clientId,
-        clientName,
-        budgetNumber: 0,
-        items,
-        totalNeto
-      });
+      let odooRes;
+      const isOdooId = editId && /^\d+$/.test(editId);
+      if (isOdooId) {
+        odooRes = await actualizarCotizacionEnOdoo({
+          orderId: parseInt(editId),
+          clientId,
+          clientName,
+          obra,
+          items,
+          totalNeto,
+          isMonolitico: false
+        });
+      } else {
+        odooRes = await guardarCotizacionEnOdoo({
+          clientId,
+          clientName,
+          obra,
+          budgetNumber: 0,
+          items,
+          totalNeto
+        });
+      }
 
       if (odooRes.exito) {
-        alert(`✅ ¡Listo! Orden de venta ${odooRes.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
+        if (isOdooId) {
+          alert(`✅ ¡Listo! Cotización ${odooRes.cotizacionName} actualizada en Odoo. A continuación se descargarán los PDFs.`);
+        } else {
+          alert(`✅ ¡Listo! Orden de venta ${odooRes.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
+        }
         
         const finalBudgetName = odooRes.cotizacionName || 'Borrador';
         setBudgetName(finalBudgetName);
@@ -373,6 +407,10 @@ function CotizadorTermopanelContent() {
             precioUnitario: 0
           }
         ]);
+
+        if (isOdooId) {
+          router.push('/cotizaciones');
+        }
       } else {
         alert(`Error desde Odoo: ${odooRes.error}`);
       }
@@ -849,12 +887,20 @@ function CotizadorTermopanelContent() {
 
           <button
             onClick={handleProcessQuote}
-            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95"
+            className={`flex items-center gap-2 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95 ${
+              editId && /^\d+$/.test(editId)
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700'
+                : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700'
+            }`}
             disabled={isSyncingOdoo || items.length === 0}
-            title="Enviar a Odoo, Imprimir Presupuesto y Generar Órdenes de Trabajo"
+            title={editId && /^\d+$/.test(editId) ? `Actualizar la cotización ${budgetName} en Odoo` : 'Enviar a Odoo, Imprimir Presupuesto y Generar Órdenes de Trabajo'}
           >
             <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
-            {isSyncingOdoo ? 'Enviando a Odoo (puede tardar ~1-2 min)...' : 'Procesar Todo (Odoo + PDFs)'}
+            {isSyncingOdoo
+              ? 'Guardando en Odoo...'
+              : editId && /^\d+$/.test(editId)
+                ? `Actualizar ${budgetName} (Odoo + PDFs)`
+                : 'Procesar Todo (Odoo + PDFs)'}
           </button>
 
           <button

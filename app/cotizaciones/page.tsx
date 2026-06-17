@@ -1,14 +1,13 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import jsPDF from "jspdf";
 import {
   listarCotizacionesOdoo,
   obtenerDetalleCotizacion,
-  actualizarLineaCotizacion,
   cancelarCotizacion,
   confirmarCotizacionOdoo,
-  actualizarClienteCotizacion,
 } from "@/app/actions/odoo";
 import { ClientSelector } from "@/components/ClientSelector";
 import {
@@ -159,44 +158,7 @@ function parseDimensions(name: string): { ancho: number; alto: number } | null {
   }
   return null;
 }
-
-function updateDescriptionDimensions(name: string, ancho: number, alto: number): string {
-  const regex = /(Termopanel|Cristal Monolítico|Cristal)\s+(\d+)\s*x\s*(\d+)(\s*mm)?/i;
-  if (regex.test(name)) {
-    return name.replace(regex, `$1 ${ancho} x ${alto} mm`);
-  }
-  const genericRegex = /(\d+)\s*x\s*(\d+)/;
-  if (genericRegex.test(name)) {
-    return name.replace(genericRegex, `${ancho} x ${alto}`);
-  }
-  return name;
-}
-
-function updateDescriptionCristal(name: string, num: 1 | 2, tipo: string, espesor: number): string {
-  const regex = new RegExp(`(Cristal ${num}:\\s*)(.+?)(\\s+\\d+mm)`, 'i');
-  if (regex.test(name)) {
-    return name.replace(regex, `Cristal ${num}: ${tipo} ${espesor}mm`);
-  }
-  return name;
-}
-
-function updateDescriptionSeparador(name: string, espesor: number, color: string): string {
-  const regex = /Separador:\s*\d+mm\s+color\s+[^|]+/i;
-  if (regex.test(name)) {
-    return name.replace(regex, `Separador: ${espesor}mm color ${color}`);
-  }
-  return name;
-}
-
 // Opciones para los selectores de cristal y separador (extraidas de configService / vidrios)
-const CRISTAL_TIPOS = [
-  'Incoloro', 'Bronce', 'Espejo', 'Saten', 'Semilla', 'Semilla Bronce',
-  'Laminado', 'Solar Cool BR.', 'Solar Green', 'Reflex Bronce',
-  'Bluegreen', 'Templado', 'Empavonado',
-];
-const CRISTAL_ESPESORES = [4, 5, 6, 8, 10];
-const SEP_ESPESORES = [6, 8, 10, 12];
-const SEP_COLORES = ['Mate', 'Negro', 'Bronce'];
 
 const STATE_LABELS: Record<string, { label: string; color: string; bg: string; dot: string }> = {
   draft: { label: "Borrador", color: "text-amber-700", bg: "bg-amber-50 border-amber-200", dot: "bg-amber-400" },
@@ -231,6 +193,8 @@ const PAGE_SIZE = 15;
 // â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function CotizacionesPage() {
+  const router = useRouter();
+
   // Listado
   const [orders, setOrders] = useState<SaleOrder[]>([]);
   const [total, setTotal] = useState(0);
@@ -248,31 +212,6 @@ export default function CotizacionesPage() {
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
-
-  // Edición de líneas
-  const [editingLines, setEditingLines] = useState<Record<number, {
-    name: string;
-    price_unit: number;
-    product_uom_qty: number;
-    x_studio_ancho_m: number;
-    x_studio_alto_m: number;
-    discount: number;
-    cristal1_tipo: string;
-    cristal1_espesor: number;
-    cristal2_tipo: string;
-    cristal2_espesor: number;
-    sep_espesor: number;
-    sep_color: string;
-  }>>({}); 
-  const [savingLine, setSavingLine] = useState<number | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  // Edición de cliente
-  const [isEditingClient, setIsEditingClient] = useState(false);
-  const [tempClientName, setTempClientName] = useState("");
-  const [tempClientId, setTempClientId] = useState<number | undefined>(undefined);
-  const [updatingClient, setUpdatingClient] = useState(false);
-  const [clientUpdateError, setClientUpdateError] = useState<string | null>(null);
 
   // Cancelar orden
   const [cancelling, setCancelling] = useState(false);
@@ -314,6 +253,32 @@ export default function CotizacionesPage() {
     }, 400);
   };
 
+  const closeDetail = () => {
+    setSelectedId(null);
+    setDetail(null);
+    setDetailError(null);
+  };
+
+  const handleEditarCotizacion = () => {
+    if (!detail) return;
+    
+    const productLines = detail.order_line.filter(
+      (l: any) => !l.display_type && l.product_id && l.product_uom_qty > 0
+    );
+    const firstLineName = productLines[0]?.name || '';
+    const isMonolitico = /monol[íi]tico/i.test(firstLineName);
+    const isFormas = productLines.some((l: any) => /con forma/i.test(l.name || ''));
+
+    let targetPath = '/';
+    if (isMonolitico) {
+      targetPath = '/monolitico';
+    } else if (isFormas) {
+      targetPath = '/formas';
+    }
+
+    router.push(`${targetPath}?editId=${detail.id}`);
+  };
+
   const handleStateChange = (val: string) => {
     setStateFilter(val);
     setPage(0);
@@ -327,19 +292,12 @@ export default function CotizacionesPage() {
     setDetail(null);
   };
 
-  // â”€â”€ Fetch detail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— Fetch detail ——————————————————————————————————————————————————————————————————————————
   const openDetail = async (id: number) => {
     setSelectedId(id);
     setDetail(null);
     setDetailLoading(true);
     setDetailError(null);
-    setEditingLines({});
-    setSaveError(null);
-    setIsEditingClient(false);
-    setTempClientName("");
-    setTempClientId(undefined);
-    setUpdatingClient(false);
-    setClientUpdateError(null);
     try {
       const res = await obtenerDetalleCotizacion(id);
       if (res.exito && res.order) {
@@ -351,131 +309,6 @@ export default function CotizacionesPage() {
       setDetailError(e.message ?? "Error de conexión");
     } finally {
       setDetailLoading(false);
-    }
-  };
-
-  const closeDetail = () => {
-    setSelectedId(null);
-    setDetail(null);
-    setDetailError(null);
-    setEditingLines({});
-    setSaveError(null);
-    setIsEditingClient(false);
-    setTempClientName("");
-    setTempClientId(undefined);
-    setUpdatingClient(false);
-    setClientUpdateError(null);
-  };
-
-  const startEditingClient = () => {
-    if (!detail) return;
-    setTempClientName(detail.partner_id?.[1] ?? "");
-    setTempClientId(detail.partner_id?.[0]);
-    setIsEditingClient(true);
-    setClientUpdateError(null);
-  };
-
-  const saveClientEdit = async () => {
-    if (!detail || !tempClientId) return;
-    setUpdatingClient(true);
-    setClientUpdateError(null);
-    try {
-      const res = await actualizarClienteCotizacion(detail.id, tempClientId);
-      if (res.exito) {
-        const refreshed = await obtenerDetalleCotizacion(detail.id);
-        if (refreshed.exito && refreshed.order) {
-          setDetail(refreshed.order as OrderDetail);
-        }
-        setIsEditingClient(false);
-        fetchOrders(search, stateFilter, page);
-      } else {
-        setClientUpdateError(res.error ?? "No se pudo actualizar el cliente");
-      }
-    } catch (e: any) {
-      setClientUpdateError(e.message ?? "Error de conexión");
-    } finally {
-      setUpdatingClient(false);
-    }
-  };
-
-  // â”€â”€ Edit lines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const startEditing = (line: OrderLine) => {
-    const name = line.name || "";
-    const parts = name.split(' | ').map(p => p.trim());
-
-    // Parsear Cristal 1
-    const c1Part  = parts.find(p => /^cristal 1:/i.test(p));
-    const c1Match = c1Part?.match(/cristal 1:\s*(.+?)\s+(\d+)mm/i);
-    const cristal1_tipo    = c1Match ? c1Match[1].trim() : 'Incoloro';
-    const cristal1_espesor = c1Match ? parseInt(c1Match[2]) : 6;
-
-    // Parsear Cristal 2
-    const c2Part  = parts.find(p => /^cristal 2:/i.test(p));
-    const c2Match = c2Part?.match(/cristal 2:\s*(.+?)\s+(\d+)mm/i);
-    const cristal2_tipo    = c2Match ? c2Match[1].trim() : 'Incoloro';
-    const cristal2_espesor = c2Match ? parseInt(c2Match[2]) : 6;
-
-    // Parsear Separador
-    const sepPart  = parts.find(p => /^separador:/i.test(p));
-    const sepMatch = sepPart?.match(/separador:\s*(\d+)mm\s+color\s+(.+)/i);
-    const sep_espesor = sepMatch ? parseInt(sepMatch[1]) : 12;
-    const sep_color   = sepMatch ? sepMatch[2].trim() : 'Negro';
-
-    setEditingLines(prev => ({
-      ...prev,
-      [line.id]: {
-        name,
-        price_unit:       line.price_unit,
-        product_uom_qty:  line.product_uom_qty,
-        x_studio_ancho_m: line.x_studio_ancho_m ?? 0,
-        x_studio_alto_m:  line.x_studio_alto_m  ?? 0,
-        discount:         line.discount ?? 0,
-        cristal1_tipo,
-        cristal1_espesor,
-        cristal2_tipo,
-        cristal2_espesor,
-        sep_espesor,
-        sep_color,
-      },
-    }));
-  };
-
-  const cancelEditing = (lineId: number) => {
-    setEditingLines(prev => {
-      const n = { ...prev };
-      delete n[lineId];
-      return n;
-    });
-  };
-
-  const saveLine = async (lineId: number) => {
-    const edits = editingLines[lineId];
-    if (!edits) return;
-    setSavingLine(lineId);
-    setSaveError(null);
-    try {
-      const res = await actualizarLineaCotizacion(lineId, {
-        price_unit:       edits.price_unit,
-        product_uom_qty:  edits.product_uom_qty,
-        name:             edits.name,
-        x_studio_ancho_m: edits.x_studio_ancho_m,
-        x_studio_alto_m:  edits.x_studio_alto_m,
-        discount:         edits.discount,
-      });
-      if (res.exito) {
-        // Refrescar detalle
-        if (detail) {
-          const refreshed = await obtenerDetalleCotizacion(detail.id);
-          if (refreshed.exito && refreshed.order) setDetail(refreshed.order as OrderDetail);
-        }
-        cancelEditing(lineId);
-      } else {
-        setSaveError(res.error ?? "Error al guardar");
-      }
-    } catch (e: any) {
-      setSaveError(e.message ?? "Error de conexión");
-    } finally {
-      setSavingLine(null);
     }
   };
 
@@ -1309,62 +1142,13 @@ export default function CotizacionesPage() {
                 <>
                   {/* Info cards */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 relative group">
-                      <div className="flex justify-between items-center mb-1.5">
-                        <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
-                          <User size={11} /> Cliente
-                        </div>
-                        {detail.state === 'draft' && !isEditingClient && (
-                          <button
-                            onClick={startEditingClient}
-                            className="text-[#7a5973] hover:text-[#5e4157] opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
-                            title="Editar cliente"
-                          >
-                            <Edit3 size={12} />
-                          </button>
-                        )}
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                      <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1.5">
+                        <User size={11} /> Cliente
                       </div>
-                      
-                      {isEditingClient ? (
-                        <div className="space-y-2">
-                          <ClientSelector
-                            value={tempClientName}
-                            clientId={tempClientId}
-                            onChange={(name, id) => {
-                              setTempClientName(name);
-                              setTempClientId(id);
-                            }}
-                          />
-                          {clientUpdateError && (
-                            <p className="text-[10px] text-red-600 font-medium">{clientUpdateError}</p>
-                          )}
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              disabled={updatingClient}
-                              onClick={() => setIsEditingClient(false)}
-                              className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs rounded font-semibold transition-colors flex items-center gap-1"
-                            >
-                              <Ban size={10} /> Cancelar
-                            </button>
-                            <button
-                              disabled={updatingClient || !tempClientId}
-                              onClick={saveClientEdit}
-                              className="px-2 py-1 bg-[#7a5973] hover:bg-[#5e4157] text-white text-xs rounded font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
-                            >
-                              {updatingClient ? (
-                                <Loader2 size={10} className="animate-spin" />
-                              ) : (
-                                <Save size={10} />
-                              )}
-                              Guardar
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-sm font-semibold text-slate-700 leading-snug">
-                          {detail.partner_id?.[1] ?? "—"}
-                        </p>
-                      )}
+                      <p className="text-sm font-semibold text-slate-700 leading-snug">
+                        {detail.partner_id?.[1] ?? "—"}
+                      </p>
                     </div>
 
                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
@@ -1410,10 +1194,13 @@ export default function CotizacionesPage() {
                   <div className="flex items-center justify-between gap-3 flex-wrap bg-slate-50 border border-slate-200 rounded-xl p-3.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       {detail.state === 'draft' && (
-                        <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
+                        <button
+                          onClick={handleEditarCotizacion}
+                          className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-1.5 rounded-lg font-semibold transition-colors shadow-sm"
+                        >
                           <Edit3 size={12} />
-                          Borrador â€” puedes editar precios y cantidades
-                        </div>
+                          Editar Cotización
+                        </button>
                       )}
 
                       {detail.state === 'cancel' && (
@@ -1455,6 +1242,15 @@ export default function CotizacionesPage() {
 
                     <div className="flex gap-2 items-center">
                       <button
+                        onClick={handleEditarCotizacion}
+                        className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all duration-200"
+                        title="Abrir esta cotización para editarla"
+                      >
+                        <Edit3 size={13} />
+                        Editar
+                      </button>
+
+                      <button
                         onClick={handlePrintPDF}
                         className="flex items-center gap-2 bg-[#7a5973] hover:bg-[#6b4c64] text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all duration-200"
                         title="Volver a generar e imprimir el PDF de este presupuesto"
@@ -1474,12 +1270,6 @@ export default function CotizacionesPage() {
                     </div>
                   </div>
 
-                  {saveError && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700 flex gap-1.5 items-center">
-                      <AlertTriangle size={12} /> {saveError}
-                    </div>
-                  )}
-
                   {/* Order lines */}
                   <div>
                     <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
@@ -1495,22 +1285,6 @@ export default function CotizacionesPage() {
                         <div className="divide-y divide-slate-100">
                           {detail.order_line.map((line) => {
                             const isNote = line.display_type === 'line_note' || line.display_type === 'line_section';
-                            const isEditing = !!editingLines[line.id];
-                            const isSaving = savingLine === line.id;
-                            const edits = editingLines[line.id] ?? {
-                              name: line.name || "",
-                              price_unit:       line.price_unit,
-                              product_uom_qty:  line.product_uom_qty,
-                              x_studio_ancho_m: line.x_studio_ancho_m ?? 0,
-                              x_studio_alto_m:  line.x_studio_alto_m  ?? 0,
-                              discount:         line.discount ?? 0,
-                              cristal1_tipo:    'Incoloro',
-                              cristal1_espesor: 6,
-                              cristal2_tipo:    'Incoloro',
-                              cristal2_espesor: 6,
-                              sep_espesor:      12,
-                              sep_color:        'Negro',
-                            };
 
                             if (isNote) {
                               return (
@@ -1521,390 +1295,51 @@ export default function CotizacionesPage() {
                             }
 
                             return (
-                              <div key={line.id} className={`p-4 ${isEditing ? "bg-amber-50/30" : "hover:bg-slate-50/50"} transition-colors`}>
+                              <div key={line.id} className="p-4 hover:bg-slate-50/50 transition-colors">
                                 <div className="flex flex-col gap-3">
                                   {/* Description */}
-                                  {isEditing ? (
-                                    <div className="flex flex-col gap-1 w-full">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Descripción</span>
-                                      <textarea
-                                        value={edits.name}
-                                        onChange={(e) => {
-                                          const newText = e.target.value;
-                                          setEditingLines(prev => {
-                                            const lineEdits = prev[line.id];
-                                            if (!lineEdits) return prev;
-                                            const piezas = parsePiezas(newText);
-                                            const dims = parseDimensions(newText);
-                                            
-                                            let anchoM = lineEdits.x_studio_ancho_m;
-                                            let altoIndividualM = lineEdits.x_studio_alto_m / parsePiezas(lineEdits.name);
-                                            
-                                            if (dims) {
-                                              anchoM = dims.ancho / 1000;
-                                              altoIndividualM = dims.alto / 1000;
-                                            }
-                                            
-                                            const nuevoXStudioAnchoM = anchoM;
-                                            const nuevoXStudioAltoM = altoIndividualM * piezas;
-                                            const nuevoProductUomQty = Math.round(nuevoXStudioAnchoM * nuevoXStudioAltoM * 100) / 100;
-                                            
-                                            return {
-                                              ...prev,
-                                              [line.id]: {
-                                                ...lineEdits,
-                                                name: newText,
-                                                x_studio_ancho_m: nuevoXStudioAnchoM,
-                                                x_studio_alto_m: nuevoXStudioAltoM,
-                                                product_uom_qty: nuevoProductUomQty
-                                              }
-                                            };
-                                          });
-                                        }}
-                                        className="w-full p-2 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white leading-relaxed"
-                                        rows={2}
-                                      />
-                                    </div>
-                                  ) : (
-                                    <p className="text-xs text-slate-700 leading-relaxed">{line.name}</p>
-                                  )}
+                                  <p className="text-xs text-slate-700 leading-relaxed">{line.name}</p>
+                                  
                                   {/* Metrics row */}
                                   <div className="flex items-start gap-4 flex-wrap">
                                     {/* Quantity */}
                                     <div className="flex flex-col gap-1 min-w-[90px]">
                                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cantidad (m²)</span>
-                                      {isEditing ? (
-                                        <input
-                                          type="number"
-                                          step="0.01"
-                                          min="0"
-                                          value={edits.product_uom_qty}
-                                          onChange={(e) =>
-                                            setEditingLines(prev => ({
-                                              ...prev,
-                                              [line.id]: { ...prev[line.id], product_uom_qty: parseFloat(e.target.value) || 0 }
-                                            }))
-                                          }
-                                          className="w-24 px-2 py-1 border border-amber-300 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
-                                        />
-                                      ) : (
-                                        <span className="text-sm font-bold text-slate-700 font-mono">{line.product_uom_qty.toFixed(2)}</span>
-                                      )}
+                                      <span className="text-sm font-bold text-slate-700 font-mono">{line.product_uom_qty.toFixed(2)}</span>
                                     </div>
 
-                                     {/* Price unit */}
-                                     <div className="flex flex-col gap-1 min-w-[120px]">
-                                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Precio Unit.</span>
-                                       {isEditing ? (
-                                         <input
-                                           type="number"
-                                           step="1"
-                                           min="0"
-                                           value={edits.price_unit}
-                                           onChange={(e) =>
-                                             setEditingLines(prev => ({
-                                               ...prev,
-                                               [line.id]: { ...prev[line.id], price_unit: parseFloat(e.target.value) || 0 }
-                                             }))
-                                           }
-                                           className="w-32 px-2 py-1 border border-amber-300 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
-                                         />
-                                       ) : (
-                                         <span className="text-sm font-bold text-slate-700 font-mono">{formatCLP(line.price_unit)}</span>
-                                       )}
-                                     </div>
+                                    {/* Price unit */}
+                                    <div className="flex flex-col gap-1 min-w-[120px]">
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Precio Unit.</span>
+                                      <span className="text-sm font-bold text-slate-700 font-mono">{formatCLP(line.price_unit)}</span>
+                                    </div>
 
-                                     {/* Valor Neto */}
-                                     <div className="flex flex-col gap-1 min-w-[120px]">
-                                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Valor Neto</span>
-                                       {isEditing ? (
-                                         <input
-                                           type="number"
-                                           step="1"
-                                           min="0"
-                                           value={Math.round(edits.price_unit * edits.product_uom_qty * (1 - edits.discount / 100))}
-                                           onChange={(e) => {
-                                             const valorNeto = parseFloat(e.target.value) || 0;
-                                             setEditingLines(prev => {
-                                               const le = prev[line.id];
-                                               if (!le) return prev;
-                                               const factor = 1 - (le.discount / 100);
-                                               const newPriceUnit = (le.product_uom_qty > 0 && factor > 0)
-                                                 ? valorNeto / (le.product_uom_qty * factor)
-                                                 : le.price_unit;
-                                               return { ...prev, [line.id]: { ...le, price_unit: Math.round(newPriceUnit) } };
-                                             });
-                                           }}
-                                           className="w-32 px-2 py-1 border border-amber-300 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
-                                         />
-                                       ) : (
-                                         <span className="text-sm font-black text-slate-800 font-mono">
-                                           {formatCLP(line.price_subtotal)}
-                                         </span>
-                                       )}
-                                     </div>
+                                    {/* Valor Neto */}
+                                    <div className="flex flex-col gap-1 min-w-[120px]">
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Valor Neto</span>
+                                      <span className="text-sm font-black text-slate-800 font-mono">
+                                        {formatCLP(line.price_subtotal)}
+                                      </span>
+                                    </div>
 
-                                     {/* % Descuento */}
-                                     <div className="flex flex-col gap-1 min-w-[80px]">
-                                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">% Desc.</span>
-                                       {isEditing ? (
-                                         <input
-                                           type="number"
-                                           step="0.5"
-                                           min="0"
-                                           max="100"
-                                           value={edits.discount}
-                                           onChange={(e) =>
-                                             setEditingLines(prev => ({
-                                               ...prev,
-                                               [line.id]: { ...prev[line.id], discount: parseFloat(e.target.value) || 0 }
-                                             }))
-                                           }
-                                           className="w-20 px-2 py-1 border border-amber-300 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
-                                         />
-                                       ) : (
-                                         <span className="text-sm font-bold text-slate-700 font-mono">
-                                            {(line.discount ?? 0) > 0 ? `${(line.discount ?? 0).toFixed(1)}%` : <span className="text-slate-300">—</span>}
-                                         </span>
-                                       )}
-                                     </div>
+                                    {/* % Descuento */}
+                                    <div className="flex flex-col gap-1 min-w-[80px]">
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">% Desc.</span>
+                                      <span className="text-sm font-bold text-slate-700 font-mono">
+                                        {(line.discount ?? 0) > 0 ? `${(line.discount ?? 0).toFixed(1)}%` : <span className="text-slate-300">—</span>}
+                                      </span>
+                                    </div>
 
                                     {/* Dimensions */}
-                                    {isEditing ? (
-                                      <>
-                                        <div className="flex flex-col gap-1 min-w-[90px]">
-                                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ancho (mm)</span>
-                                          <input
-                                            type="number"
-                                            step="1"
-                                            min="0"
-                                            value={Math.round(edits.x_studio_ancho_m * 1000) || ""}
-                                            onChange={(e) => {
-                                              const val = parseFloat(e.target.value) || 0;
-                                              setEditingLines(prev => {
-                                                const lineEdits = prev[line.id];
-                                                if (!lineEdits) return prev;
-                                                const piezas = parsePiezas(lineEdits.name);
-                                                const altoIndividualM = lineEdits.x_studio_alto_m / piezas;
-                                                const altoIndividualMm = Math.round(altoIndividualM * 1000);
-                                                const nuevoAnchoM = val / 1000;
-                                                const nuevoProductUomQty = Math.round(nuevoAnchoM * lineEdits.x_studio_alto_m * 100) / 100;
-                                                const nuevoName = updateDescriptionDimensions(lineEdits.name, val, altoIndividualMm);
-                                                return {
-                                                  ...prev,
-                                                  [line.id]: {
-                                                    ...lineEdits,
-                                                    x_studio_ancho_m: nuevoAnchoM,
-                                                    product_uom_qty: nuevoProductUomQty,
-                                                    name: nuevoName
-                                                  }
-                                                };
-                                              });
-                                            }}
-                                            className="w-24 px-2 py-1 border border-amber-300 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
-                                            placeholder="Ancho"
-                                          />
-                                        </div>
-
-                                        <div className="flex flex-col gap-1 min-w-[90px]">
-                                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Alto (mm)</span>
-                                          <input
-                                            type="number"
-                                            step="1"
-                                            min="0"
-                                            value={Math.round((edits.x_studio_alto_m / parsePiezas(edits.name)) * 1000) || ""}
-                                            onChange={(e) => {
-                                              const val = parseFloat(e.target.value) || 0;
-                                              setEditingLines(prev => {
-                                                const lineEdits = prev[line.id];
-                                                if (!lineEdits) return prev;
-                                                const piezas = parsePiezas(lineEdits.name);
-                                                const anchoMm = Math.round(lineEdits.x_studio_ancho_m * 1000);
-                                                const nuevoAltoIndividualM = val / 1000;
-                                                const nuevoXStudioAltoM = nuevoAltoIndividualM * piezas;
-                                                const nuevoProductUomQty = Math.round(lineEdits.x_studio_ancho_m * nuevoXStudioAltoM * 100) / 100;
-                                                const nuevoName = updateDescriptionDimensions(lineEdits.name, anchoMm, val);
-                                                return {
-                                                  ...prev,
-                                                  [line.id]: {
-                                                    ...lineEdits,
-                                                    x_studio_alto_m: nuevoXStudioAltoM,
-                                                    product_uom_qty: nuevoProductUomQty,
-                                                    name: nuevoName
-                                                  }
-                                                };
-                                              });
-                                            }}
-                                            className="w-24 px-2 py-1 border border-amber-300 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
-                                            placeholder="Alto"
-                                          />
-                                        </div>
-                                      </>
-                                    ) : (
-                                      line.x_studio_ancho_m != null && (
-                                        <div className="flex flex-col gap-1">
-                                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Medidas (m)</span>
-                                          <span className="text-xs text-slate-600 font-mono">
-                                            {line.x_studio_ancho_m?.toFixed(3)} × {line.x_studio_alto_m?.toFixed(3)}
-                                          </span>
-                                        </div>
-                                      )
+                                    {line.x_studio_ancho_m != null && (
+                                      <div className="flex flex-col gap-1">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Medidas (m)</span>
+                                        <span className="text-xs text-slate-600 font-mono">
+                                          {line.x_studio_ancho_m?.toFixed(3)} × {line.x_studio_alto_m?.toFixed(3)}
+                                        </span>
+                                      </div>
                                     )}
                                   </div>
-
-                                  {/* Cristales & Separador (solo termopanel, en modo edición) */}
-                                  {isEditing && /termopanel/i.test(line.name || '') && (
-                                    <div className="flex flex-col gap-2 pt-2 border-t border-amber-200/60">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cristales &amp; Separador</span>
-                                      <div className="flex items-end gap-3 flex-wrap">
-
-                                        {/* C1 tipo */}
-                                        <div className="flex flex-col gap-1">
-                                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">C1 Tipo</span>
-                                          <select
-                                            value={edits.cristal1_tipo}
-                                            onChange={(e) => {
-                                              const tipo = e.target.value;
-                                              setEditingLines(prev => {
-                                                const le = prev[line.id]; if (!le) return prev;
-                                                return { ...prev, [line.id]: { ...le, cristal1_tipo: tipo, name: updateDescriptionCristal(le.name, 1, tipo, le.cristal1_espesor) } };
-                                              });
-                                            }}
-                                            className="px-2 py-1 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
-                                          >
-                                            {CRISTAL_TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
-                                          </select>
-                                        </div>
-
-                                        {/* C1 espesor */}
-                                        <div className="flex flex-col gap-1">
-                                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">C1 Esp.</span>
-                                          <select
-                                            value={edits.cristal1_espesor}
-                                            onChange={(e) => {
-                                              const esp = parseInt(e.target.value);
-                                              setEditingLines(prev => {
-                                                const le = prev[line.id]; if (!le) return prev;
-                                                return { ...prev, [line.id]: { ...le, cristal1_espesor: esp, name: updateDescriptionCristal(le.name, 1, le.cristal1_tipo, esp) } };
-                                              });
-                                            }}
-                                            className="w-20 px-2 py-1 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
-                                          >
-                                            {CRISTAL_ESPESORES.map(e => <option key={e} value={e}>{e}mm</option>)}
-                                          </select>
-                                        </div>
-
-                                        <div className="w-px self-stretch bg-amber-200" />
-
-                                        {/* C2 tipo */}
-                                        <div className="flex flex-col gap-1">
-                                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">C2 Tipo</span>
-                                          <select
-                                            value={edits.cristal2_tipo}
-                                            onChange={(e) => {
-                                              const tipo = e.target.value;
-                                              setEditingLines(prev => {
-                                                const le = prev[line.id]; if (!le) return prev;
-                                                return { ...prev, [line.id]: { ...le, cristal2_tipo: tipo, name: updateDescriptionCristal(le.name, 2, tipo, le.cristal2_espesor) } };
-                                              });
-                                            }}
-                                            className="px-2 py-1 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
-                                          >
-                                            {CRISTAL_TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
-                                          </select>
-                                        </div>
-
-                                        {/* C2 espesor */}
-                                        <div className="flex flex-col gap-1">
-                                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">C2 Esp.</span>
-                                          <select
-                                            value={edits.cristal2_espesor}
-                                            onChange={(e) => {
-                                              const esp = parseInt(e.target.value);
-                                              setEditingLines(prev => {
-                                                const le = prev[line.id]; if (!le) return prev;
-                                                return { ...prev, [line.id]: { ...le, cristal2_espesor: esp, name: updateDescriptionCristal(le.name, 2, le.cristal2_tipo, esp) } };
-                                              });
-                                            }}
-                                            className="w-20 px-2 py-1 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
-                                          >
-                                            {CRISTAL_ESPESORES.map(e => <option key={e} value={e}>{e}mm</option>)}
-                                          </select>
-                                        </div>
-
-                                        <div className="w-px self-stretch bg-amber-200" />
-
-                                        {/* Separador espesor */}
-                                        <div className="flex flex-col gap-1">
-                                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Sep. Esp.</span>
-                                          <select
-                                            value={edits.sep_espesor}
-                                            onChange={(e) => {
-                                              const esp = parseInt(e.target.value);
-                                              setEditingLines(prev => {
-                                                const le = prev[line.id]; if (!le) return prev;
-                                                return { ...prev, [line.id]: { ...le, sep_espesor: esp, name: updateDescriptionSeparador(le.name, esp, le.sep_color) } };
-                                              });
-                                            }}
-                                            className="w-20 px-2 py-1 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
-                                          >
-                                            {SEP_ESPESORES.map(e => <option key={e} value={e}>{e}mm</option>)}
-                                          </select>
-                                        </div>
-
-                                        {/* Separador color */}
-                                        <div className="flex flex-col gap-1">
-                                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Sep. Color</span>
-                                          <select
-                                            value={edits.sep_color}
-                                            onChange={(e) => {
-                                              const color = e.target.value;
-                                              setEditingLines(prev => {
-                                                const le = prev[line.id]; if (!le) return prev;
-                                                return { ...prev, [line.id]: { ...le, sep_color: color, name: updateDescriptionSeparador(le.name, le.sep_espesor, color) } };
-                                              });
-                                            }}
-                                            className="px-2 py-1 border border-amber-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white"
-                                          >
-                                            {SEP_COLORES.map(c => <option key={c} value={c}>{c}</option>)}
-                                          </select>
-                                        </div>
-
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Edit controls (only for draft) */}
-                                  {detail.state === 'draft' && (
-                                    <div className="flex items-center gap-2 pt-1">
-                                      {!isEditing ? (
-                                        <button
-                                          onClick={() => startEditing(line)}
-                                          className="flex items-center gap-1.5 text-[11px] font-semibold text-[#7a5973] hover:text-[#6b4c64] hover:bg-[#7a5973]/5 px-2.5 py-1.5 rounded-lg transition-colors border border-[#7a5973]/20"
-                                        >
-                                          <Edit3 size={11} /> Editar
-                                        </button>
-                                      ) : (
-                                        <>
-                                          <button
-                                            onClick={() => saveLine(line.id)}
-                                            disabled={isSaving}
-                                            className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded-lg transition-colors border border-emerald-200 disabled:opacity-60"
-                                          >
-                                            {isSaving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
-                                            {isSaving ? "Guardando..." : "Guardar"}
-                                          </button>
-                                          <button
-                                            onClick={() => cancelEditing(line.id)}
-                                            disabled={isSaving}
-                                            className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg transition-colors border border-slate-200 disabled:opacity-60"
-                                          >
-                                            <X size={11} /> Cancelar
-                                          </button>
-                                        </>
-                                      )}
-                                    </div>
-                                  )}
                                 </div>
                               </div>
                             );

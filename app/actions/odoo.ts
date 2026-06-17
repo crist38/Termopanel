@@ -31,6 +31,7 @@ export async function crearClienteOdoo(data: CustomerInput): Promise<{ exito: bo
 export async function guardarCotizacionEnOdoo(data: {
   clientId?: number;
   clientName: string;
+  obra?: string;
   budgetNumber: number;
   items: any[];
   totalNeto: number;
@@ -141,7 +142,7 @@ export async function guardarCotizacionEnOdoo(data: {
     // autoConfirm=true asegura que todo quede creado antes de responder al usuario.
     const session = await getSession();
     const userId = session?.uid;
-    const odooQuote = await odooSales.createQuote(clienteId, lineas, rawItems, false, data.clientName, userId);
+    const odooQuote = await odooSales.createQuote(clienteId, lineas, rawItems, false, data.clientName, userId, data.obra);
 
     return { exito: true, cotizacionId: odooQuote.id, cotizacionName: odooQuote.name };
   } catch (error: any) {
@@ -153,6 +154,7 @@ export async function guardarCotizacionEnOdoo(data: {
 export async function guardarCotizacionMonoliticoEnOdoo(data: {
   clientId?: number;
   clientName: string;
+  obra?: string;
   budgetNumber: number;
   items: any[];
   totalNeto: number;
@@ -203,7 +205,7 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
 
     const session = await getSession();
     const userId = session?.uid;
-    const odooQuote = await odooSales.createMonoliticQuote(clienteId, lineas, rawItems, false, data.clientName, userId);
+    const odooQuote = await odooSales.createMonoliticQuote(clienteId, lineas, rawItems, false, data.clientName, userId, data.obra);
     return { exito: true, cotizacionId: odooQuote.id, cotizacionName: odooQuote.name };
   } catch (error: any) {
     console.error('Error en Server Action Odoo (Monolítico):', error);
@@ -494,6 +496,226 @@ export async function actualizarClienteCotizacion(
     return { exito: true };
   } catch (error: any) {
     console.error('Error al actualizar cliente de cotización en Odoo:', error);
+    return { exito: false, error: error.message || 'Error desconocido' };
+  }
+}
+
+function stripHtml(htmlStr: string) {
+  if (!htmlStr) return "";
+  return htmlStr.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+}
+
+export async function obtenerCotizacionParaEditar(orderId: number): Promise<{
+  exito: boolean;
+  tipo?: 'termopanel' | 'monolitico' | 'formas';
+  clientName?: string;
+  clientId?: number;
+  obra?: string;
+  budgetName?: string;
+  items?: any[];
+  error?: string;
+}> {
+  try {
+    const session = await getSession();
+    if (!session) return { exito: false, error: 'No autorizado' };
+
+    const order = await odooSales.getOrderDetail(orderId);
+    if (!order) return { exito: false, error: 'Cotización no encontrada' };
+
+    if (order.state !== 'draft') {
+      return { exito: false, error: 'Solo se pueden editar cotizaciones en estado borrador.' };
+    }
+
+    const productOrderLines = order.order_line.filter(
+      (l: any) => !l.display_type && l.product_id && l.product_uom_qty > 0
+    );
+
+    const clientName = Array.isArray(order.partner_id) ? order.partner_id[1] : '';
+    const clientId = Array.isArray(order.partner_id) ? order.partner_id[0] : undefined;
+    const obra = order.note ? stripHtml(order.note) : '';
+    const budgetName = order.name || `SO${orderId}`;
+
+    if (productOrderLines.length === 0) {
+      return {
+        exito: true,
+        tipo: 'termopanel',
+        clientName,
+        clientId,
+        obra,
+        budgetName,
+        items: []
+      };
+    }
+
+    const firstLineName = productOrderLines[0]?.name || '';
+    const isMonolitico = /monol[íi]tico/i.test(firstLineName);
+    const isFormas = productOrderLines.some((l: any) => /con forma/i.test(l.name || ''));
+
+    let tipo: 'termopanel' | 'monolitico' | 'formas' = 'termopanel';
+    if (isMonolitico) {
+      tipo = 'monolitico';
+    } else if (isFormas) {
+      tipo = 'formas';
+    }
+
+    // Parse items
+    let items: any[] = [];
+    if (isMonolitico) {
+      items = productOrderLines.map((line: any, i: number) => {
+        const parsed = parseMonoliticoLine(line.name, i);
+        const qty = parsed.cantidad || 1;
+        const precioUnitario = Math.round(line.price_subtotal / qty);
+        
+        return {
+          id: Math.random().toString(36).substring(2, 15),
+          ...parsed,
+          precioUnitario
+        };
+      });
+    } else {
+      items = productOrderLines.map((line: any, i: number) => {
+        const parsed = parseTermopanelLine(line.name, i);
+        const qty = parsed.cantidad || 1;
+        const precioUnitario = Math.round(line.price_subtotal / qty);
+
+        return {
+          id: Math.random().toString(36).substring(2, 15),
+          ...parsed,
+          precioUnitario
+        };
+      });
+    }
+
+    return {
+      exito: true,
+      tipo,
+      clientName,
+      clientId,
+      obra,
+      budgetName,
+      items
+    };
+  } catch (error: any) {
+    console.error('Error al obtener cotización para editar:', error);
+    return { exito: false, error: error.message || 'Error desconocido' };
+  }
+}
+
+export async function actualizarCotizacionEnOdoo(data: {
+  orderId: number;
+  clientId?: number;
+  clientName: string;
+  obra?: string;
+  items: any[];
+  totalNeto: number;
+  isMonolitico?: boolean;
+}): Promise<{ exito: boolean; cotizacionName?: string; error?: string }> {
+  try {
+    const session = await getSession();
+    if (!session) return { exito: false, error: 'No autorizado' };
+
+    // 1. Obtener o crear cliente en Odoo
+    let clienteId = data.clientId;
+    if (!clienteId) {
+      clienteId = await odooCustomers.getOrCreateCustomer({
+        name: data.clientName || 'Cliente sin nombre',
+      });
+    }
+
+    // 2. Preparar las nuevas líneas de cotización
+    const defaultProductId = parseInt(process.env.ODOO_DEFAULT_PRODUCT_ID || '0');
+    const monoliticoProductId = parseInt(process.env.ODOO_MONOLITIC_PRODUCT_ID || process.env.ODOO_DEFAULT_PRODUCT_ID || '0');
+    const productId = data.isMonolitico ? monoliticoProductId : defaultProductId;
+
+    if (!productId) {
+      return { exito: false, error: 'Variable de entorno ODOO_DEFAULT_PRODUCT_ID o ODOO_MONOLITIC_PRODUCT_ID no configurada en el servidor.' };
+    }
+
+    const lineas = data.items.map((item, index) => {
+      const itemLabel = item.label || `V${index + 1}`;
+      
+      let desc = '';
+      if (data.isMonolitico) {
+        desc = `[${itemLabel}] Cantidad: ${item.cantidad} | Cristal Monolítico ${item.ancho} x ${item.alto} mm | Cristal: ${item.cristal.tipo} ${item.cristal.espesor}mm`;
+      } else {
+        const extras = [];
+        if (item.pulido) extras.push('Pulido');
+        if (item.micropersiana) extras.push('Micropersiana');
+        if (item.palillaje) {
+          extras.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales, ${item.palillajeVerticales || 0} verticales)`);
+        }
+        if (item.conForma) {
+          if (item.tipoFigura && item.tipoFigura !== 'rectangulo') {
+            const med = item.medidasFigura || {};
+            let shapeDesc = '';
+            if (item.tipoFigura === 'triangulo') shapeDesc = `Triángulo: Base:${med.a || 0}, Altura:${med.b || 0}`;
+            if (item.tipoFigura === 'trapecio') shapeDesc = `Trapecio: Ancho:${med.a || 0}, Alt.Izq:${med.b1 || 0}, Alt.Der:${med.b2 || 0}`;
+            if (item.tipoFigura === 'arco') shapeDesc = `Arco: Ancho:${med.a || 0}, Alt.Base:${med.b || 0}`;
+            extras.push(`Con Forma (${shapeDesc})`);
+          } else {
+            extras.push('Con Forma');
+          }
+        }
+
+        desc = [
+          `[${itemLabel}]`,
+          `Cantidad: ${item.cantidad} unidad${item.cantidad !== 1 ? 'es' : ''}`,
+          `Termopanel ${item.ancho} x ${item.alto} mm`,
+          `Cristal 1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
+          `Cristal 2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+          `Separador: ${item.separador.espesor}mm color ${item.separador.color}`,
+          ...(extras.length > 0 ? [`Extras: ${extras.join(', ')}`] : []),
+        ].join(' | ');
+      }
+
+      const anchoM = item.ancho / 1000;
+      const altoM = (item.alto / 1000) * item.cantidad;
+      const qtyRounded = Math.round(anchoM * altoM * 100) / 100;
+      const totalPrice = item.precioUnitario * item.cantidad;
+      const priceUnitM2 = qtyRounded > 0 ? Math.round(totalPrice / qtyRounded) : 0;
+
+      return {
+        product_id: productId,
+        name: desc,
+        product_uom_qty: qtyRounded,
+        price_unit: priceUnitM2,
+        x_studio_ancho_m: anchoM,
+        x_studio_alto_m: altoM,
+      };
+    });
+
+    // 3. Ejecutar la actualización en Odoo
+    const orderLinesTuples = [
+      [5, 0, 0],
+      ...lineas.map(line => [0, 0, {
+        product_id: line.product_id || false,
+        name: line.name,
+        product_uom_qty: line.product_uom_qty,
+        product_uom_id: 1,
+        price_unit: line.price_unit,
+        ...(line.x_studio_ancho_m !== undefined && { x_studio_ancho_m: line.x_studio_ancho_m }),
+        ...(line.x_studio_alto_m !== undefined && { x_studio_alto_m: line.x_studio_alto_m }),
+      }])
+    ];
+
+    const orderData: any = {
+      partner_id: clienteId,
+      order_line: orderLinesTuples,
+      note: data.obra || '',
+    };
+
+    await odoo.executeKw('sale.order', 'write', [[data.orderId], orderData]);
+    
+    // Forzar precio unitario correcto (Odoo puede sobreescribirlo)
+    await odooSales.forceLinePrices(data.orderId, lineas);
+
+    // Obtener el nombre de la cotización para retornarlo
+    const orderDataResp = await odoo.executeKw('sale.order', 'search_read', [[['id', '=', data.orderId]]], { fields: ['name'], limit: 1 });
+    const orderName = orderDataResp.length > 0 ? orderDataResp[0].name : `SO${data.orderId}`;
+
+    return { exito: true, cotizacionName: orderName };
+  } catch (error: any) {
+    console.error('Error al actualizar cotización en Odoo:', error);
     return { exito: false, error: error.message || 'Error desconocido' };
   }
 }
