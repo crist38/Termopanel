@@ -398,12 +398,24 @@ function ReportsDashboardContent() {
                   {Object.keys(stats.insumos.cristalesTipo).length === 0 ? (
                     <p className="text-xs text-slate-400 italic">Sin registros en el período.</p>
                   ) : (
-                    Object.entries(stats.insumos.cristalesTipo).map(([tipo, m2]) => (
-                      <div key={tipo} className="flex justify-between items-center text-xs p-2 bg-slate-50 rounded-lg hover:bg-slate-100/70 transition-colors">
-                        <span className="text-slate-600 font-medium">{tipo}</span>
-                        <span className="font-bold text-slate-800 font-mono">{m2.toFixed(2)} m²</span>
-                      </div>
-                    ))
+                    Object.entries(stats.insumos.cristalesTipo).map(([tipo, data]) => {
+                      const desperdicio = data.real > 0 ? ((data.real - data.neto) / data.real) * 100 : 0;
+                      const planchas = Math.round(data.real / 4.5); // planchas de 1800 x 2500 mm (4.5 m2 cada una)
+                      return (
+                        <div key={tipo} className="p-3 bg-slate-50 rounded-xl hover:bg-slate-100/70 transition-colors space-y-1.5 border border-slate-100">
+                          <div className="flex justify-between items-start text-xs font-semibold text-slate-700">
+                            <span className="max-w-[70%] truncate" title={tipo}>{tipo}</span>
+                            <span className="font-bold font-mono text-teal-600 text-right whitespace-nowrap">
+                              {data.real.toFixed(2)} m² ({planchas} planchas)
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium">
+                            <span>Neto: {data.neto.toFixed(2)} m²</span>
+                            <span>Desperdicio: <strong className="text-amber-600 font-mono">{desperdicio.toFixed(1)}%</strong></span>
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
