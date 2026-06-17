@@ -14,7 +14,7 @@ export interface TermopanelItem {
   palillajeHorizontales?: number
   palillajeVerticales?: number
   conForma?: boolean
-  tipoFigura?: 'rectangulo' | 'triangulo' | 'trapecio' | 'arco'
+  tipoFigura?: 'rectangulo' | 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo'
   medidasFigura?: { a: number; b: number; b1?: number; b2?: number }
   descuento?: number // Porcentaje de descuento (0-100)
   precioUnitario: number
@@ -104,6 +104,18 @@ export function calcularPrecioUnitario(
       const b = med.b || 0
       m2 = (a * b + (Math.PI * Math.pow(a / 2, 2)) / 2) / 1_000_000
       ml = (a + 2 * b + (Math.PI * a) / 2) / 1000
+    } else if (item.tipoFigura === 'medio_arco') {
+      const a = med.a || 0
+      const b = med.b || 0
+      const b1 = med.b1 || 0
+      const hArch = Math.max(0, b1 - b)
+      m2 = (a * b + (Math.PI * a * hArch) / 4) / 1_000_000
+      const arcLength = (Math.PI * Math.sqrt(2 * (a * a + hArch * hArch))) / 4
+      ml = (a + b + b1 + arcLength) / 1000
+    } else if (item.tipoFigura === 'circulo') {
+      const a = med.a || 0
+      m2 = (Math.PI * Math.pow(a / 2, 2)) / 1_000_000
+      ml = (Math.PI * a) / 1000
     }
   }
 
@@ -170,6 +182,11 @@ export function calcularItem(item: TermopanelItem): {
       metrosCuadrados = (med.a || 0) * (((med.b1 || 0) + (med.b2 || 0)) / 2) / 1_000_000
     } else if (item.tipoFigura === 'arco') {
       metrosCuadrados = ((med.a || 0) * (med.b || 0) + (Math.PI * Math.pow((med.a || 0) / 2, 2)) / 2) / 1_000_000
+    } else if (item.tipoFigura === 'medio_arco') {
+      const hArch = Math.max(0, (med.b1 || 0) - (med.b || 0))
+      metrosCuadrados = ((med.a || 0) * (med.b || 0) + (Math.PI * (med.a || 0) * hArch) / 4) / 1_000_000
+    } else if (item.tipoFigura === 'circulo') {
+      metrosCuadrados = (Math.PI * Math.pow((med.a || 0) / 2, 2)) / 1_000_000
     }
   }
   const totalLinea = item.precioUnitario * item.cantidad
