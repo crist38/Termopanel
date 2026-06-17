@@ -916,9 +916,9 @@ export default function CotizacionesPage() {
       doc.text(`${item.ancho}`, 60, yPos);
       doc.text(`${item.alto}`, 85, yPos);
       doc.setFont("helvetica", "normal");
-      doc.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 110, yPos);
+      doc.text(`(${item.cantidad}) ${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 110, yPos);
       if (item.cristal2) {
-        doc.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 152, yPos);
+        doc.text(`(${item.cantidad}) ${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 152, yPos);
       } else {
         doc.text("—", 152, yPos);
       }

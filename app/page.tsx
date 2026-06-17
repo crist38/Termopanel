@@ -655,8 +655,8 @@ function CotizadorTermopanelContent() {
       pdf.text(`${item.ancho}`, 60, yPos);
       pdf.text(`${item.alto}`, 85, yPos);
       pdf.setFont("helvetica", "normal");
-      pdf.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 110, yPos);
-      pdf.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 152, yPos);
+      pdf.text(`(${item.cantidad}) ${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 110, yPos);
+      pdf.text(`(${item.cantidad}) ${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 152, yPos);
 
       if (extrasText) {
         pdf.setFontSize(8);
