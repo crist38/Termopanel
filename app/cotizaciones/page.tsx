@@ -869,11 +869,12 @@ export default function CotizacionesPage() {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.text("Ref", 17, yPos);
-    doc.text("Cant.", 47, yPos);
-    doc.text("Ancho (mm)", 60, yPos);
-    doc.text("Alto (mm)", 85, yPos);
-    doc.text("Cristal 1", 110, yPos);
-    doc.text("Cristal 2", 152, yPos);
+    doc.text("Ancho (mm)", 36, yPos);
+    doc.text("Alto (mm)", 58, yPos);
+    doc.text("Cant.", 77, yPos);
+    doc.text("Cristal 1", 89, yPos);
+    doc.text("Cant.", 138, yPos);
+    doc.text("Cristal 2", 150, yPos);
     doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "normal");
 
@@ -893,11 +894,12 @@ export default function CotizacionesPage() {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(9);
         doc.text("Ref", 17, yPos);
-        doc.text("Cant.", 47, yPos);
-        doc.text("Ancho (mm)", 60, yPos);
-        doc.text("Alto (mm)", 85, yPos);
-        doc.text("Cristal 1", 110, yPos);
-        doc.text("Cristal 2", 152, yPos);
+        doc.text("Ancho (mm)", 36, yPos);
+        doc.text("Alto (mm)", 58, yPos);
+        doc.text("Cant.", 77, yPos);
+        doc.text("Cristal 1", 89, yPos);
+        doc.text("Cant.", 138, yPos);
+        doc.text("Cristal 2", 150, yPos);
         doc.setTextColor(0, 0, 0);
         doc.setFont("helvetica", "normal");
         yPos += 8;
@@ -911,16 +913,18 @@ export default function CotizacionesPage() {
 
       doc.setFontSize(9);
       doc.text(splitLabel, 17, yPos);
-      doc.text(`${item.cantidad}`, 47, yPos);
       doc.setFont("helvetica", "bold");
-      doc.text(`${item.ancho}`, 60, yPos);
-      doc.text(`${item.alto}`, 85, yPos);
+      doc.text(`${item.ancho}`, 36, yPos);
+      doc.text(`${item.alto}`, 58, yPos);
       doc.setFont("helvetica", "normal");
-      doc.text(`(${item.cantidad}) ${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 110, yPos);
+      doc.text(`${item.cantidad}`, 79, yPos);
+      doc.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 89, yPos);
       if (item.cristal2) {
-        doc.text(`(${item.cantidad}) ${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 152, yPos);
+        doc.text(`${item.cantidad}`, 140, yPos);
+        doc.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 150, yPos);
       } else {
-        doc.text("—", 152, yPos);
+        doc.text("—", 140, yPos);
+        doc.text("—", 150, yPos);
       }
 
       if (item.extrasText) {

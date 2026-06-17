@@ -538,11 +538,12 @@ function ShapesCADCotizadorContent() {
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(9);
     pdf.text("Ref", 17, yPos);
-    pdf.text("Cant.", 47, yPos);
-    pdf.text("Ancho (mm)", 60, yPos);
-    pdf.text("Alto (mm)", 85, yPos);
-    pdf.text("Cristal 1", 110, yPos);
-    pdf.text("Cristal 2", 152, yPos);
+    pdf.text("Ancho (mm)", 36, yPos);
+    pdf.text("Alto (mm)", 58, yPos);
+    pdf.text("Cant.", 77, yPos);
+    pdf.text("Cristal 1", 89, yPos);
+    pdf.text("Cant.", 138, yPos);
+    pdf.text("Cristal 2", 150, yPos);
     pdf.setTextColor(0, 0, 0);
     pdf.setFont("helvetica", "normal");
 
@@ -568,11 +569,12 @@ function ShapesCADCotizadorContent() {
         pdf.rect(14, yPos - 6, 182, 9, 'F');
         pdf.setTextColor(255, 255, 255);
         pdf.text("Ref", 17, yPos);
-        pdf.text("Cant.", 47, yPos);
-        pdf.text("Ancho (mm)", 60, yPos);
-        pdf.text("Alto (mm)", 85, yPos);
-        pdf.text("Cristal 1", 110, yPos);
-        pdf.text("Cristal 2", 152, yPos);
+        pdf.text("Ancho (mm)", 36, yPos);
+        pdf.text("Alto (mm)", 58, yPos);
+        pdf.text("Cant.", 77, yPos);
+        pdf.text("Cristal 1", 89, yPos);
+        pdf.text("Cant.", 138, yPos);
+        pdf.text("Cristal 2", 150, yPos);
         pdf.setTextColor(0, 0, 0);
         yPos += 8;
       }
@@ -584,13 +586,14 @@ function ShapesCADCotizadorContent() {
 
       pdf.setFontSize(9);
       pdf.text(splitLabel, 17, yPos);
-      pdf.text(`${item.cantidad}`, 47, yPos);
       pdf.setFont("helvetica", "bold");
-      pdf.text(`${item.ancho}`, 60, yPos);
-      pdf.text(`${item.alto}`, 85, yPos);
+      pdf.text(`${item.ancho}`, 36, yPos);
+      pdf.text(`${item.alto}`, 58, yPos);
       pdf.setFont("helvetica", "normal");
-      pdf.text(`(${item.cantidad}) ${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 110, yPos);
-      pdf.text(`(${item.cantidad}) ${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 152, yPos);
+      pdf.text(`${item.cantidad}`, 79, yPos);
+      pdf.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 89, yPos);
+      pdf.text(`${item.cantidad}`, 140, yPos);
+      pdf.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 150, yPos);
 
       pdf.setFontSize(8);
       pdf.setTextColor(194, 65, 12); // Amber-700
