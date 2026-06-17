@@ -465,7 +465,7 @@ function CotizadorMonoliticoContent() {
       pdf.text(`${item.ancho}`, 65, yPos);
       pdf.text(`${item.alto}`, 95, yPos);
       pdf.setFont("helvetica", "normal");
-      pdf.text(`${item.cristal.tipo} ${item.cristal.espesor}mm`, 125, yPos);
+      pdf.text(`(${item.cantidad}) ${item.cristal.tipo} ${item.cristal.espesor}mm`, 125, yPos);
 
       yPos += rowHeight;
     });
