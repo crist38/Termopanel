@@ -235,7 +235,7 @@ export async function obtenerDatosReportes(
       const totalMl = perimMl * cantidad;
 
       if (isTermopanel) {
-        tallerCorteM2 += areaM2;
+        tallerCorteM2 += areaM2 * 2;
         tallerTermoM2 += areaM2;
 
         totalEscuadras += 4 * cantidad;
