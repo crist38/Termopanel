@@ -67,15 +67,15 @@ export async function guardarCotizacionEnOdoo(data: {
         extras.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales, ${item.palillajeVerticales || 0} verticales)`);
       }
       if (item.conForma) {
-        if (item.tipoFigura && item.tipoFigura !== 'rectangulo') {
+        if (item.tipoFigura) {
           const med = item.medidasFigura || {};
           let shapeDesc = '';
           if (item.tipoFigura === 'triangulo') shapeDesc = `Triángulo: Base:${med.a || 0}, Altura:${med.b || 0}`;
-          if (item.tipoFigura === 'trapecio') shapeDesc = `Trapecio: Ancho:${med.a || 0}, Alt.Izq:${med.b1 || 0}, Alt.Der:${med.b2 || 0}`;
-          if (item.tipoFigura === 'arco') shapeDesc = `Arco: Ancho:${med.a || 0}, Alt.Base:${med.b || 0}`;
+          else if (item.tipoFigura === 'trapecio') shapeDesc = `Trapecio: Ancho:${med.a || 0}, Alt.Izq:${med.b1 || 0}, Alt.Der:${med.b2 || 0}`;
+          else if (item.tipoFigura === 'arco') shapeDesc = `Arco: Ancho:${med.a || 0}, Alt.Base:${med.b || 0}`;
+          else if (item.tipoFigura === 'medio_arco') shapeDesc = `Medio Arco: Ancho:${med.a || 0}, Alt.Recta:${med.b || 0}, Alt.Total:${med.b1 || 0}`;
+          else if (item.tipoFigura === 'circulo') shapeDesc = `Círculo: Diámetro:${med.a || 0}`;
           extras.push(`Con Forma (${shapeDesc})`);
-        } else {
-          extras.push('Con Forma');
         }
       }
 
@@ -134,7 +134,7 @@ export async function guardarCotizacionEnOdoo(data: {
       palillajeHorizontales: item.palillajeHorizontales || 0,
       palillajeVerticales: item.palillajeVerticales || 0,
       conForma: item.conForma || false,
-      tipoFigura: item.tipoFigura || 'rectangulo',
+      tipoFigura: item.tipoFigura || 'triangulo',
       medidasFigura: item.medidasFigura || { a: 0, b: 0 },
     }));
 
@@ -344,7 +344,7 @@ function parseTermopanelLine(name: string, idx: number): TermopanelItemData {
   }
 
   const conForma = extrasStr.includes('con forma');
-  let tipoFigura: 'rectangulo' | 'triangulo' | 'trapecio' | 'arco' = 'rectangulo';
+  let tipoFigura: 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo' = 'triangulo';
   let medidasFigura: { a: number; b: number; b1?: number; b2?: number } = { a: 0, b: 0 };
 
   if (conForma) {
@@ -360,11 +360,24 @@ function parseTermopanelLine(name: string, idx: number): TermopanelItemData {
       if (m) {
         medidasFigura = { a: parseInt(m[1]), b1: parseInt(m[2]), b2: parseInt(m[3]), b: Math.max(parseInt(m[2]), parseInt(m[3])) };
       }
+    } else if (extrasStr.includes('medio arco') || extrasStr.includes('medio_arco')) {
+      tipoFigura = 'medio_arco';
+      const m = extrasStr.match(/ancho:\s*(\d+)\s*,\s*alt.recta:\s*(\d+)\s*,\s*alt.total:\s*(\d+)/i);
+      if (m) {
+        medidasFigura = { a: parseInt(m[1]), b: parseInt(m[2]), b1: parseInt(m[3]) };
+      }
     } else if (extrasStr.includes('arco')) {
       tipoFigura = 'arco';
       const m = extrasStr.match(/ancho:\s*(\d+)\s*,\s*alt.base:\s*(\d+)/i);
       if (m) {
         medidasFigura = { a: parseInt(m[1]), b: parseInt(m[2]) };
+      }
+    } else if (extrasStr.includes('círculo') || extrasStr.includes('circulo')) {
+      tipoFigura = 'circulo';
+      const m = extrasStr.match(/diámetro:\s*(\d+)|diametro:\s*(\d+)/i);
+      const val = m ? (m[1] || m[2]) : null;
+      if (val) {
+        medidasFigura = { a: parseInt(val), b: parseInt(val) };
       }
     }
   }
@@ -645,15 +658,15 @@ export async function actualizarCotizacionEnOdoo(data: {
           extras.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales, ${item.palillajeVerticales || 0} verticales)`);
         }
         if (item.conForma) {
-          if (item.tipoFigura && item.tipoFigura !== 'rectangulo') {
+          if (item.tipoFigura) {
             const med = item.medidasFigura || {};
             let shapeDesc = '';
             if (item.tipoFigura === 'triangulo') shapeDesc = `Triángulo: Base:${med.a || 0}, Altura:${med.b || 0}`;
-            if (item.tipoFigura === 'trapecio') shapeDesc = `Trapecio: Ancho:${med.a || 0}, Alt.Izq:${med.b1 || 0}, Alt.Der:${med.b2 || 0}`;
-            if (item.tipoFigura === 'arco') shapeDesc = `Arco: Ancho:${med.a || 0}, Alt.Base:${med.b || 0}`;
+            else if (item.tipoFigura === 'trapecio') shapeDesc = `Trapecio: Ancho:${med.a || 0}, Alt.Izq:${med.b1 || 0}, Alt.Der:${med.b2 || 0}`;
+            else if (item.tipoFigura === 'arco') shapeDesc = `Arco: Ancho:${med.a || 0}, Alt.Base:${med.b || 0}`;
+            else if (item.tipoFigura === 'medio_arco') shapeDesc = `Medio Arco: Ancho:${med.a || 0}, Alt.Recta:${med.b || 0}, Alt.Total:${med.b1 || 0}`;
+            else if (item.tipoFigura === 'circulo') shapeDesc = `Círculo: Diámetro:${med.a || 0}`;
             extras.push(`Con Forma (${shapeDesc})`);
-          } else {
-            extras.push('Con Forma');
           }
         }
 

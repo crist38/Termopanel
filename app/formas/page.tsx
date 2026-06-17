@@ -11,7 +11,7 @@ import { Plus, Trash2, Cloud, ArrowLeft, BarChart2, Triangle, RotateCcw, Printer
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { ClientSelector } from '@/components/ClientSelector';
 
-type ShapeType = 'rectangulo' | 'triangulo' | 'trapecio' | 'arco';
+type ShapeType = 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo';
 
 const drawShapeInPdf = (
   doc: jsPDF,
@@ -28,6 +28,11 @@ const drawShapeInPdf = (
 
   if (shape === 'rectangulo') {
     doc.rect(x, y, w, h, 'FD');
+  } else if (shape === 'circulo') {
+    const r = w / 2;
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    doc.ellipse(cx, cy, r, r, 'FD');
   } else if (shape === 'triangulo') {
     doc.triangle(x, y + h, x + w, y + h, x, y, 'FD');
   } else if (shape === 'trapecio') {
@@ -78,6 +83,43 @@ const drawShapeInPdf = (
       const y2 = yBaseTop - r * Math.sin(Math.PI + a2);
       doc.line(x1, y1, x2, y2);
     }
+  } else if (shape === 'medio_arco') {
+    const b = med.b || 0;     // Altura Recta
+    const b1 = med.b1 || 0;   // Altura Total
+    const maxVal = b1 || 1;
+    
+    const hRight = (b / maxVal) * h;
+    const yBottom = y + h;
+    const yRight = yBottom - hRight;
+    const rY = h - hRight;
+    
+    // Parte rectangular base
+    doc.rect(x, yRight, w, hRight, 'FD');
+    
+    // Llenado con triángulos del sector del arco
+    const steps = 16;
+    for (let i = 0; i < steps; i++) {
+      const a1 = i * (Math.PI / 2) / steps;
+      const a2 = (i + 1) * (Math.PI / 2) / steps;
+      const x1 = x + w * Math.cos(a1);
+      const y1 = yRight - rY * Math.sin(a1);
+      const x2 = x + w * Math.cos(a2);
+      const y2 = yRight - rY * Math.sin(a2);
+      doc.triangle(x, yRight, x1, y1, x2, y2, 'FD');
+    }
+
+    doc.line(x, yBottom, x + w, yBottom);
+    doc.line(x + w, yBottom, x + w, yRight);
+    doc.line(x, yBottom, x, y);
+    for (let i = 0; i < steps; i++) {
+      const a1 = i * (Math.PI / 2) / steps;
+      const a2 = (i + 1) * (Math.PI / 2) / steps;
+      const x1 = x + w * Math.cos(a1);
+      const y1 = yRight - rY * Math.sin(a1);
+      const x2 = x + w * Math.cos(a2);
+      const y2 = yRight - rY * Math.sin(a2);
+      doc.line(x1, y1, x2, y2);
+    }
   }
 
   doc.setLineWidth(0.2);
@@ -91,7 +133,7 @@ function ShapesCADCotizadorContent() {
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
 
   // Active form state (new item)
-  const [shape, setShape] = useState<ShapeType>('rectangulo');
+  const [shape, setShape] = useState<ShapeType>('triangulo');
   const [medidaA, setMedidaA] = useState<number>(1000);   // mm (base or width)
   const [medidaB, setMedidaB] = useState<number>(1000);   // mm (height or Left height or base height)
   const [medidaB1, setMedidaB1] = useState<number>(1500); // mm (Left height for trapezoid)
@@ -291,26 +333,36 @@ function ShapesCADCotizadorContent() {
 
   // Geometry calculations for preview
   const getBoundingBox = () => {
-    if (shape === 'rectangulo') return { w: medidaA, h: medidaB };
     if (shape === 'triangulo') return { w: medidaA, h: medidaB };
     if (shape === 'trapecio') return { w: medidaA, h: Math.max(medidaB1, medidaB2) };
     if (shape === 'arco') return { w: medidaA, h: medidaB + medidaA / 2 };
+    if (shape === 'medio_arco') return { w: medidaA, h: medidaB1 };
+    if (shape === 'circulo') return { w: medidaA, h: medidaA };
     return { w: 1000, h: 1000 };
   };
 
   const getCalculatedArea = () => {
-    if (shape === 'rectangulo') return (medidaA * medidaB) / 1_000_000;
     if (shape === 'triangulo') return (medidaA * medidaB) / 2_000_000;
     if (shape === 'trapecio') return medidaA * ((medidaB1 + medidaB2) / 2) / 1_000_000;
     if (shape === 'arco') return (medidaA * medidaB + (Math.PI * Math.pow(medidaA / 2, 2)) / 2) / 1_000_000;
+    if (shape === 'medio_arco') {
+      const hArch = Math.max(0, medidaB1 - medidaB);
+      return (medidaA * medidaB + (Math.PI * medidaA * hArch) / 4) / 1_000_000;
+    }
+    if (shape === 'circulo') return (Math.PI * Math.pow(medidaA / 2, 2)) / 1_000_000;
     return 1;
   };
 
   const getCalculatedPerimeter = () => {
-    if (shape === 'rectangulo') return 2 * (medidaA + medidaB) / 1000;
     if (shape === 'triangulo') return (medidaA + medidaB + Math.sqrt(medidaA * medidaA + medidaB * medidaB)) / 1000;
     if (shape === 'trapecio') return (medidaA + medidaB1 + medidaB2 + Math.sqrt(medidaA * medidaA + Math.pow(Math.abs(medidaB1 - medidaB2), 2))) / 1000;
     if (shape === 'arco') return (medidaA + 2 * medidaB + (Math.PI * medidaA) / 2) / 1000;
+    if (shape === 'medio_arco') {
+      const hArch = Math.max(0, medidaB1 - medidaB);
+      const arcLength = (Math.PI * Math.sqrt(2 * (medidaA * medidaA + hArch * hArch))) / 4;
+      return (medidaA + medidaB + medidaB1 + arcLength) / 1000;
+    }
+    if (shape === 'circulo') return (Math.PI * medidaA) / 1000;
     return 4;
   };
 
@@ -333,8 +385,8 @@ function ShapesCADCotizadorContent() {
     tipoFigura: shape,
     medidasFigura: {
       a: medidaA,
-      b: shape === 'trapecio' ? Math.max(medidaB1, medidaB2) : medidaB,
-      b1: shape === 'trapecio' ? medidaB1 : undefined,
+      b: shape === 'trapecio' ? Math.max(medidaB1, medidaB2) : shape === 'circulo' ? medidaA : medidaB,
+      b1: shape === 'trapecio' ? medidaB1 : shape === 'medio_arco' ? medidaB1 : undefined,
       b2: shape === 'trapecio' ? medidaB2 : undefined
     },
     descuento,
@@ -372,8 +424,8 @@ function ShapesCADCotizadorContent() {
       tipoFigura: shape,
       medidasFigura: {
         a: medidaA,
-        b: shape === 'trapecio' ? Math.max(medidaB1, medidaB2) : medidaB,
-        b1: shape === 'trapecio' ? medidaB1 : undefined,
+        b: shape === 'trapecio' ? Math.max(medidaB1, medidaB2) : shape === 'circulo' ? medidaA : medidaB,
+        b1: shape === 'trapecio' ? medidaB1 : shape === 'medio_arco' ? medidaB1 : undefined,
         b2: shape === 'trapecio' ? medidaB2 : undefined
       },
       descuento,
@@ -882,16 +934,6 @@ function ShapesCADCotizadorContent() {
     const xOffset = 50;
     const yOffset = 50;
 
-    if (shape === 'rectangulo') {
-      return {
-        path: `M ${xOffset},${yOffset} L ${xOffset + wMax},${yOffset} L ${xOffset + wMax},${yOffset + hMax} L ${xOffset},${yOffset + hMax} Z`,
-        points: [],
-        lines: [
-          { x1: xOffset, y1: yOffset + hMax + 20, x2: xOffset + wMax, y2: yOffset + hMax + 20, label: `A = ${medidaA} mm` },
-          { x1: xOffset + wMax + 20, y1: yOffset, x2: xOffset + wMax + 20, y2: yOffset + hMax, label: `B = ${medidaB} mm` }
-        ]
-      };
-    }
     if (shape === 'triangulo') {
       return {
         path: `M ${xOffset},${yOffset + hMax} L ${xOffset + wMax},${yOffset + hMax} L ${xOffset},${yOffset} Z`,
@@ -941,6 +983,37 @@ function ShapesCADCotizadorContent() {
           { x1: xStart, y1: yBottom + 20, x2: xEnd, y2: yBottom + 20, label: `A = ${medidaA} mm` },
           { x1: xStart - 20, y1: yBaseTop, x2: xStart - 20, y2: yBottom, label: `B = ${medidaB} mm` },
           { x1: 200, y1: yArchTop, x2: 200, y2: yBaseTop, label: `R = ${medidaA / 2} mm` }
+        ]
+      };
+    }
+    if (shape === 'medio_arco') {
+      const maxH = medidaB1 || 1;
+      const hRight = (medidaB / maxH) * hMax;
+      const yBottom = yOffset + hMax;
+      const yLeft = yOffset;
+      const yRight = yBottom - hRight;
+      const rY = hMax - hRight;
+
+      return {
+        path: `M ${xOffset},${yBottom} L ${xOffset + wMax},${yBottom} L ${xOffset + wMax},${yRight} A ${wMax},${rY} 0 0,0 ${xOffset},${yLeft} Z`,
+        points: [],
+        lines: [
+          { x1: xOffset, y1: yBottom + 20, x2: xOffset + wMax, y2: yBottom + 20, label: `A = ${medidaA} mm` },
+          { x1: xOffset + wMax + 20, y1: yRight, x2: xOffset + wMax + 20, y2: yBottom, label: `B = ${medidaB} mm` },
+          { x1: xOffset - 20, y1: yLeft, x2: xOffset - 20, y2: yBottom, label: `H = ${medidaB1} mm` }
+        ]
+      };
+    }
+    if (shape === 'circulo') {
+      const rScaled = hMax / 2;
+      const cx = xOffset + wMax / 2;
+      const cy = yOffset + hMax / 2;
+
+      return {
+        path: `M ${cx},${cy - rScaled} A ${rScaled},${rScaled} 0 1,1 ${cx - 0.01},${cy - rScaled} Z`,
+        points: [],
+        lines: [
+          { x1: cx - rScaled, y1: cy, x2: cx + rScaled, y2: cy, label: `Diámetro = ${medidaA} mm` }
         ]
       };
     }
@@ -1073,24 +1146,25 @@ function ShapesCADCotizadorContent() {
           {/* SELECCIÓN DE FIGURA */}
           <div>
             <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">1. Seleccionar Figura</h2>
-            <div className="grid grid-cols-4 gap-2">
-              {(['rectangulo', 'triangulo', 'trapecio', 'arco'] as ShapeType[]).map((t) => (
+            <div className="grid grid-cols-5 gap-1.5">
+              {(['triangulo', 'trapecio', 'arco', 'medio_arco', 'circulo'] as ShapeType[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setShape(t)}
-                  className={`p-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all text-xs font-semibold uppercase ${
+                  className={`p-2 rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-all text-[10px] font-bold uppercase leading-tight ${
                     shape === t
                       ? 'border-cyan-500 bg-cyan-50 text-cyan-600'
                       : 'border-slate-200 hover:border-slate-300 text-slate-500 hover:bg-slate-50'
                   }`}
                 >
-                  <svg className="w-10 h-10" viewBox="0 0 100 100">
-                    {t === 'rectangulo' && <rect x="20" y="25" width="60" height="50" fill="none" stroke="currentColor" strokeWidth="6" rx="4" />}
+                  <svg className="w-8 h-8" viewBox="0 0 100 100">
                     {t === 'triangulo' && <polygon points="20,80 80,80 20,20" fill="none" stroke="currentColor" strokeWidth="6" />}
                     {t === 'trapecio' && <polygon points="15,80 85,80 75,35 15,20" fill="none" stroke="currentColor" strokeWidth="6" />}
                     {t === 'arco' && <path d="M 20,80 L 80,80 L 80,50 A 30,30 0 0,0 20,50 Z" fill="none" stroke="currentColor" strokeWidth="6" />}
+                    {t === 'medio_arco' && <path d="M 20,80 L 80,80 L 80,50 A 60,30 0 0,0 20,20 Z" fill="none" stroke="currentColor" strokeWidth="6" />}
+                    {t === 'circulo' && <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" strokeWidth="6" />}
                   </svg>
-                  <span>{t}</span>
+                  <span>{t === 'medio_arco' ? 'M. Arco' : t === 'circulo' ? 'Círculo' : t === 'triangulo' ? 'Triángulo' : t === 'trapecio' ? 'Trapecio' : 'Arco'}</span>
                 </button>
               ))}
             </div>
@@ -1101,7 +1175,18 @@ function ShapesCADCotizadorContent() {
             <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">2. Dimensiones (mm)</h2>
             <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
               
-              {shape !== 'trapecio' ? (
+              {shape === 'circulo' && (
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Diámetro (A)</label>
+                  <input
+                    type="number"
+                    value={medidaA || ''}
+                    onChange={(e) => setMedidaA(parseInt(e.target.value) || 0)}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
+                  />
+                </div>
+              )}
+              {(shape === 'triangulo' || shape === 'arco') && (
                 <>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">Ancho / Base (A)</label>
@@ -1113,7 +1198,7 @@ function ShapesCADCotizadorContent() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Altura (B)</label>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">{shape === 'arco' ? 'Altura Base (B)' : 'Altura (B)'}</label>
                     <input
                       type="number"
                       value={medidaB || ''}
@@ -1122,7 +1207,39 @@ function ShapesCADCotizadorContent() {
                     />
                   </div>
                 </>
-              ) : (
+              )}
+              {shape === 'medio_arco' && (
+                <>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Ancho Base (A)</label>
+                    <input
+                      type="number"
+                      value={medidaA || ''}
+                      onChange={(e) => setMedidaA(parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Altura Recta (B)</label>
+                    <input
+                      type="number"
+                      value={medidaB || ''}
+                      onChange={(e) => setMedidaB(parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Altura Total (H)</label>
+                    <input
+                      type="number"
+                      value={medidaB1 || ''}
+                      onChange={(e) => setMedidaB1(parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
+                    />
+                  </div>
+                </>
+              )}
+              {shape === 'trapecio' && (
                 <>
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-slate-500 mb-1">Ancho Base (A)</label>
