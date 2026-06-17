@@ -13,6 +13,78 @@ import { ClientSelector } from '@/components/ClientSelector';
 
 type ShapeType = 'rectangulo' | 'triangulo' | 'trapecio' | 'arco';
 
+const drawShapeInPdf = (
+  doc: jsPDF,
+  shape: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  med: { a: number; b: number; b1?: number; b2?: number }
+) => {
+  doc.setLineWidth(0.3);
+  doc.setDrawColor(71, 85, 105);   // Slate-600
+  doc.setFillColor(241, 245, 249); // Slate-100
+
+  if (shape === 'rectangulo') {
+    doc.rect(x, y, w, h, 'FD');
+  } else if (shape === 'triangulo') {
+    doc.triangle(x, y + h, x + w, y + h, x, y, 'FD');
+  } else if (shape === 'trapecio') {
+    const b1 = med.b1 || 0;
+    const b2 = med.b2 || 0;
+    const maxVal = Math.max(b1, b2) || 1;
+    const hLeft = (b1 / maxVal) * h;
+    const hRight = (b2 / maxVal) * h;
+    
+    doc.triangle(x, y + h, x + w, y + h, x + w, y + h - hRight, 'FD');
+    doc.triangle(x, y + h, x, y + h - hLeft, x + w, y + h - hRight, 'FD');
+  } else if (shape === 'arco') {
+    const a = med.a || 1;
+    const b = med.b || 0;
+    const maxVal = (b + a / 2) || 1;
+    
+    const hBaseScaled = (b / maxVal) * h;
+    const rScaled = ((a / 2) / maxVal) * h;
+    
+    const yBottom = y + h;
+    const yBaseTop = yBottom - hBaseScaled;
+    const cx = x + w / 2;
+    const r = w / 2;
+
+    doc.rect(x, yBaseTop, w, hBaseScaled, 'FD');
+
+    const steps = 16;
+    for (let i = 0; i < steps; i++) {
+      const a1 = i * Math.PI / steps;
+      const a2 = (i + 1) * Math.PI / steps;
+      const x1 = cx + r * Math.cos(Math.PI + a1);
+      const y1 = yBaseTop - r * Math.sin(Math.PI + a1);
+      const x2 = cx + r * Math.cos(Math.PI + a2);
+      const y2 = yBaseTop - r * Math.sin(Math.PI + a2);
+      doc.triangle(cx, yBaseTop, x1, y1, x2, y2, 'FD');
+    }
+    
+    doc.line(x, yBottom, x + w, yBottom);
+    doc.line(x, yBottom, x, yBaseTop);
+    doc.line(x + w, yBottom, x + w, yBaseTop);
+    
+    for (let i = 0; i < steps; i++) {
+      const a1 = i * Math.PI / steps;
+      const a2 = (i + 1) * Math.PI / steps;
+      const x1 = cx + r * Math.cos(Math.PI + a1);
+      const y1 = yBaseTop - r * Math.sin(Math.PI + a1);
+      const x2 = cx + r * Math.cos(Math.PI + a2);
+      const y2 = yBaseTop - r * Math.sin(Math.PI + a2);
+      doc.line(x1, y1, x2, y2);
+    }
+  }
+
+  doc.setLineWidth(0.2);
+  doc.setDrawColor(0, 0, 0);
+  doc.setFillColor(255, 255, 255);
+};
+
 function ShapesCADCotizadorContent() {
   const [config, setConfig] = useState<TermopanelConfig | null>(null);
   const [tiposUnicos, setTiposUnicos] = useState<string[]>([]);
@@ -462,10 +534,11 @@ function ShapesCADCotizadorContent() {
         configDesc += ` | Extras: ${extrasList.join(", ")}`;
       }
 
-      const splitConfig = doc.splitTextToSize(configDesc, 66);
+      const splitConfig = doc.splitTextToSize(configDesc, 42); // Reducido de 66 a 42 para dar espacio al dibujo
       const lineCount = Math.max(splitLabel.length, splitConfig.length);
+      const rowHeight = Math.max(20, (lineCount * 5) + 5);
 
-      if (yPos + (lineCount * 5) > 275) {
+      if (yPos + rowHeight > 275) {
         doc.addPage();
         yPos = 20;
       }
@@ -474,10 +547,22 @@ function ShapesCADCotizadorContent() {
       doc.text(item.cantidad.toString(), 43, yPos);
       doc.text(`${item.ancho} x ${item.alto}`, 57, yPos);
       doc.text(splitConfig, 84, yPos);
+
+      // Dibujar la forma geométrica en el PDF
+      drawShapeInPdf(
+        doc,
+        item.tipoFigura || 'rectangulo',
+        128,
+        yPos - 3,
+        20,
+        14,
+        item.medidasFigura || { a: item.ancho, b: item.alto }
+      );
+
       doc.text(`$${item.precioUnitario.toLocaleString('es-CL')}`, 152, yPos);
       doc.text(`$${calculo.totalLinea.toLocaleString('es-CL')}`, 176, yPos);
 
-      yPos += (lineCount * 5) + 5;
+      yPos += rowHeight;
     });
 
     doc.line(14, yPos, 196, yPos);
@@ -609,7 +694,7 @@ function ShapesCADCotizadorContent() {
       if (item.tipoFigura === 'arco') extrasText += `Arco (Ancho:${med.a}, Alt.Base:${med.b})`;
       if (item.tipoFigura === 'rectangulo') extrasText += `Rectángulo (Ancho:${med.a}, Alt:${med.b})`;
 
-      const rowHeight = 14;
+      const rowHeight = 24; // Aumentado de 14 a 24 para dar espacio a la figura
 
       if (yPos + rowHeight > 275) {
         pdf.addPage();
@@ -644,9 +729,20 @@ function ShapesCADCotizadorContent() {
       pdf.text(`${item.cantidad}`, 140, yPos);
       pdf.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 150, yPos);
 
+      // Dibujar la forma en la derecha de la fila
+      drawShapeInPdf(
+        pdf,
+        item.tipoFigura || 'rectangulo',
+        172,
+        yPos - 3,
+        20,
+        15,
+        item.medidasFigura || { a: item.ancho, b: item.alto }
+      );
+
       pdf.setFontSize(8);
       pdf.setTextColor(194, 65, 12); // Amber-700
-      pdf.text(extrasText, 110, yPos + 4.5);
+      pdf.text(extrasText, 89, yPos + 6); // Desplazado a la izquierda
       pdf.setTextColor(0, 0, 0);
 
       yPos += rowHeight;
@@ -684,13 +780,14 @@ function ShapesCADCotizadorContent() {
     pdf.rect(14, yPos - 6, 182, 9, 'F');
     pdf.setTextColor(255, 255, 255);
     pdf.text("Ref", 17, yPos);
-    pdf.text("Cant.", 47, yPos);
-    pdf.text("Ancho", 58, yPos);
-    pdf.text("Alto", 73, yPos);
-    pdf.text("Cristal 1", 88, yPos);
-    pdf.text("Cristal 2", 121, yPos);
-    pdf.text("Sep. (mm)", 154, yPos);
-    pdf.text("Color Sep.", 175, yPos);
+    pdf.text("Cant.", 38, yPos);
+    pdf.text("Ancho", 48, yPos);
+    pdf.text("Alto", 61, yPos);
+    pdf.text("Cristal 1", 74, yPos);
+    pdf.text("Cristal 2", 107, yPos);
+    pdf.text("Sep.", 140, yPos);
+    pdf.text("Color Sep.", 152, yPos);
+    pdf.text("Dibujo", 174, yPos);
     pdf.setTextColor(0, 0, 0);
 
     yPos += 8;
@@ -710,7 +807,7 @@ function ShapesCADCotizadorContent() {
         extrasText += ` | Palillaje (${item.palillajeColor}, ${item.palillajeHorizontales} horizontales y ${item.palillajeVerticales} verticales)`;
       }
 
-      const rowHeight = 14;
+      const rowHeight = 24; // Aumentado de 14 a 24 para dar espacio a la figura
 
       if (yPos + rowHeight > 275) {
         pdf.addPage();
@@ -719,13 +816,14 @@ function ShapesCADCotizadorContent() {
         pdf.rect(14, yPos - 6, 182, 9, 'F');
         pdf.setTextColor(255, 255, 255);
         pdf.text("Ref", 17, yPos);
-        pdf.text("Cant.", 47, yPos);
-        pdf.text("Ancho", 58, yPos);
-        pdf.text("Alto", 73, yPos);
-        pdf.text("Cristal 1", 88, yPos);
-        pdf.text("Cristal 2", 121, yPos);
-        pdf.text("Sep. (mm)", 154, yPos);
-        pdf.text("Color Sep.", 175, yPos);
+        pdf.text("Cant.", 38, yPos);
+        pdf.text("Ancho", 48, yPos);
+        pdf.text("Alto", 61, yPos);
+        pdf.text("Cristal 1", 74, yPos);
+        pdf.text("Cristal 2", 107, yPos);
+        pdf.text("Sep.", 140, yPos);
+        pdf.text("Color Sep.", 152, yPos);
+        pdf.text("Dibujo", 174, yPos);
         pdf.setTextColor(0, 0, 0);
         yPos += 8;
       }
@@ -737,21 +835,32 @@ function ShapesCADCotizadorContent() {
 
       pdf.setFontSize(9);
       pdf.text(splitLabel, 17, yPos);
-      pdf.text(`${item.cantidad}`, 47, yPos);
+      pdf.text(`${item.cantidad}`, 38, yPos);
       pdf.setFont("helvetica", "bold");
-      pdf.text(`${item.ancho}`, 58, yPos);
-      pdf.text(`${item.alto}`, 73, yPos);
+      pdf.text(`${item.ancho}`, 48, yPos);
+      pdf.text(`${item.alto}`, 61, yPos);
       pdf.setFont("helvetica", "normal");
-      pdf.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 88, yPos);
-      pdf.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 121, yPos);
+      pdf.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 74, yPos);
+      pdf.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 107, yPos);
       pdf.setFont("helvetica", "bold");
-      pdf.text(`${item.separador.espesor}`, 154, yPos);
-      pdf.text(`${item.separador.color}`, 175, yPos);
+      pdf.text(`${item.separador.espesor}`, 140, yPos);
+      pdf.text(`${item.separador.color}`, 152, yPos);
       pdf.setFont("helvetica", "normal");
+
+      // Dibujar la forma en la derecha de la fila
+      drawShapeInPdf(
+        pdf,
+        item.tipoFigura || 'rectangulo',
+        172,
+        yPos - 3,
+        20,
+        15,
+        item.medidasFigura || { a: item.ancho, b: item.alto }
+      );
 
       pdf.setFontSize(8);
       pdf.setTextColor(13, 148, 136); // Teal-600
-      pdf.text(extrasText, 88, yPos + 4.5);
+      pdf.text(extrasText, 74, yPos + 6); // Desplazado a la izquierda
       pdf.setTextColor(0, 0, 0);
 
       yPos += rowHeight;
