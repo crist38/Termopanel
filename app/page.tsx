@@ -306,7 +306,7 @@ function CotizadorTermopanelContent() {
     const defaultLabel = `V${nextNum}`;
 
     const newItem: TermopanelItem = {
-      id: crypto.randomUUID(),
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
       label: defaultLabel,
       cantidad: 1,
       ancho: 0,
@@ -388,7 +388,7 @@ function CotizadorTermopanelContent() {
         setBudgetName('Borrador');
         setItems([
           {
-            id: crypto.randomUUID(),
+            id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
             label: "V1",
             cantidad: 1,
             ancho: 0,

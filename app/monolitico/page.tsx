@@ -186,7 +186,7 @@ function CotizadorMonoliticoContent() {
     setItems([
       ...items,
       {
-        id: crypto.randomUUID(),
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
         label: `V${items.length + 1}`,
         cantidad: 1,
         ancho: 1000,
@@ -559,7 +559,7 @@ function CotizadorMonoliticoContent() {
         setClientName('');
         setObra('');
         setBudgetName('Borrador');
-        setItems([{ id: crypto.randomUUID(), label: "V1", cantidad: 1, ancho: 1000, alto: 1000, cristal: { tipo: "Incoloro", espesor: 4 }, precioUnitario: 0 }]);
+        setItems([{ id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15), label: "V1", cantidad: 1, ancho: 1000, alto: 1000, cristal: { tipo: "Incoloro", espesor: 4 }, precioUnitario: 0 }]);
 
         if (isOdooId) {
           router.push('/cotizaciones');
