@@ -19,7 +19,7 @@ export interface ReportStats {
     butilo: number;
     cristalTotalM2: number;
     separadoresColor: Record<string, { neto: number; real: number }>;
-    cristalesTipo: Record<string, number>;
+    cristalesTipo: Record<string, { neto: number; real: number }>;
   };
   clientesRanking: Array<{
     name: string;
@@ -75,6 +75,129 @@ function calcularConsumoSeparadorReal(ancho: number, alto: number, cantidad: num
   
   const realMl = strips.length * 5; // cada tira usada son 5 metros
   return { netoMl, realMl };
+}
+
+function calcularConsumoVidrioReal(
+  pieces: Array<{ width: number; height: number; qty: number }>,
+  sheetW: number = 1800,
+  sheetH: number = 2500
+): { netoM2: number; realM2: number } {
+  let netoM2 = 0;
+  const flatPieces: Array<{ w: number; h: number }> = [];
+
+  for (const p of pieces) {
+    const w = p.width;
+    const h = p.height;
+    const qty = p.qty || 1;
+    if (w <= 0 || h <= 0 || qty <= 0) continue;
+    
+    const areaPiece = (w * h / 1000000) * qty;
+    netoM2 += areaPiece;
+
+    for (let i = 0; i < qty; i++) {
+      const side1 = Math.min(w, h);
+      const side2 = Math.max(w, h);
+      flatPieces.push({ w: side1, h: side2 });
+    }
+  }
+
+  if (flatPieces.length === 0) {
+    return { netoM2: 0, realM2: 0 };
+  }
+
+  flatPieces.sort((a, b) => b.h - a.h);
+
+  interface Shelf {
+    y: number;
+    height: number;
+    usedWidth: number;
+  }
+
+  interface Sheet {
+    shelves: Shelf[];
+    totalHeightUsed: number;
+  }
+
+  const sheets: Sheet[] = [];
+
+  for (const piece of flatPieces) {
+    let placed = false;
+
+    for (const sheet of sheets) {
+      for (const shelf of sheet.shelves) {
+        if (shelf.usedWidth + piece.w <= sheetW && piece.h <= shelf.height) {
+          shelf.usedWidth += piece.w;
+          placed = true;
+          break;
+        }
+        if (shelf.usedWidth + piece.h <= sheetW && piece.w <= shelf.height) {
+          shelf.usedWidth += piece.h;
+          placed = true;
+          break;
+        }
+      }
+      if (placed) break;
+
+      if (sheet.totalHeightUsed + piece.h <= sheetH && piece.w <= sheetW) {
+        const newShelf: Shelf = {
+          y: sheet.totalHeightUsed,
+          height: piece.h,
+          usedWidth: piece.w
+        };
+        sheet.shelves.push(newShelf);
+        sheet.totalHeightUsed += piece.h;
+        placed = true;
+        break;
+      }
+      if (sheet.totalHeightUsed + piece.w <= sheetH && piece.h <= sheetW) {
+        const newShelf: Shelf = {
+          y: sheet.totalHeightUsed,
+          height: piece.w,
+          usedWidth: piece.h
+        };
+        sheet.shelves.push(newShelf);
+        sheet.totalHeightUsed += piece.w;
+        placed = true;
+        break;
+      }
+    }
+
+    if (!placed) {
+      const sheet: Sheet = {
+        shelves: [],
+        totalHeightUsed: 0
+      };
+      
+      if (piece.h <= sheetH && piece.w <= sheetW) {
+        const newShelf: Shelf = {
+          y: 0,
+          height: piece.h,
+          usedWidth: piece.w
+        };
+        sheet.shelves.push(newShelf);
+        sheet.totalHeightUsed = piece.h;
+        sheets.push(sheet);
+        placed = true;
+      } else if (piece.w <= sheetH && piece.h <= sheetW) {
+        const newShelf: Shelf = {
+          y: 0,
+          height: piece.w,
+          usedWidth: piece.h
+        };
+        sheet.shelves.push(newShelf);
+        sheet.totalHeightUsed = piece.w;
+        sheets.push(sheet);
+        placed = true;
+      } else {
+        netoM2 += (piece.w * piece.h) / 1000000;
+      }
+    }
+  }
+
+  const sheetAreaM2 = (sheetW * sheetH) / 1000000;
+  const realM2 = sheets.length * sheetAreaM2;
+
+  return { netoM2, realM2: Math.max(realM2, netoM2) };
 }
 
 export async function obtenerDatosReportes(
@@ -197,7 +320,7 @@ export async function obtenerDatosReportes(
     let totalButilo = 0;
     let totalManoDeObra = 0;
     const separadoresColor: Record<string, { neto: number; real: number }> = {};
-    const cristalesTipo: Record<string, number> = {};
+    const cristalesPiezas: Record<string, Array<{ width: number; height: number; qty: number }>> = {};
 
     lines.forEach((line) => {
       const prodId = line.product_id ? line.product_id[0] : 0;
@@ -262,12 +385,14 @@ export async function obtenerDatosReportes(
         const c1Match = name.match(/Cristal 1:\s*([^0-9|]+)\s*(\d+)mm/i);
         if (c1Match) {
           const key = `Cristal ${c1Match[1].trim()} ${c1Match[2]}mm`;
-          cristalesTipo[key] = (cristalesTipo[key] || 0) + areaM2;
+          if (!cristalesPiezas[key]) cristalesPiezas[key] = [];
+          cristalesPiezas[key].push({ width: ancho, height: alto, qty: cantidad });
         }
         const c2Match = name.match(/Cristal 2:\s*([^0-9|]+)\s*(\d+)mm/i);
         if (c2Match) {
           const key = `Cristal ${c2Match[1].trim()} ${c2Match[2]}mm`;
-          cristalesTipo[key] = (cristalesTipo[key] || 0) + areaM2;
+          if (!cristalesPiezas[key]) cristalesPiezas[key] = [];
+          cristalesPiezas[key].push({ width: ancho, height: alto, qty: cantidad });
         }
       } else if (isMonolitico) {
         tallerCorteM2 += areaM2;
@@ -276,12 +401,22 @@ export async function obtenerDatosReportes(
         const cMatch = name.match(/Cristal:\s*([^0-9|]+)\s*(\d+)mm/i);
         if (cMatch) {
           const key = `Cristal ${cMatch[1].trim()} ${cMatch[2]}mm`;
-          cristalesTipo[key] = (cristalesTipo[key] || 0) + areaM2;
+          if (!cristalesPiezas[key]) cristalesPiezas[key] = [];
+          cristalesPiezas[key].push({ width: ancho, height: alto, qty: cantidad });
         }
       }
     });
 
-    const cristalTotalM2 = Object.values(cristalesTipo).reduce((sum, v) => sum + v, 0);
+    const cristalesTipo: Record<string, { neto: number; real: number }> = {};
+    Object.entries(cristalesPiezas).forEach(([key, pieces]) => {
+      const consumo = calcularConsumoVidrioReal(pieces, 1800, 2500); // planchas de 1800 x 2500 mm
+      cristalesTipo[key] = {
+        neto: consumo.netoM2,
+        real: consumo.realM2
+      };
+    });
+
+    const cristalTotalM2 = Object.values(cristalesTipo).reduce((sum, v) => sum + v.real, 0);
 
     // 6. Ranking de Clientes
     const clientesMap: Record<string, { pedidos: number; total: number }> = {};
