@@ -9,7 +9,7 @@ import { getTermopanelConfig, TermopanelConfig } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { Printer, Plus, Trash2, Cloud, ClipboardList, BarChart2 } from 'lucide-react';
-import { guardarCotizacionMonoliticoEnOdoo } from '@/app/actions/odoo';
+import { guardarCotizacionMonoliticoEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { ClientSelector } from '@/components/ClientSelector';
 
 function CotizadorMonoliticoContent() {
@@ -72,14 +72,29 @@ function CotizadorMonoliticoContent() {
     if (!editId) return;
     const loadBudget = async () => {
       try {
-        const docRef = doc(db, 'presupuestos_monoliticos', editId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setClientName(data.clientName || '');
-          setObra(data.obra || '');
-          setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
-          setItems(data.items || []);
+        const isOdooId = /^\d+$/.test(editId);
+        if (isOdooId) {
+          const res = await obtenerCotizacionParaEditar(parseInt(editId));
+          if (res.exito) {
+            setClientName(res.clientName || '');
+            setClientId(res.clientId);
+            setObra(res.obra || '');
+            setBudgetName(res.budgetName || 'Borrador');
+            setItems(res.items || []);
+          } else {
+            alert(`Error al cargar cotización de Odoo: ${res.error}`);
+          }
+        } else {
+          // Fallback legacy a Firestore
+          const docRef = doc(db, 'presupuestos_monoliticos', editId);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setClientName(data.clientName || '');
+            setObra(data.obra || '');
+            setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
+            setItems(data.items || []);
+          }
         }
       } catch (e) {
         console.error("Error loading budget:", e);
@@ -505,16 +520,35 @@ function CotizadorMonoliticoContent() {
 
     setIsSyncingOdoo(true);
     try {
-      const response = await guardarCotizacionMonoliticoEnOdoo({
-        clientId,
-        clientName,
-        budgetNumber: 0,
-        items,
-        totalNeto,
-      });
+      let response;
+      const isOdooId = editId && /^\d+$/.test(editId);
+      if (isOdooId) {
+        response = await actualizarCotizacionEnOdoo({
+          orderId: parseInt(editId),
+          clientId,
+          clientName,
+          obra,
+          items,
+          totalNeto,
+          isMonolitico: true
+        });
+      } else {
+        response = await guardarCotizacionMonoliticoEnOdoo({
+          clientId,
+          clientName,
+          obra,
+          budgetNumber: 0,
+          items,
+          totalNeto,
+        });
+      }
 
       if (response.exito) {
-        alert(`¡Cotización enviada exitosamente a Odoo!\nOrden de Venta: ${response.cotizacionName}`);
+        if (isOdooId) {
+          alert(`¡Cotización actualizada exitosamente en Odoo!\nCotización: ${response.cotizacionName}`);
+        } else {
+          alert(`¡Cotización enviada exitosamente a Odoo!\nOrden de Venta: ${response.cotizacionName}`);
+        }
         
         const finalBudgetName = response.cotizacionName || 'Borrador';
         setBudgetName(finalBudgetName);
@@ -527,6 +561,9 @@ function CotizadorMonoliticoContent() {
         setBudgetName('Borrador');
         setItems([{ id: crypto.randomUUID(), label: "V1", cantidad: 1, ancho: 1000, alto: 1000, cristal: { tipo: "Incoloro", espesor: 4 }, precioUnitario: 0 }]);
 
+        if (isOdooId) {
+          router.push('/cotizaciones');
+        }
       } else {
         alert(`Error al guardar en Odoo: ${response.error}`);
       }
@@ -562,10 +599,18 @@ function CotizadorMonoliticoContent() {
           <button
             onClick={handleProcessQuote}
             disabled={isSyncingOdoo}
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all font-medium text-sm"
+            className={`disabled:opacity-50 text-white px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all font-medium text-sm ${
+              editId && /^\d+$/.test(editId)
+                ? 'bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400'
+                : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400'
+            }`}
           >
             <Cloud size={18} />
-            {isSyncingOdoo ? 'Sincronizando...' : 'Enviar a Odoo'}
+            {isSyncingOdoo
+              ? 'Guardando en Odoo...'
+              : editId && /^\d+$/.test(editId)
+                ? `Actualizar ${budgetName} (Odoo + PDFs)`
+                : 'Enviar a Odoo'}
           </button>
           <button
             onClick={() => handleExportAllPDFs()}
