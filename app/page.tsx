@@ -8,7 +8,7 @@ import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, BarChart2, Triangle } from 'lucide-react';
+import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, Triangle } from 'lucide-react';
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { logoutFromOdoo } from '@/app/actions/auth';
 import { ClientSelector } from '@/components/ClientSelector';
@@ -921,10 +921,7 @@ function CotizadorTermopanelContent() {
             <Printer size={16} />
             Taller PDF
           </button>
-          <a href="/reports" className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-            <BarChart2 size={16} />
-            Reportes
-          </a>
+
           <form action={logoutFromOdoo}>
             <button
               type="submit"

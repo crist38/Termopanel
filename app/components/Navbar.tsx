@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Settings, Layers, Square, FileText, Triangle } from 'lucide-react';
+import { Settings, Layers, Square, FileText, Triangle, BarChart2 } from 'lucide-react';
 
 
 export function Navbar() {
@@ -64,6 +64,17 @@ export function Navbar() {
                 >
                   <FileText size={16} />
                   Cotizaciones
+                </Link>
+                <Link
+                  href="/reports"
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    pathname === '/reports' 
+                      ? 'bg-[#6b4c64] text-white shadow-inner' 
+                      : 'text-white/80 hover:bg-[#8f6b88] hover:text-white'
+                  }`}
+                >
+                  <BarChart2 size={16} />
+                  Reportes
                 </Link>
 
               </div>

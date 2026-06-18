@@ -8,7 +8,7 @@ import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Printer, Plus, Trash2, Cloud, ClipboardList, BarChart2 } from 'lucide-react';
+import { Printer, Plus, Trash2, Cloud, ClipboardList } from 'lucide-react';
 import { guardarCotizacionMonoliticoEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { ClientSelector } from '@/components/ClientSelector';
 
@@ -618,13 +618,7 @@ function CotizadorMonoliticoContent() {
           >
             <Printer size={18} /> Exportar PDF
           </button>
-          <a
-            href="/reports"
-            className="flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
-          >
-            <BarChart2 size={16} />
-            Reportes
-          </a>
+
         </div>
       </header>
 

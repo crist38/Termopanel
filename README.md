@@ -64,7 +64,7 @@ Una aplicación web moderna y dinámica diseñada para facilitar el cálculo, co
     ODOO_MONOLITIC_PRODUCT_ID=67890
 
     # Nombre de la etiqueta (Tags / Etiquetas) en Odoo para clasificar y diferenciar las cotizaciones del taller
-    ODOO_TAG_NAME="Taller PVC"
+    ODOO_TAG_NAME="Termopanel"
     ```
 
 4. **Logo de empresa**
