@@ -62,11 +62,66 @@ export interface SaleOrderLineInput {
   x_studio_alto_m?: number;
 }
 
+function getGlassOdooName(tipo: string, espesor: number): string {
+  const t = tipo.toLowerCase();
+  
+  if (t.includes('incoloro') || t.includes('float')) {
+    if (espesor === 5) return 'Cristal Dim. Incoloro 5mm 119x125';
+    if (espesor === 10) return 'Cristal Dim. Incoloro 10mm diferentes medidas';
+    return `Cristal Dim. Incoloro ${espesor}mm`;
+  }
+  
+  if (t.includes('bronce')) {
+    return `Cristal Dim. bronce ${espesor}mm`;
+  }
+  
+  if (t.includes('laminado')) {
+    return `Cristal Dim. Laminado ${espesor}mm`;
+  }
+  
+  if (t.includes('saten') || t.includes('satinado')) {
+    return 'Cristal Dim. Saten difrentes medidas';
+  }
+  
+  if (t.includes('solar cool') || t.includes('solcool')) {
+    return `Cristal Dim. Solar Cool ${espesor}mm`;
+  }
+  
+  if (t.includes('bluegreen') || t.includes('azulite')) {
+    return `Cristal Dim. azulite ${espesor}mm`;
+  }
+
+  if (t.includes('semilla bronce')) {
+    return 'Catedral Dim. Semilla Bronce';
+  }
+
+  if (t.includes('semilla')) {
+    return 'Catedral Dim. Semilla Incoloro';
+  }
+
+  if (t.includes('espejo')) {
+    return `Espejo Dim. incoloro ${espesor}mm`;
+  }
+
+  if (t.includes('empavonado')) {
+    return `Catedral Dim. Difuso 2mm`;
+  }
+  
+  return `Cristal Dim. ${tipo} ${espesor}mm`;
+}
+
+function getEscuadraName(espesor: number): string {
+  if (espesor === 12) return 'Escuadra porta sal 9.5';
+  if (espesor === 10) return 'Escuadra porta sal 7.5';
+  if (espesor === 8 || espesor === 6) return 'Escuadra porta sal 5.5';
+  return 'Escuadras';
+}
+
 export class OdooSalesService {
   private termopanelTagId: number | null = null;
 
   /**
-   * Obtiene o crea la etiqueta configurada (ej: "Taller PVC") en Odoo.
+   * Obtiene o crea la etiqueta configurada (ej: "Termopanel") en Odoo.
    * Retorna el ID de la etiqueta, o null si hay algún error.
    */
   async getOrCreateTermopanelTagId(): Promise<number | null> {
@@ -74,7 +129,7 @@ export class OdooSalesService {
       return this.termopanelTagId;
     }
     try {
-      const tagName = process.env.ODOO_TAG_NAME || 'Taller PVC';
+      const tagName = process.env.ODOO_TAG_NAME || 'Termopanel';
       // 1. Buscar si ya existe una etiqueta con el nombre
       const tags = await odoo.executeKw(
         'crm.tag',
@@ -99,7 +154,7 @@ export class OdooSalesService {
       this.termopanelTagId = tagId;
       return tagId;
     } catch (error) {
-      console.error(`Error al obtener o crear la etiqueta "${process.env.ODOO_TAG_NAME || 'Taller PVC'}" en Odoo:`, error);
+      console.error(`Error al obtener o crear la etiqueta "${process.env.ODOO_TAG_NAME || 'Termopanel'}" en Odoo:`, error);
       return null;
     }
   }
@@ -343,6 +398,51 @@ export class OdooSalesService {
     return null;
   }
 
+  async findSeparatorProduct(espesor: number, color: string, uomId: number): Promise<number | null> {
+    let templateName = `Separador Perfil porta sal ${espesor} mm`;
+    if (espesor === 10) {
+      templateName = 'Separador porta sal silica 10 mm';
+    } else if (espesor === 6) {
+      templateName = 'Separador Porta sal silica 6mm';
+    }
+
+    const cacheKey = `separador_${espesor}_${color}`.toLowerCase();
+    if (this.productCache[cacheKey]) return this.productCache[cacheKey];
+
+    // Buscar si existe el producto por nombre exacto en Odoo
+    const templates = await odoo.executeKw(
+      'product.template', 'search_read',
+      [[['name', '=', templateName]]],
+      { fields: ['id', 'default_code', 'product_variant_ids'] }
+    );
+
+    if (templates && templates.length > 0) {
+      let selectedTemplate = templates[0];
+      
+      if (templates.length > 1) {
+        // Encontrar por sufijo de código según el color (Br = bronce, Ma = mate/aluminio)
+        const isBronce = color.toLowerCase().includes('bronce');
+        const targetSuffix = isBronce ? 'br' : 'ma';
+        
+        const matching = templates.find((t: any) => 
+          t.default_code && t.default_code.toLowerCase().endsWith(targetSuffix)
+        );
+        if (matching) {
+          selectedTemplate = matching;
+        }
+      }
+
+      if (selectedTemplate.product_variant_ids && selectedTemplate.product_variant_ids.length > 0) {
+        const productId = selectedTemplate.product_variant_ids[0];
+        this.productCache[cacheKey] = productId;
+        return productId;
+      }
+    }
+
+    // Si no existe, crearlo dinámicamente
+    return this.findOrCreateProduct(templateName, uomId);
+  }
+
   async getWorkCenterId(name: string): Promise<number | null> {
     if (this.workCenterCache[name]) return this.workCenterCache[name];
 
@@ -397,52 +497,91 @@ export class OdooSalesService {
     let hotmeltId: number | null = null;
     let salId: number | null = null;
     let builoId: number | null = null;
-    let escuadrasId: number | null = null;
     const separadorProductMap: Record<string, number> = {};
+    const glassProductMap: Record<string, number> = {};
+    const escuadraProductMap: Record<string, number> = {};
     let uomMetrosId: number | null = null;
     let uomUnitsId: number | null = null;
+    let uomM2Id: number | null = null;
+    let pulidoId: number | null = null;
 
     try {
       // Buscar UOMs de forma secuencial para no disparar 429
       uomMetrosId = await this.getUomId(['m', 'Metro', 'Metros', 'Meter', 'Meters', 'metro(s)']);
       await new Promise(r => setTimeout(r, 300));
       uomUnitsId  = await this.getUomId(['u', 'Units', 'Unit', 'Unidades', 'Unidad', 'uom_unit']);
+      await new Promise(r => setTimeout(r, 300));
+      uomM2Id     = await this.getUomId(['m²', 'm2', 'Square Meters', 'Square Meter', 'Metros Cuadrados', 'Metro Cuadrado', 'm2(s)']);
 
-      if (uomMetrosId && uomUnitsId) {
-        const sepKeys = rawItems
-          .map(i => `Separador ${i.separador.espesor}mm ${i.separador.color}`)
-          .filter((val, idx, self) => self.indexOf(val) === idx);
+      // Buscar/crear productos de insumos y componentes de forma secuencial
+      const glassKeys = rawItems
+        .flatMap(i => [
+          getGlassOdooName(i.cristal1.tipo, i.cristal1.espesor),
+          getGlassOdooName(i.cristal2.tipo, i.cristal2.espesor)
+        ])
+        .filter((val, idx, self) => self.indexOf(val) === idx);
 
-        // Buscar/crear productos de insumos de forma secuencial con pausa
-        hotmeltId   = await this.findOrCreateProduct('Hotmelt', uomMetrosId);
+      const escuadraKeys = rawItems
+        .map(i => getEscuadraName(i.separador.espesor))
+        .filter((val, idx, self) => self.indexOf(val) === idx);
+
+      const hasPulido = rawItems.some(i => i.pulido);
+
+      if (uomMetrosId) {
+        hotmeltId = await this.findOrCreateProduct('Hotmelt para DVH ', uomMetrosId);
         await new Promise(r => setTimeout(r, 300));
-        salId       = await this.findOrCreateProduct('Sal Deshidratante', uomMetrosId);
+        salId     = await this.findOrCreateProduct('Sal silica Gel 1 kg.', uomMetrosId);
         await new Promise(r => setTimeout(r, 300));
-        builoId     = await this.findOrCreateProduct('Butilo', uomMetrosId);
+        builoId   = await this.findOrCreateProduct('Butilo para DVH', uomMetrosId);
         await new Promise(r => setTimeout(r, 300));
-        escuadrasId = await this.findOrCreateProduct('Escuadras', uomUnitsId);
-        await new Promise(r => setTimeout(r, 300));
-        for (const k of sepKeys) {
-          const sepId = await this.findOrCreateProduct(k, uomMetrosId!);
-          if (sepId) separadorProductMap[k] = sepId;
+
+        // Separadores correspondientes a cada ítem según espesor y color
+        for (const item of rawItems) {
+          const sepKey = `${item.separador.espesor}_${item.separador.color}`.toLowerCase();
+          if (!separadorProductMap[sepKey]) {
+            const sepId = await this.findSeparatorProduct(item.separador.espesor, item.separador.color, uomMetrosId);
+            if (sepId) separadorProductMap[sepKey] = sepId;
+            await new Promise(r => setTimeout(r, 300));
+          }
+        }
+
+        if (hasPulido) {
+          pulidoId = await this.findOrCreateProduct('Pulido', uomMetrosId);
           await new Promise(r => setTimeout(r, 300));
         }
-      } else {
-        console.warn('No se encontraron UOMs de metros o unidades en Odoo. Los insumos no se vincularán como componentes.');
       }
+
+      if (uomUnitsId) {
+        for (const k of escuadraKeys) {
+          const escId = await this.findOrCreateProduct(k, uomUnitsId);
+          if (escId) escuadraProductMap[k] = escId;
+          await new Promise(r => setTimeout(r, 300));
+        }
+      }
+
+      const glassUomId = uomM2Id || uomUnitsId || 1;
+      for (const k of glassKeys) {
+        const glassId = await this.findOrCreateProduct(k, glassUomId);
+        if (glassId) glassProductMap[k] = glassId;
+        await new Promise(r => setTimeout(r, 300));
+      }
+
     } catch (e) {
-      console.error('Error al buscar/crear productos de insumos:', e);
+      console.error('Error al buscar/crear productos de insumos/componentes:', e);
     }
 
     // 2. Preparar datos para creación por lote (batch) de Órdenes de Fabricación (MOs)
     const moDataList = productLines.map((line, i) => {
       const item = rawItems[i];
       const itemLabel = item.label || `V${i + 1}`;
+      const c1NameMapped = getGlassOdooName(item.cristal1.tipo, item.cristal1.espesor);
+      const c2NameMapped = getGlassOdooName(item.cristal2.tipo, item.cristal2.espesor);
+      
       const fullDescParts = [
         `[${itemLabel}]`,
         `Termopanel ${item.ancho} x ${item.alto} mm`,
-        `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
-        `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+        `C1: ${c1NameMapped}`,
+        `C2: ${c2NameMapped}`,
         `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
       ];
       if (item.pulido) fullDescParts.push('Pulido');
@@ -485,20 +624,49 @@ export class OdooSalesService {
       // Calcular cantidades de insumos para este ítem
       const perimMl = 2 * (item.ancho + item.alto) / 1000;
       const totalMl = parseFloat((perimMl * item.cantidad).toFixed(3));
+      
+      const escuadraKey = getEscuadraName(item.separador.espesor);
+      const escuadrasId = escuadraProductMap[escuadraKey];
       const escuadrasQty = 4 * item.cantidad;
-      const sepKey = `Separador ${item.separador.espesor}mm ${item.separador.color}`;
+      
+      const sepKey = `${item.separador.espesor}_${item.separador.color}`.toLowerCase();
+      const sepProductId = separadorProductMap[sepKey];
+
+      // Calcular cantidad de cristales (m2)
+      const glassArea = (item.ancho / 1000) * (item.alto / 1000) * item.cantidad;
+      const glassAreaQty = parseFloat(glassArea.toFixed(3));
+
+      const c1Key = getGlassOdooName(item.cristal1.tipo, item.cristal1.espesor);
+      const c2Key = getGlassOdooName(item.cristal2.tipo, item.cristal2.espesor);
 
       const moveRawIds: any[] = [];
-      if (uomMetrosId) {
-        if (hotmeltId)  moveRawIds.push([0, 0, { name: 'Hotmelt', product_id: hotmeltId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
-        if (salId)      moveRawIds.push([0, 0, { name: 'Sal Deshidratante', product_id: salId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
-        if (builoId)    moveRawIds.push([0, 0, { name: 'Butilo', product_id: builoId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
-        if (separadorProductMap[sepKey]) {
-          moveRawIds.push([0, 0, { name: sepKey, product_id: separadorProductMap[sepKey], product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
-        }
+
+      // Cristales
+      const glassUomId = uomM2Id || uomUnitsId || 1;
+      if (glassProductMap[c1Key]) {
+        moveRawIds.push([0, 0, { name: c1Key, product_id: glassProductMap[c1Key], product_uom_qty: glassAreaQty, product_uom: glassUomId, location_id: locSrcId, location_dest_id: locDestId }]);
       }
+      if (glassProductMap[c2Key]) {
+        moveRawIds.push([0, 0, { name: c2Key, product_id: glassProductMap[c2Key], product_uom_qty: glassAreaQty, product_uom: glassUomId, location_id: locSrcId, location_dest_id: locDestId }]);
+      }
+
+      if (uomMetrosId) {
+        if (hotmeltId)  moveRawIds.push([0, 0, { name: 'Hotmelt para DVH ', product_id: hotmeltId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
+        if (salId)      moveRawIds.push([0, 0, { name: 'Sal silica Gel 1 kg.', product_id: salId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
+        if (builoId)    moveRawIds.push([0, 0, { name: 'Butilo para DVH', product_id: builoId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
+        if (sepProductId) {
+          const sepName = item.separador.espesor === 10 ? 'Separador porta sal silica 10 mm' : (item.separador.espesor === 6 ? 'Separador Porta sal silica 6mm' : `Separador Perfil porta sal ${item.separador.espesor} mm`);
+          moveRawIds.push([0, 0, { name: sepName, product_id: sepProductId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
+        }
+        if (item.pulido && pulidoId) {
+          moveRawIds.push([0, 0, { name: 'Pulido', product_id: pulidoId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
+        }
+      } else if (item.pulido && pulidoId && uomUnitsId) {
+        moveRawIds.push([0, 0, { name: 'Pulido', product_id: pulidoId, product_uom_qty: item.cantidad, product_uom: uomUnitsId, location_id: locSrcId, location_dest_id: locDestId }]);
+      }
+
       if (uomUnitsId && escuadrasId) {
-        moveRawIds.push([0, 0, { name: 'Escuadras', product_id: escuadrasId, product_uom_qty: escuadrasQty, product_uom: uomUnitsId, location_id: locSrcId, location_dest_id: locDestId }]);
+        moveRawIds.push([0, 0, { name: escuadraKey, product_id: escuadrasId, product_uom_qty: escuadrasQty, product_uom: uomUnitsId, location_id: locSrcId, location_dest_id: locDestId }]);
       }
 
       if (moveRawIds.length > 0) {
@@ -518,12 +686,14 @@ export class OdooSalesService {
       const itemLabel = item.label || `V${i + 1}`;
 
       const clientPrefix = clientName ? `${clientName} | ` : '';
+      const c1NameMapped = getGlassOdooName(item.cristal1.tipo, item.cristal1.espesor);
+      const c2NameMapped = getGlassOdooName(item.cristal2.tipo, item.cristal2.espesor);
 
       // Work Order 1: TALLER CORTE VIDRIO
       const corteWoParts = [
         `[${itemLabel}] ${clientPrefix}Corte Vidrio | ${item.ancho} x ${item.alto} mm`,
-        `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
-        `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+        `C1: ${c1NameMapped}`,
+        `C2: ${c2NameMapped}`,
       ];
       if (item.conForma) {
         corteWoParts.push('Con Forma (Plantilla)');
@@ -539,8 +709,8 @@ export class OdooSalesService {
       // Work Order 2: TALLER TERMOPANELES
       const termoWoParts = [
         `[${itemLabel}] ${clientPrefix}Termopanel | ${item.ancho} x ${item.alto} mm`,
-        `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
-        `C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+        `C1: ${c1NameMapped}`,
+        `C2: ${c2NameMapped}`,
         `Sep: ${item.separador.espesor}mm ${item.separador.color}`,
       ];
       if (item.palillaje) {
@@ -570,10 +740,12 @@ export class OdooSalesService {
     const calcInsumos = (item: TermopanelItemData, idx: number) => {
       const perimMl = 2 * (item.ancho + item.alto) / 1000;
       const totalMl = perimMl * item.cantidad;
+      const glassArea = (item.ancho / 1000) * (item.alto / 1000) * item.cantidad;
       return {
         label: item.label || `V${idx + 1}`,
         perimMl,
         totalMl,
+        glassArea,
         escuadras: 4 * item.cantidad,
       };
     };
@@ -583,12 +755,17 @@ export class OdooSalesService {
       const item = rawItems[i];
       const itemLabel = item.label || `V${i + 1}`;
       const ins = calcInsumos(item, i);
+      const glassAreaPerUnit = (item.ancho / 1000) * (item.alto / 1000);
+      const c1NameMapped = getGlassOdooName(item.cristal1.tipo, item.cristal1.espesor);
+      const c2NameMapped = getGlassOdooName(item.cristal2.tipo, item.cristal2.espesor);
+      const escuadraKey = getEscuadraName(item.separador.espesor);
+
       const bodyParts = [
         `<b>📋 Especificaciones del Termopanel [${itemLabel}]</b>`,
         `<b>Cantidad:</b> ${item.cantidad}`,
         `<b>Medida:</b> ${item.ancho} x ${item.alto} mm`,
-        `<b>Cristal 1:</b> ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
-        `<b>Cristal 2:</b> ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
+        `<b>Cristal 1:</b> ${c1NameMapped}`,
+        `<b>Cristal 2:</b> ${c2NameMapped}`,
         `<b>Separador:</b> ${item.separador.espesor}mm - Color: ${item.separador.color}`,
       ];
       if (item.pulido) bodyParts.push(`<b>Pulido:</b> SI`);
@@ -597,15 +774,23 @@ export class OdooSalesService {
         bodyParts.push(`<b>Palillaje:</b> SI (Color: ${item.palillajeColor || 'Blanco'}, H: ${item.palillajeHorizontales || 0}, V: ${item.palillajeVerticales || 0})`);
       }
       if (item.conForma) bodyParts.push(`<b>Con Forma Especial:</b> SI`);
-      bodyParts.push(
+      
+      const insumosSection = [
         `&nbsp;`,
-        `<b>📦 Insumos [${itemLabel}] — ${item.cantidad} ud × ${ins.perimMl.toFixed(3)} ml/ud</b>`,
-        `<b>Separador ${item.separador.espesor}mm ${item.separador.color}:</b> ${ins.totalMl.toFixed(3)} ml`,
+        `<b>📦 Insumos [${itemLabel}]</b>`,
+        `<b>Cristal 1 (${c1NameMapped}):</b> ${ins.glassArea.toFixed(3)} m² (${item.cantidad} ud × ${glassAreaPerUnit.toFixed(3)} m²/ud)`,
+        `<b>Cristal 2 (${c2NameMapped}):</b> ${ins.glassArea.toFixed(3)} m² (${item.cantidad} ud × ${glassAreaPerUnit.toFixed(3)} m²/ud)`,
+        `<b>Separador ${item.separador.espesor}mm ${item.separador.color}:</b> ${ins.totalMl.toFixed(3)} ml (${item.cantidad} ud × ${ins.perimMl.toFixed(3)} ml/ud)`,
         `<b>Hotmelt:</b> ${ins.totalMl.toFixed(3)} ml`,
         `<b>Sal deshidratante:</b> ${ins.totalMl.toFixed(3)} ml`,
         `<b>Butilo:</b> ${ins.totalMl.toFixed(3)} ml`,
-        `<b>Escuadras:</b> ${ins.escuadras} unidades`
-      );
+        `<b>${escuadraKey}:</b> ${ins.escuadras} unidades`
+      ];
+      if (item.pulido) {
+        insumosSection.push(`<b>Pulido:</b> ${ins.totalMl.toFixed(3)} ml`);
+      }
+      bodyParts.push(...insumosSection);
+      
       const body = bodyParts.join('<br/>');
 
       try {
@@ -624,27 +809,73 @@ export class OdooSalesService {
     // 5. Publicar resumen total de insumos en la Orden de Venta
     try {
       const allInsumos = rawItems.map((item, i) => calcInsumos(item, i));
-      const totSeparador  = allInsumos.reduce((s, x) => s + x.totalMl, 0);
       const totHotmelt    = allInsumos.reduce((s, x) => s + x.totalMl, 0);
       const totSal        = allInsumos.reduce((s, x) => s + x.totalMl, 0);
       const totButilo     = allInsumos.reduce((s, x) => s + x.totalMl, 0);
-      const totEscuadras  = allInsumos.reduce((s, x) => s + x.escuadras, 0);
+
+      // Agrupar cristales totales por tipo y espesor mapeados
+      const glassTotals: Record<string, number> = {};
+      rawItems.forEach(item => {
+        const c1Key = getGlassOdooName(item.cristal1.tipo, item.cristal1.espesor);
+        const c2Key = getGlassOdooName(item.cristal2.tipo, item.cristal2.espesor);
+        const area = (item.ancho / 1000) * (item.alto / 1000) * item.cantidad;
+        glassTotals[c1Key] = (glassTotals[c1Key] || 0) + area;
+        glassTotals[c2Key] = (glassTotals[c2Key] || 0) + area;
+      });
+
+      const glassRows = Object.entries(glassTotals).map(([key, val]) =>
+        `<b>${key} (total):</b> ${val.toFixed(3)} m²`
+      );
+
+      // Agrupar separadores por tipo/color
+      const sepTotals: Record<string, number> = {};
+      rawItems.forEach(item => {
+        const key = item.separador.espesor === 10 ? 'Separador porta sal silica 10 mm' : (item.separador.espesor === 6 ? 'Separador Porta sal silica 6mm' : `Separador Perfil porta sal ${item.separador.espesor} mm`);
+        const perimeter = 2 * (item.ancho + item.alto) / 1000 * item.cantidad;
+        sepTotals[key] = (sepTotals[key] || 0) + perimeter;
+      });
+      const sepRows = Object.entries(sepTotals).map(([key, val]) =>
+        `<b>${key} (total):</b> ${val.toFixed(3)} ml`
+      );
+
+      // Agrupar escuadras
+      const escTotals: Record<string, number> = {};
+      rawItems.forEach(item => {
+        const key = getEscuadraName(item.separador.espesor);
+        escTotals[key] = (escTotals[key] || 0) + (4 * item.cantidad);
+      });
+      const escRows = Object.entries(escTotals).map(([key, val]) =>
+        `<b>${key} (total):</b> ${val} unidades`
+      );
+
+      const totPulido = rawItems.reduce((acc, item) => {
+        if (item.pulido) {
+          const perimeter = 2 * (item.ancho + item.alto) / 1000 * item.cantidad;
+          return acc + perimeter;
+        }
+        return acc;
+      }, 0);
 
       const itemRows = allInsumos.map(ins =>
-        `&nbsp;&nbsp;• <b>[${ins.label}]:</b> ${ins.perimMl.toFixed(3)} ml/ud × ${ins.escuadras / 4} ud = ${ins.totalMl.toFixed(3)} ml | Escuadras: ${ins.escuadras}`
+        `&nbsp;&nbsp;• <b>[${ins.label}]:</b> ${ins.perimMl.toFixed(3)} ml/ud × ${ins.escuadras / 4} ud = ${ins.totalMl.toFixed(3)} ml`
       ).join('<br/>');
 
-      const summaryBody = [
+      const summaryBodyParts = [
         `<b>📊 RESUMEN TOTAL DE INSUMOS — ${clientName || 'Cliente'}</b>`,
         `<b>─────────────────────────────</b>`,
         itemRows,
         `<b>─────────────────────────────</b>`,
-        `<b>Separador (total):</b> ${totSeparador.toFixed(3)} ml`,
+        ...glassRows,
+        ...sepRows,
         `<b>Hotmelt (total):</b> ${totHotmelt.toFixed(3)} ml`,
         `<b>Sal deshidratante (total):</b> ${totSal.toFixed(3)} ml`,
         `<b>Butilo (total):</b> ${totButilo.toFixed(3)} ml`,
-        `<b>Escuadras (total):</b> ${totEscuadras} unidades`,
-      ].join('<br/>');
+        ...escRows,
+      ];
+      if (totPulido > 0) {
+        summaryBodyParts.push(`<b>Pulido (total):</b> ${totPulido.toFixed(3)} ml`);
+      }
+      const summaryBody = summaryBodyParts.join('<br/>');
 
       await odoo.executeKw('sale.order', 'message_post', [[saleOrderId]], {
         body: summaryBody,
