@@ -86,7 +86,7 @@ export function calcularPrecioUnitario(
   let m2 = (item.ancho * item.alto) / 1_000_000
   let ml = 2 * (item.ancho + item.alto) / 1_000
 
-  if (item.tipoFigura && item.medidasFigura) {
+  if (item.conForma && item.tipoFigura && item.medidasFigura) {
     const med = item.medidasFigura
     if (item.tipoFigura === 'triangulo') {
       const a = med.a || 0
@@ -174,7 +174,7 @@ export function calcularItem(item: TermopanelItem): {
   totalLinea: number
 } {
   let metrosCuadrados = (item.ancho * item.alto) / 1_000_000
-  if (item.tipoFigura && item.medidasFigura) {
+  if (item.conForma && item.tipoFigura && item.medidasFigura) {
     const med = item.medidasFigura
     if (item.tipoFigura === 'triangulo') {
       metrosCuadrados = ((med.a || 0) * (med.b || 0)) / 2_000_000
