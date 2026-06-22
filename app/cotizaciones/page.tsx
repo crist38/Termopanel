@@ -333,7 +333,7 @@ export default function CotizacionesPage() {
       const res = await cancelarCotizacion(detail.id);
       if (res.exito) {
         // Refrescar lista y detalle
-        fetchOrders(search, stateFilter, page);
+        fetchOrders(search, stateFilter, page, sortBy);
         openDetail(detail.id);
       } else {
         alert(`Error al cancelar: ${res.error}`);
@@ -356,7 +356,7 @@ export default function CotizacionesPage() {
       const res = await confirmarCotizacionOdoo(detail.id);
       if (res.exito) {
         // Refrescar lista y detalle
-        fetchOrders(search, stateFilter, page);
+        fetchOrders(search, stateFilter, page, sortBy);
         openDetail(detail.id);
       } else {
         alert(`Error al confirmar: ${res.error}`);
