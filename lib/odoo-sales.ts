@@ -47,6 +47,7 @@ export interface OrderSearchParams {
   state?: string;          // 'draft' | 'sale' | 'cancel' | '' (todos)
   limit?: number;
   offset?: number;
+  orderBy?: string;
 }
 
 /**
@@ -1014,7 +1015,7 @@ export class OdooSalesService {
    * Obtiene órdenes de venta con filtros y paginación.
    */
   async getOrders(params: OrderSearchParams = {}): Promise<{ orders: SaleOrder[]; total: number }> {
-    const { search = '', state = '', limit = 15, offset = 0 } = params;
+    const { search = '', state = '', limit = 15, offset = 0, orderBy } = params;
 
     const domain: any[] = [];
 
@@ -1035,7 +1036,7 @@ export class OdooSalesService {
         [domain],
         {
           fields: ['id', 'name', 'partner_id', 'state', 'amount_total', 'amount_untaxed', 'amount_tax', 'date_order', 'user_id'],
-          order: 'id desc',
+          order: orderBy || 'id desc',
           limit,
           offset,
         }

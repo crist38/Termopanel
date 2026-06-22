@@ -205,6 +205,7 @@ export default function CotizacionesPage() {
   // Filtros
   const [search, setSearch] = useState("");
   const [stateFilter, setStateFilter] = useState("");
+  const [sortBy, setSortBy] = useState("id desc");
   const searchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Detalle
@@ -219,12 +220,18 @@ export default function CotizacionesPage() {
   // Confirmar orden y crear OTs
   const [confirming, setConfirming] = useState(false);
 
-  // â”€â”€ Fetch list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const fetchOrders = useCallback(async (s: string, st: string, p: number) => {
+  // ─── Fetch list ────────────────────────────────────────────────────────────
+  const fetchOrders = useCallback(async (s: string, st: string, p: number, sort: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await listarCotizacionesOdoo({ search: s, state: st, limit: PAGE_SIZE, offset: p * PAGE_SIZE });
+      const res = await listarCotizacionesOdoo({ 
+        search: s, 
+        state: st, 
+        limit: PAGE_SIZE, 
+        offset: p * PAGE_SIZE,
+        orderBy: sort
+      });
       if (res.exito && res.orders) {
         setOrders(res.orders);
         setTotal(res.total ?? 0);
@@ -239,9 +246,9 @@ export default function CotizacionesPage() {
   }, []);
 
   useEffect(() => {
-    fetchOrders(search, stateFilter, page);
+    fetchOrders(search, stateFilter, page, sortBy);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, [page, sortBy]);
 
   // Debounce de búsqueda
   const handleSearchChange = (val: string) => {
@@ -249,7 +256,7 @@ export default function CotizacionesPage() {
     if (searchRef.current) clearTimeout(searchRef.current);
     searchRef.current = setTimeout(() => {
       setPage(0);
-      fetchOrders(val, stateFilter, 0);
+      fetchOrders(val, stateFilter, 0, sortBy);
     }, 400);
   };
 
@@ -282,12 +289,17 @@ export default function CotizacionesPage() {
   const handleStateChange = (val: string) => {
     setStateFilter(val);
     setPage(0);
-    fetchOrders(search, val, 0);
+    fetchOrders(search, val, 0, sortBy);
+  };
+
+  const handleSortChange = (val: string) => {
+    setSortBy(val);
+    setPage(0);
   };
 
   const handleRefresh = () => {
     setPage(0);
-    fetchOrders(search, stateFilter, 0);
+    fetchOrders(search, stateFilter, 0, sortBy);
     setSelectedId(null);
     setDetail(null);
   };
@@ -972,25 +984,45 @@ export default function CotizacionesPage() {
               />
             </div>
 
-            <div className="flex gap-2 flex-wrap">
-              {[
-                { val: "", label: "Todos" },
-                { val: "draft", label: "Borrador" },
-                { val: "sale", label: "Confirmado" },
-                { val: "cancel", label: "Cancelado" },
-              ].map(({ val, label }) => (
-                <button
-                  key={val}
-                  onClick={() => handleStateChange(val)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                    stateFilter === val
-                      ? "bg-[#7a5973] text-white border-[#7a5973] shadow-sm"
-                      : "bg-white text-slate-600 border-slate-200 hover:border-[#7a5973]/40 hover:text-[#7a5973]"
-                  }`}
+            <div className="flex justify-between items-center gap-2 flex-wrap">
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { val: "", label: "Todos" },
+                  { val: "draft", label: "Borrador" },
+                  { val: "sale", label: "Confirmado" },
+                  { val: "cancel", label: "Cancelado" },
+                ].map(({ val, label }) => (
+                  <button
+                    key={val}
+                    onClick={() => handleStateChange(val)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                      stateFilter === val
+                        ? "bg-[#7a5973] text-white border-[#7a5973] shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-[#7a5973]/40 hover:text-[#7a5973]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Ordenar */}
+              <div className="flex items-center gap-1.5 ml-auto">
+                <span className="text-xs text-slate-400 font-medium">Ordenar:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => handleSortChange(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 text-slate-600 rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[#7a5973] focus:border-[#7a5973] cursor-pointer"
                 >
-                  {label}
-                </button>
-              ))}
+                  <option value="id desc">Recientes</option>
+                  <option value="partner_id asc">Cliente (A-Z)</option>
+                  <option value="partner_id desc">Cliente (Z-A)</option>
+                  <option value="name asc">N° Cotización (A-Z)</option>
+                  <option value="name desc">N° Cotización (Z-A)</option>
+                  <option value="amount_total desc">Monto (Mayor)</option>
+                  <option value="amount_total asc">Monto (Menor)</option>
+                </select>
+              </div>
             </div>
           </div>
 
