@@ -8,7 +8,7 @@ import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, Triangle } from 'lucide-react';
+import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, Triangle, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { logoutFromOdoo } from '@/app/actions/auth';
 import { ClientSelector } from '@/components/ClientSelector';
@@ -51,6 +51,23 @@ function CotizadorTermopanelContent() {
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   const [draftData, setDraftData] = useState<any>(null);
   const [draftTime, setDraftTime] = useState("");
+
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | null>(null);
+
+  const handleSortByLabel = () => {
+    const nextOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    setSortOrder(nextOrder);
+    setItems(prev => {
+      const sorted = [...prev].sort((a, b) => {
+        const labelA = a.label || '';
+        const labelB = b.label || '';
+        return nextOrder === 'asc'
+          ? labelA.localeCompare(labelB, undefined, { numeric: true, sensitivity: 'base' })
+          : labelB.localeCompare(labelA, undefined, { numeric: true, sensitivity: 'base' });
+      });
+      return sorted;
+    });
+  };
 
   const searchParams = useSearchParams();
   const editId = searchParams.get('editId');
@@ -992,7 +1009,18 @@ function CotizadorTermopanelContent() {
         <table className="min-w-full text-xs sm:text-sm">
           <thead className="bg-slate-100 text-slate-700 uppercase font-bold text-[11px] tracking-wider">
             <tr>
-              <th className="p-3 text-center border-r border-slate-200 w-32">Ref / Posición</th>
+              <th
+                className="p-3 text-center border-r border-slate-200 w-32 cursor-pointer hover:bg-slate-200 transition-colors select-none group"
+                onClick={handleSortByLabel}
+                title="Ordenar por Ref / Posición"
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <span>Ref / Posición</span>
+                  {sortOrder === 'asc' && <ArrowUp size={12} className="text-[#7a5973] flex-shrink-0" />}
+                  {sortOrder === 'desc' && <ArrowDown size={12} className="text-[#7a5973] flex-shrink-0" />}
+                  {!sortOrder && <ArrowUpDown size={12} className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />}
+                </div>
+              </th>
               <th className="p-3 text-center border-r border-slate-200 w-16">Cant.</th>
               <th className="p-3 text-center border-r border-slate-200 bg-blue-50/50" colSpan={2}>Dimensiones (mm)</th>
               <th className="p-3 text-center border-r border-slate-200 bg-amber-50/50" colSpan={2}>Cristal 1</th>
