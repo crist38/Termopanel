@@ -1029,6 +1029,12 @@ export class OdooSalesService {
       domain.push(['partner_id.name', 'ilike', search.trim()]);
     }
 
+    // Filtrar por la etiqueta de Termopanel
+    const tagId = await this.getOrCreateTermopanelTagId();
+    if (tagId) {
+      domain.push(['tag_ids', 'in', [tagId]]);
+    }
+
     const [orders, total] = await Promise.all([
       odoo.executeKw(
         'sale.order',
