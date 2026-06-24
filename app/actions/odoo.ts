@@ -21,7 +21,7 @@ export async function crearClienteOdoo(data: CustomerInput): Promise<{ exito: bo
   try {
     const session = await getSession();
     if (!session) return { exito: false, error: 'No autorizado' };
-    const clientId = await odooCustomers.createCustomer(data);
+    const clientId = await odooCustomers.getOrCreateCustomer(data);
     return { exito: true, id: clientId };
   } catch (error: any) {
     return { exito: false, error: error.message || 'Error al crear cliente' };
