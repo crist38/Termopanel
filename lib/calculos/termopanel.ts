@@ -18,6 +18,7 @@ export interface TermopanelItem {
   medidasFigura?: { a: number; b: number; b1?: number; b2?: number }
   descuento?: number // Porcentaje de descuento (0-100)
   precioUnitario: number
+  esPrecioManual?: boolean
 }
 
 /**

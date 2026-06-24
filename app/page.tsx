@@ -93,6 +93,7 @@ function CotizadorTermopanelContent() {
   useEffect(() => {
     if (!config) return;
     setItems(prev => prev.map(item => {
+      if (item.esPrecioManual) return item;
       if (item.ancho <= 0 || item.alto <= 0) return item;
       const p1 = config.vidrios.find(v => v.tipo === item.cristal1.tipo && v.espesor === item.cristal1.espesor)?.precio ?? 0;
       const p2 = config.vidrios.find(v => v.tipo === item.cristal2.tipo && v.espesor === item.cristal2.espesor)?.precio ?? 0;
@@ -118,7 +119,11 @@ function CotizadorTermopanelContent() {
             setClientId(res.clientId);
             setObra(res.obra || '');
             setBudgetName(res.budgetName || 'Borrador');
-            setItems(res.items || []);
+            const loadedItems = (res.items || []).map((it: any) => ({
+              ...it,
+              esPrecioManual: it.precioUnitario > 0
+            }));
+            setItems(loadedItems);
           } else {
             alert(`Error al cargar cotización de Odoo: ${res.error}`);
           }
@@ -138,7 +143,8 @@ function CotizadorTermopanelContent() {
               palillajeColor: item.palillajeColor || "Blanco",
               palillajeHorizontales: item.palillajeHorizontales || 0,
               palillajeVerticales: item.palillajeVerticales || 0,
-              conForma: item.conForma || false
+              conForma: item.conForma || false,
+              esPrecioManual: item.precioUnitario > 0
             }));
             setItems(loadedItems);
           }
@@ -279,26 +285,33 @@ function CotizadorTermopanelContent() {
         updatedItem[field] = value
       }
 
-      // Calcular precio sugerido con la fórmula completa del Excel
-      const p1 = getPrecioVidrio(updatedItem.cristal1.tipo, updatedItem.cristal1.espesor)
-      const p2 = getPrecioVidrio(updatedItem.cristal2.tipo, updatedItem.cristal2.espesor)
-      // Usar siempre PRECIOS_SEPARADORES_DEFAULT como fallback garantizado
-      const seps = config?.preciosSeparadores?.length
-        ? config.preciosSeparadores
-        : PRECIOS_SEPARADORES_DEFAULT
-      const precioSep = getPrecioSeparadorPorMl(
-        seps,
-        updatedItem.separador.color,
-        updatedItem.separador.espesor
-      )
+      if (field === 'precioUnitario') {
+        updatedItem.esPrecioManual = true
+      } else {
+        // Al modificar cualquier otra propiedad, se desactiva el precio manual y se recalcula
+        updatedItem.esPrecioManual = false
 
-      updatedItem.precioUnitario = calcularPrecioUnitario(
-        updatedItem,
-        p1,
-        p2,
-        precioSep,
-        config?.parametrosCalculo
-      )
+        // Calcular precio sugerido con la fórmula completa del Excel
+        const p1 = getPrecioVidrio(updatedItem.cristal1.tipo, updatedItem.cristal1.espesor)
+        const p2 = getPrecioVidrio(updatedItem.cristal2.tipo, updatedItem.cristal2.espesor)
+        // Usar siempre PRECIOS_SEPARADORES_DEFAULT como fallback garantizado
+        const seps = config?.preciosSeparadores?.length
+          ? config.preciosSeparadores
+          : PRECIOS_SEPARADORES_DEFAULT
+        const precioSep = getPrecioSeparadorPorMl(
+          seps,
+          updatedItem.separador.color,
+          updatedItem.separador.espesor
+        )
+
+        updatedItem.precioUnitario = calcularPrecioUnitario(
+          updatedItem,
+          p1,
+          p2,
+          precioSep,
+          config?.parametrosCalculo
+        )
+      }
 
       return updatedItem
     }))
