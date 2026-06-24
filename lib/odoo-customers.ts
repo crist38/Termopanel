@@ -77,6 +77,26 @@ export class OdooCustomersService {
   }
 
   /**
+   * Busca un cliente por su nombre exacto (case-insensitive)
+   */
+  async getCustomerByName(name: string): Promise<OdooCustomer | null> {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const customers = await odoo.executeKw(
+      'res.partner',
+      'search_read',
+      [
+        [['name', '=ilike', trimmed]]
+      ],
+      {
+        fields: ['id', 'name', 'email', 'vat', 'phone'],
+        limit: 1,
+      }
+    );
+    return customers.length > 0 ? customers[0] : null;
+  }
+
+  /**
    * Crea un cliente nuevo en Odoo
    */
   async createCustomer(data: CustomerInput): Promise<number> {
@@ -99,7 +119,7 @@ export class OdooCustomersService {
   }
 
   /**
-   * Función útil que busca si existe el cliente por RUT o Email, y si no existe lo crea automáticamente.
+   * Función útil que busca si existe el cliente por RUT, Email o Nombre, y si no existe lo crea automáticamente.
    * Retorna el ID del cliente para ser usado en la cotización.
    */
   async getOrCreateCustomer(data: CustomerInput): Promise<number> {
@@ -115,7 +135,13 @@ export class OdooCustomersService {
       if (existing) return existing.id;
     }
 
-    // 3. Si no existe, lo creamos
+    // 3. Intentar buscar por Nombre si no se encontró por RUT ni Email
+    if (data.name) {
+      const existing = await this.getCustomerByName(data.name);
+      if (existing) return existing.id;
+    }
+
+    // 4. Si no existe, lo creamos
     return await this.createCustomer(data);
   }
 }
