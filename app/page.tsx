@@ -43,6 +43,7 @@ function CotizadorTermopanelContent() {
   // Estado para Información del Cliente y Presupuesto
   const [clientName, setClientName] = useState('');
   const [obra, setObra] = useState('');
+  const [fechaEntrega, setFechaEntrega] = useState('');
   const [clientId, setClientId] = useState<number | undefined>(undefined);
   const [budgetName, setBudgetName] = useState('Borrador');
   const [budgetDate, setBudgetDate] = useState('');
@@ -118,6 +119,7 @@ function CotizadorTermopanelContent() {
             setClientName(res.clientName || '');
             setClientId(res.clientId);
             setObra(res.obra || '');
+            setFechaEntrega(res.fechaEntrega || '');
             setBudgetName(res.budgetName || 'Borrador');
             const loadedItems = (res.items || []).map((it: any) => ({
               ...it,
@@ -136,6 +138,7 @@ function CotizadorTermopanelContent() {
             const data = docSnap.data();
             setClientName(data.clientName || '');
             setObra(data.obra || '');
+            setFechaEntrega(data.fechaEntrega || '');
             setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
             const loadedItems = (data.items || []).map((item: any) => ({
               ...item,
@@ -186,7 +189,7 @@ function CotizadorTermopanelContent() {
     if (savedDraft) {
       try {
         const parsed = JSON.parse(savedDraft);
-        const hasData = parsed.clientName || parsed.obra || parsed.items?.some((i: any) => i.ancho > 0 || i.alto > 0 || i.cantidad > 1);
+        const hasData = parsed.clientName || parsed.obra || parsed.fechaEntrega || parsed.items?.some((i: any) => i.ancho > 0 || i.alto > 0 || i.cantidad > 1);
         if (hasData) {
           setDraftData(parsed);
           setDraftTime(new Date(parsed.timestamp).toLocaleString('es-CL'));
@@ -203,7 +206,7 @@ function CotizadorTermopanelContent() {
     if (editId) return;
 
     // Si los campos están vacíos/iniciales, no creamos/mantenemos borrador sucio
-    const hasAnyContent = clientName.trim() !== '' || obra.trim() !== '' || items.some(i => i.ancho > 0 || i.alto > 0 || i.cantidad > 1);
+    const hasAnyContent = clientName.trim() !== '' || obra.trim() !== '' || fechaEntrega.trim() !== '' || items.some(i => i.ancho > 0 || i.alto > 0 || i.cantidad > 1);
     if (!hasAnyContent) {
       localStorage.removeItem('termopanel_cotizacion_draft');
       return;
@@ -215,18 +218,20 @@ function CotizadorTermopanelContent() {
         obra,
         clientId,
         items,
+        fechaEntrega,
         timestamp: Date.now()
       };
       localStorage.setItem('termopanel_cotizacion_draft', JSON.stringify(draft));
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [clientName, obra, clientId, items, editId]);
+  }, [clientName, obra, clientId, items, editId, fechaEntrega]);
 
   const handleRestoreDraft = () => {
     if (!draftData) return;
     setClientName(draftData.clientName || '');
     setObra(draftData.obra || '');
+    setFechaEntrega(draftData.fechaEntrega || '');
     setClientId(draftData.clientId);
     if (draftData.items && draftData.items.length > 0) {
       setItems(draftData.items);
@@ -382,6 +387,7 @@ function CotizadorTermopanelContent() {
           clientId,
           clientName,
           obra,
+          fechaEntrega,
           items,
           totalNeto,
           isMonolitico: false
@@ -391,6 +397,7 @@ function CotizadorTermopanelContent() {
           clientId,
           clientName,
           obra,
+          fechaEntrega,
           budgetNumber: 0,
           items,
           totalNeto
@@ -415,6 +422,7 @@ function CotizadorTermopanelContent() {
         localStorage.removeItem('termopanel_cotizacion_draft');
         setClientName('');
         setObra('');
+        setFechaEntrega('');
         setBudgetName('Borrador');
         setItems([
           {
@@ -488,6 +496,15 @@ function CotizadorTermopanelContent() {
     if (obra.trim()) {
       currentY += 8;
       doc.text(`Obra: ${obra.trim()}`, 14, currentY);
+    }
+    if (fechaEntrega.trim()) {
+      currentY += 8;
+      let formattedFechaEntrega = fechaEntrega;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(fechaEntrega)) {
+        const [year, month, day] = fechaEntrega.split('-');
+        formattedFechaEntrega = `${day}/${month}/${year}`;
+      }
+      doc.text(`Fecha de Entrega: ${formattedFechaEntrega}`, 14, currentY);
     }
     currentY += 8;
     const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
@@ -647,9 +664,20 @@ function CotizadorTermopanelContent() {
     pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
     pdf.text(`Cliente: ${clientName}`, 155, 30);
     let topHeaderOffset = 38;
+    let rightY = 30;
     if (obra.trim()) {
       pdf.text(`Obra: ${obra.trim()}`, 155, 36);
+      rightY = 36;
       topHeaderOffset = 44;
+    }
+    if (fechaEntrega.trim()) {
+      let formattedFechaEntrega = fechaEntrega;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(fechaEntrega)) {
+        const [year, month, day] = fechaEntrega.split('-');
+        formattedFechaEntrega = `${day}/${month}/${year}`;
+      }
+      pdf.text(`F. Entrega: ${formattedFechaEntrega}`, 155, rightY + 6);
+      topHeaderOffset = rightY + 12;
     }
 
     // Línea separadora
@@ -778,10 +806,20 @@ function CotizadorTermopanelContent() {
     pdf.text(`Ref: ${finalName}`, 155, 18);
     pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
     pdf.text(`Cliente: ${clientName}`, 155, 30);
-    topHeaderOffset = 38;
+    let rightYArmado = 30;
     if (obra.trim()) {
       pdf.text(`Obra: ${obra.trim()}`, 155, 36);
+      rightYArmado = 36;
       topHeaderOffset = 44;
+    }
+    if (fechaEntrega.trim()) {
+      let formattedFechaEntrega = fechaEntrega;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(fechaEntrega)) {
+        const [year, month, day] = fechaEntrega.split('-');
+        formattedFechaEntrega = `${day}/${month}/${year}`;
+      }
+      pdf.text(`F. Entrega: ${formattedFechaEntrega}`, 155, rightYArmado + 6);
+      topHeaderOffset = rightYArmado + 12;
     }
 
     // Línea separadora
@@ -993,7 +1031,7 @@ function CotizadorTermopanelContent() {
 
       {/* Sección de Información del Cliente */}
       <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-600 mb-1">Nombre Cliente</label>
             <ClientSelector
@@ -1012,6 +1050,16 @@ function CotizadorTermopanelContent() {
               value={obra}
               onChange={(e) => setObra(e.target.value)}
               placeholder="Nombre de la obra, dirección, etc."
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">Fecha de Entrega (Opcional)</label>
+            <input
+              type="text"
+              value={fechaEntrega}
+              onChange={(e) => setFechaEntrega(e.target.value)}
+              placeholder="Ej: 15 días hábiles, 10/12/2026, etc."
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
             />
           </div>
