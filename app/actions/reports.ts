@@ -3,6 +3,7 @@
 import { odoo } from '@/lib/odoo';
 import { getTermopanelConfig } from '@/lib/configService';
 import { getSession } from '@/app/actions/auth';
+import { odooSales } from '@/lib/odoo-sales';
 
 export interface ReportStats {
   ingresosTotales: number;
@@ -222,10 +223,16 @@ export async function obtenerDatosReportes(
     const config = await getTermopanelConfig();
     const costoManoDeObra = config.parametrosCalculo?.costoManoDeObra ?? 1650;
 
-    // 2. Traer todos los pedidos de venta de Odoo
+    // 2. Traer todos los pedidos de venta de Odoo con la etiqueta Termopanel
     // Limitado a 500 para evitar sobrecarga, ordenados por id desc
+    const domain: any[] = [];
+    const tagId = await odooSales.getOrCreateTermopanelTagId();
+    if (tagId) {
+      domain.push(['tag_ids', 'in', [tagId]]);
+    }
+
     const orders = await odoo.executeKw('sale.order', 'search_read', [
-      []
+      domain
     ], {
       fields: ['id', 'name', 'partner_id', 'state', 'amount_total', 'date_order'],
       order: 'id desc',
