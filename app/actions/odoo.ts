@@ -32,6 +32,7 @@ export async function guardarCotizacionEnOdoo(data: {
   clientId?: number;
   clientName: string;
   obra?: string;
+  fechaEntrega?: string;
   budgetNumber: number;
   items: any[];
   totalNeto: number;
@@ -140,9 +141,14 @@ export async function guardarCotizacionEnOdoo(data: {
 
     // 4. Crear cotización, confirmarla y crear órdenes de fabricación de forma síncrona.
     // autoConfirm=true asegura que todo quede creado antes de responder al usuario.
+    let finalNote = data.obra || '';
+    if (data.fechaEntrega) {
+      finalNote = `${finalNote}\nFecha de Entrega: ${data.fechaEntrega}`.trim();
+    }
+
     const session = await getSession();
     const userId = session?.uid;
-    const odooQuote = await odooSales.createQuote(clienteId, lineas, rawItems, false, data.clientName, userId, data.obra);
+    const odooQuote = await odooSales.createQuote(clienteId, lineas, rawItems, false, data.clientName, userId, finalNote);
 
     return { exito: true, cotizacionId: odooQuote.id, cotizacionName: odooQuote.name };
   } catch (error: any) {
@@ -155,6 +161,7 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
   clientId?: number;
   clientName: string;
   obra?: string;
+  fechaEntrega?: string;
   budgetNumber: number;
   items: any[];
   totalNeto: number;
@@ -203,9 +210,14 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
       cristal: { tipo: item.cristal.tipo, espesor: item.cristal.espesor },
     }));
 
+    let finalNote = data.obra || '';
+    if (data.fechaEntrega) {
+      finalNote = `${finalNote}\nFecha de Entrega: ${data.fechaEntrega}`.trim();
+    }
+
     const session = await getSession();
     const userId = session?.uid;
-    const odooQuote = await odooSales.createMonoliticQuote(clienteId, lineas, rawItems, false, data.clientName, userId, data.obra);
+    const odooQuote = await odooSales.createMonoliticQuote(clienteId, lineas, rawItems, false, data.clientName, userId, finalNote);
     return { exito: true, cotizacionId: odooQuote.id, cotizacionName: odooQuote.name };
   } catch (error: any) {
     console.error('Error en Server Action Odoo (Monolítico):', error);
@@ -515,7 +527,11 @@ export async function actualizarClienteCotizacion(
 
 function stripHtml(htmlStr: string) {
   if (!htmlStr) return "";
-  return htmlStr.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+  let text = htmlStr
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/div>/gi, '\n');
+  return text.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
 }
 
 export async function obtenerCotizacionParaEditar(orderId: number): Promise<{
@@ -524,6 +540,7 @@ export async function obtenerCotizacionParaEditar(orderId: number): Promise<{
   clientName?: string;
   clientId?: number;
   obra?: string;
+  fechaEntrega?: string;
   budgetName?: string;
   items?: any[];
   error?: string;
@@ -545,7 +562,15 @@ export async function obtenerCotizacionParaEditar(orderId: number): Promise<{
 
     const clientName = Array.isArray(order.partner_id) ? order.partner_id[1] : '';
     const clientId = Array.isArray(order.partner_id) ? order.partner_id[0] : undefined;
-    const obra = order.note ? stripHtml(order.note) : '';
+    
+    const fullNote = order.note ? stripHtml(order.note) : '';
+    let obra = fullNote;
+    let fechaEntrega = '';
+    const match = fullNote.match(/Fecha de Entrega:\s*(.*)$/im);
+    if (match) {
+      fechaEntrega = match[1].trim();
+      obra = fullNote.replace(/Fecha de Entrega:\s*(.*)$/im, '').trim();
+    }
     const budgetName = order.name || `SO${orderId}`;
 
     if (productOrderLines.length === 0) {
@@ -555,6 +580,7 @@ export async function obtenerCotizacionParaEditar(orderId: number): Promise<{
         clientName,
         clientId,
         obra,
+        fechaEntrega,
         budgetName,
         items: []
       };
@@ -605,6 +631,7 @@ export async function obtenerCotizacionParaEditar(orderId: number): Promise<{
       clientName,
       clientId,
       obra,
+      fechaEntrega,
       budgetName,
       items
     };
@@ -619,6 +646,7 @@ export async function actualizarCotizacionEnOdoo(data: {
   clientId?: number;
   clientName: string;
   obra?: string;
+  fechaEntrega?: string;
   items: any[];
   totalNeto: number;
   isMonolitico?: boolean;
@@ -711,10 +739,15 @@ export async function actualizarCotizacionEnOdoo(data: {
       }])
     ];
 
+    let finalNote = data.obra || '';
+    if (data.fechaEntrega) {
+      finalNote = `${finalNote}\nFecha de Entrega: ${data.fechaEntrega}`.trim();
+    }
+
     const orderData: any = {
       partner_id: clienteId,
       order_line: orderLinesTuples,
-      note: data.obra || '',
+      note: finalNote,
     };
 
     await odoo.executeKw('sale.order', 'write', [[data.orderId], orderData]);
