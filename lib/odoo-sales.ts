@@ -112,10 +112,8 @@ function getGlassOdooName(tipo: string, espesor: number): string {
 }
 
 function getEscuadraName(espesor: number): string {
-  if (espesor === 12) return 'Escuadra porta sal 9.5';
-  if (espesor === 10) return 'Escuadra porta sal 7.5';
-  if (espesor === 8 || espesor === 6) return 'Escuadra porta sal 5.5';
-  return 'Escuadras';
+  const escuadraVal = espesor - 0.5;
+  return `Escuadra porta sal ${escuadraVal}`;
 }
 
 export class OdooSalesService {
@@ -598,6 +596,7 @@ export class OdooSalesService {
         product_qty: line.product_uom_qty,
         origin: `S${saleOrderId}`,
         product_description_variants: fullDesc,
+        bom_id: false,
       };
     });
 
@@ -617,10 +616,20 @@ export class OdooSalesService {
       const item = rawItems[i];
       const moRecord = mosData.find((m: any) => m.id === moId);
       
-      if (!moRecord || !moRecord.location_src_id || !moRecord.production_location_id) continue;
+      let locSrcId: number | null = null;
+      let locDestId: number | null = null;
 
-      const locSrcId = moRecord.location_src_id[0];
-      const locDestId = moRecord.production_location_id[0];
+      if (!moRecord || !moRecord.location_src_id || !moRecord.production_location_id) {
+        console.error(`Faltan ubicaciones en MO ${moId}. Record:`, moRecord);
+        await odoo.executeKw('mrp.production', 'message_post', [[moId]], {
+          body: `<b>⚠️ Error del Cotizador:</b> No se pudieron inyectar los componentes reales porque faltan las ubicaciones de producción (location_src_id o production_location_id) en esta Orden. Record: ${JSON.stringify(moRecord)}`,
+          message_type: 'comment',
+        });
+        // Intentaremos continuar sin ubicaciones para ver si Odoo las auto-asigna
+      } else {
+        locSrcId = moRecord.location_src_id[0];
+        locDestId = moRecord.production_location_id[0];
+      }
 
       // Calcular cantidades de insumos para este ítem
       const perimMl = 2 * (item.ancho + item.alto) / 1000;
@@ -640,42 +649,65 @@ export class OdooSalesService {
       const c1Key = getGlassOdooName(item.cristal1.tipo, item.cristal1.espesor);
       const c2Key = getGlassOdooName(item.cristal2.tipo, item.cristal2.espesor);
 
-      const moveRawIds: any[] = [];
+      const moveRawIds: any[] = [[5, 0, 0]]; // [5, 0, 0] elimina los componentes genéricos del BOM
 
-      // Cristales
       const glassUomId = uomM2Id || uomUnitsId || 1;
       if (glassProductMap[c1Key]) {
-        moveRawIds.push([0, 0, { name: c1Key, product_id: glassProductMap[c1Key], product_uom_qty: glassAreaQty, product_uom: glassUomId, location_id: locSrcId, location_dest_id: locDestId }]);
+        const moveData: any = { product_id: glassProductMap[c1Key], product_uom_qty: glassAreaQty, product_uom: glassUomId };
+        if (locSrcId) moveData.location_id = locSrcId;
+        if (locDestId) moveData.location_dest_id = locDestId;
+        moveRawIds.push([0, 0, moveData]);
       }
       if (glassProductMap[c2Key]) {
-        moveRawIds.push([0, 0, { name: c2Key, product_id: glassProductMap[c2Key], product_uom_qty: glassAreaQty, product_uom: glassUomId, location_id: locSrcId, location_dest_id: locDestId }]);
+        const moveData: any = { product_id: glassProductMap[c2Key], product_uom_qty: glassAreaQty, product_uom: glassUomId };
+        if (locSrcId) moveData.location_id = locSrcId;
+        if (locDestId) moveData.location_dest_id = locDestId;
+        moveRawIds.push([0, 0, moveData]);
       }
 
       if (uomMetrosId) {
-        if (hotmeltId)  moveRawIds.push([0, 0, { name: 'Hotmelt para DVH ', product_id: hotmeltId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
-        if (salId)      moveRawIds.push([0, 0, { name: 'Sal silica Gel 1 kg.', product_id: salId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
-        if (builoId)    moveRawIds.push([0, 0, { name: 'Butilo para DVH', product_id: builoId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
+        const addMove = (prodId: number, qty: number, uom: number) => {
+          const moveData: any = { product_id: prodId, product_uom_qty: qty, product_uom: uom };
+          if (locSrcId) moveData.location_id = locSrcId;
+          if (locDestId) moveData.location_dest_id = locDestId;
+          moveRawIds.push([0, 0, moveData]);
+        };
+        if (hotmeltId) addMove(hotmeltId, totalMl, uomMetrosId);
+        if (salId) addMove(salId, totalMl, uomMetrosId);
+        if (builoId) addMove(builoId, totalMl, uomMetrosId);
         if (sepProductId) {
-          const sepName = item.separador.espesor === 10 ? 'Separador porta sal silica 10 mm' : (item.separador.espesor === 6 ? 'Separador Porta sal silica 6mm' : `Separador Perfil porta sal ${item.separador.espesor} mm`);
-          moveRawIds.push([0, 0, { name: sepName, product_id: sepProductId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
+          addMove(sepProductId, totalMl, uomMetrosId);
         }
-        if (item.pulido && pulidoId) {
-          moveRawIds.push([0, 0, { name: 'Pulido', product_id: pulidoId, product_uom_qty: totalMl, product_uom: uomMetrosId, location_id: locSrcId, location_dest_id: locDestId }]);
-        }
+        if (item.pulido && pulidoId) addMove(pulidoId, totalMl, uomMetrosId);
       } else if (item.pulido && pulidoId && uomUnitsId) {
-        moveRawIds.push([0, 0, { name: 'Pulido', product_id: pulidoId, product_uom_qty: item.cantidad, product_uom: uomUnitsId, location_id: locSrcId, location_dest_id: locDestId }]);
+        const moveData: any = { product_id: pulidoId, product_uom_qty: item.cantidad, product_uom: uomUnitsId };
+        if (locSrcId) moveData.location_id = locSrcId;
+        if (locDestId) moveData.location_dest_id = locDestId;
+        moveRawIds.push([0, 0, moveData]);
       }
 
       if (uomUnitsId && escuadrasId) {
-        moveRawIds.push([0, 0, { name: escuadraKey, product_id: escuadrasId, product_uom_qty: escuadrasQty, product_uom: uomUnitsId, location_id: locSrcId, location_dest_id: locDestId }]);
+        const moveData: any = { product_id: escuadrasId, product_uom_qty: escuadrasQty, product_uom: uomUnitsId };
+        if (locSrcId) moveData.location_id = locSrcId;
+        if (locDestId) moveData.location_dest_id = locDestId;
+        moveRawIds.push([0, 0, moveData]);
       }
 
-      if (moveRawIds.length > 0) {
+      if (moveRawIds.length > 1) { // > 1 porque el primero es [5, 0, 0]
         try {
           await odoo.executeKw('mrp.production', 'write', [[moId], { move_raw_ids: moveRawIds }]);
-        } catch (err) {
+        } catch (err: any) {
           console.error(`Error al vincular componentes en MO ${moId}:`, err);
+          await odoo.executeKw('mrp.production', 'message_post', [[moId]], {
+            body: `<b>⚠️ Error del Cotizador:</b> Excepción al inyectar componentes: ${err.message || JSON.stringify(err)}`,
+            message_type: 'comment',
+          });
         }
+      } else {
+        await odoo.executeKw('mrp.production', 'message_post', [[moId]], {
+          body: `<b>⚠️ Error del Cotizador:</b> No se generaron componentes para inyectar (moveRawIds vacío o productos no encontrados).`,
+          message_type: 'comment',
+        });
       }
     }
 
@@ -1193,6 +1225,7 @@ export class OdooSalesService {
         product_qty: line.product_uom_qty,
         origin: `S${saleOrderId}`,
         product_description_variants: fullDesc,
+        bom_id: false,
       };
     });
 
