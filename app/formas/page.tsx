@@ -7,7 +7,7 @@ import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Plus, Trash2, Cloud, ArrowLeft, BarChart2, Triangle, RotateCcw, Printer } from 'lucide-react';
+import { Plus, Trash2, Cloud, ArrowLeft, BarChart2, Triangle, RotateCcw, Printer, CheckCircle } from 'lucide-react';
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { ClientSelector } from '@/components/ClientSelector';
 
@@ -445,7 +445,7 @@ function ShapesCADCotizadorContent() {
   const totalNeto = items.reduce((acc, item) => acc + item.precioUnitario * item.cantidad, 0);
 
   // PDF and Odoo functions
-  const handleProcessQuote = async () => {
+  const handleProcessQuote = async (isConfirm: boolean = false) => {
     if (!clientName) {
       alert("Por favor ingrese el nombre del cliente para procesar la cotización");
       return;
@@ -462,7 +462,8 @@ function ShapesCADCotizadorContent() {
           obra,
           items,
           totalNeto,
-          isMonolitico: false
+          isMonolitico: false,
+          autoConfirm: isConfirm
         });
       } else {
         odooRes = await guardarCotizacionEnOdoo({
@@ -471,22 +472,35 @@ function ShapesCADCotizadorContent() {
           obra,
           budgetNumber: 0,
           items,
-          totalNeto
+          totalNeto,
+          autoConfirm: isConfirm
         });
       }
 
       if (odooRes.exito) {
         if (isOdooId) {
-          alert(`✅ ¡Listo! Cotización ${odooRes.cotizacionName} actualizada en Odoo. A continuación se descargarán los PDFs.`);
+          if (isConfirm) {
+            alert(`✅ ¡Listo! Cotización ${odooRes.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
+          } else {
+            alert(`✅ ¡Listo! Cotización ${odooRes.cotizacionName} actualizada como borrador en Odoo. A continuación se descargará el Presupuesto PDF.`);
+          }
         } else {
-          alert(`✅ ¡Listo! Orden de venta ${odooRes.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
+          if (isConfirm) {
+            alert(`✅ ¡Listo! Orden de venta ${odooRes.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
+          } else {
+            alert(`✅ ¡Listo! Cotización ${odooRes.cotizacionName} guardada como borrador en Odoo. A continuación se descargará el Presupuesto PDF.`);
+          }
         }
         
         const finalBudgetName = odooRes.cotizacionName || 'Borrador';
         setBudgetName(finalBudgetName);
 
-        await handleExportPDF(finalBudgetName);
-        await handleExportWorkOrders(finalBudgetName);
+        if (isConfirm) {
+          await handleExportPDF(finalBudgetName);
+          await handleExportWorkOrders(finalBudgetName);
+        } else {
+          await handleExportPDF(finalBudgetName);
+        }
 
         // Reset
         localStorage.removeItem('formas_cotizacion_draft');
@@ -522,7 +536,7 @@ function ShapesCADCotizadorContent() {
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-      doc.addImage(logoBase64, 'PNG', 14, 10, 30, 30);
+      doc.addImage(logoBase64, 'PNG', 14, 10, 45, 22);
     } catch (e) {
       console.error("Error al cargar el logo en el PDF", e);
     }
@@ -582,6 +596,7 @@ function ShapesCADCotizadorContent() {
       if (item.pulido) extrasList.push("Pulido");
       if (item.micropersiana) extrasList.push("Micropersiana");
       if (item.palillaje) extrasList.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales y ${item.palillajeVerticales || 0} verticales)`);
+      if (item.descuento && item.descuento > 0) extrasList.push(`Descuento: ${item.descuento}%`);
       if (extrasList.length > 0) {
         configDesc += ` | Extras: ${extrasList.join(", ")}`;
       }
@@ -694,7 +709,7 @@ function ShapesCADCotizadorContent() {
     }
 
     // PAGE 1: CORTE VIDRIO
-    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 25, 25);
+    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
     pdf.setFontSize(18);
     pdf.setFont("helvetica", "bold");
     pdf.text("ORDEN DE TRABAJO", 45, 20);
@@ -807,7 +822,7 @@ function ShapesCADCotizadorContent() {
     
     // PAGE 2: TERMOPANELES
     pdf.addPage();
-    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 25, 25);
+    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
     pdf.setFontSize(18);
     pdf.text("ORDEN DE TRABAJO", 45, 20);
     pdf.setFontSize(13);
@@ -1034,54 +1049,51 @@ function ShapesCADCotizadorContent() {
   return (
     <div className="p-4 pb-24 bg-slate-50 min-h-screen font-sans">
       <header className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <div className="flex items-center gap-3">
-          <a href="/" className="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2 rounded-lg transition-colors">
+        <div className="flex items-center gap-4">
+          <a href="/" className="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2 rounded-lg transition-colors hidden sm:flex">
             <ArrowLeft size={16} />
           </a>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-              <Triangle className="text-amber-500 fill-amber-500/20" size={24} /> Cotizador de Formas
-            </h1>
-            <p className="text-slate-500 text-xs mt-0.5">Diseña figuras geométricas y cotiza en base a dimensiones reales</p>
+          <img src="/logo.png" alt="ProWindows Logo" className="h-10 sm:h-12 object-contain" />
+          <div className="hidden sm:block border-l-2 border-slate-200 pl-4">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+              <Triangle className="text-amber-500 fill-amber-500/20" size={14} /> Formas Especiales
+            </h2>
+            <div className="flex items-center gap-1.5 text-slate-500 text-xs mt-1">
+              <span>Presupuesto N°</span>
+              <div className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-slate-700 font-bold min-w-[4rem] text-center">
+                {budgetName}
+              </div>
+            </div>
           </div>
         </div>
+
         <div className="flex flex-wrap gap-2 items-center">
           {sessionName && (
-            <span className="text-xs text-slate-400 mr-2 hidden sm:inline">{sessionName}</span>
+            <span className="text-xs text-slate-400 hidden sm:block mr-1">{sessionName}</span>
           )}
+
           <button
-            onClick={() => handleExportPDF()}
-            className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
-            disabled={items.length === 0}
-            title="Imprimir Presupuesto Comercial en PDF"
-          >
-            <Printer size={16} />
-            Presupuesto PDF
-          </button>
-          <button
-            onClick={() => handleExportWorkOrders()}
-            className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
-            disabled={items.length === 0}
-            title="Imprimir Órdenes de Trabajo en PDF"
-          >
-            <Printer size={16} />
-            Taller PDF
-          </button>
-          <button
-            onClick={handleProcessQuote}
-            className={`flex items-center gap-2 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95 ${
+            onClick={() => handleProcessQuote(false)}
+            className={`flex items-center gap-2 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95 ${
               editId && /^\d+$/.test(editId)
                 ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700'
                 : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700'
             }`}
             disabled={isSyncingOdoo || items.length === 0}
+            title="Guardar como borrador en Odoo y generar PDF del Presupuesto"
           >
             <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
-            {isSyncingOdoo
-              ? 'Guardando en Odoo...'
-              : editId && /^\d+$/.test(editId)
-                ? `Actualizar ${budgetName} (Odoo + PDFs)`
-                : 'Procesar Todo (Odoo + PDFs)'}
+            {isSyncingOdoo && !editId ? 'Guardando...' : 'Guardar Borrador / Presupuesto PDF'}
+          </button>
+
+          <button
+            onClick={() => handleProcessQuote(true)}
+            className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95"
+            disabled={isSyncingOdoo || items.length === 0}
+            title="Confirmar Orden en Odoo, generar Órdenes de Fabricación y PDF de Taller"
+          >
+            <CheckCircle size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
+            {isSyncingOdoo ? 'Procesando...' : 'Confirmar en Odoo y Enviar a Taller'}
           </button>
         </div>
       </header>
@@ -1614,6 +1626,25 @@ function ShapesCADCotizadorContent() {
                 </tr>
               </tbody>
             </table>
+          </div>
+        )}
+        {items.length > 0 && (
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              onClick={() => handleExportPDF()}
+              className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200"
+              title="Descargar Presupuesto PDF localmente"
+            >
+              <Printer size={16} /> Presupuesto PDF
+            </button>
+            
+            <button
+              onClick={() => handleExportWorkOrders()}
+              className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200"
+              title="Descargar Taller PDF localmente"
+            >
+              <Printer size={16} /> Taller PDF
+            </button>
           </div>
         )}
       </div>
