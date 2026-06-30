@@ -382,7 +382,7 @@ export default function CotizacionesPage() {
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-      doc.addImage(logoBase64, 'PNG', 14, 10, 30, 30);
+      doc.addImage(logoBase64, 'PNG', 14, 10, 45, 22);
     } catch (e) {
       console.error("Error al cargar el logo en el PDF", e);
     }
@@ -685,7 +685,7 @@ export default function CotizacionesPage() {
     // ======================================================
     // PÁGINA 1: TALLER CORTE VIDRIO
     // ======================================================
-    if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 25, 25);
+    if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
 
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
@@ -805,7 +805,7 @@ export default function CotizacionesPage() {
     if (hasTermopaneles) {
       doc.addPage();
 
-      if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 25, 25);
+      if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
 
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");

@@ -716,6 +716,10 @@ export class OdooSalesService {
     for (let i = 0; i < moIds.length; i++) {
       const moId = moIds[i];
       const item = rawItems[i];
+      
+      // Confirmar la MO antes de crear las órdenes de trabajo
+      await odoo.executeKw('mrp.production', 'action_confirm', [[moId]]);
+
       const itemLabel = item.label || `V${i + 1}`;
 
       const clientPrefix = clientName ? `${clientName} | ` : '';

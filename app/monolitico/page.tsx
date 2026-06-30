@@ -8,7 +8,7 @@ import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Printer, Plus, Trash2, Cloud, ClipboardList } from 'lucide-react';
+import { Printer, Plus, Trash2, Cloud, ClipboardList, CheckCircle, ArrowLeft } from 'lucide-react';
 import { guardarCotizacionMonoliticoEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { ClientSelector } from '@/components/ClientSelector';
 
@@ -256,7 +256,7 @@ function CotizadorMonoliticoContent() {
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-      doc.addImage(logoBase64, 'PNG', 14, 10, 30, 30);
+      doc.addImage(logoBase64, 'PNG', 14, 10, 45, 22);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(20);
       doc.text("PRO WINDOWS", 50, yPos);
@@ -405,7 +405,7 @@ function CotizadorMonoliticoContent() {
       console.error("Error al cargar el logo en el PDF", e);
     }
 
-    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 25, 25);
+    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
 
     pdf.setFontSize(18);
     pdf.setFont("helvetica", "bold");
@@ -504,7 +504,7 @@ function CotizadorMonoliticoContent() {
     await handleExportWorkOrder(finalBudgetNameVal);
   }
 
-  async function handleProcessQuote() {
+  const handleProcessQuote = async (isConfirm: boolean = false) => {
     if (!clientName) {
       alert("Por favor ingrese el nombre del cliente antes de procesar.");
       return;
@@ -515,13 +515,11 @@ function CotizadorMonoliticoContent() {
       return;
     }
 
-    const conf = confirm(`¿Estás seguro de enviar la Cotización de Cristales N° ${budgetName} a Odoo?\n\nEsto creará la nota de venta y la Orden de Trabajo para el Taller Corte Vidrio.`);
-    if (!conf) return;
-
     setIsSyncingOdoo(true);
     try {
       let response;
       const isOdooId = editId && /^\d+$/.test(editId);
+      
       if (isOdooId) {
         response = await actualizarCotizacionEnOdoo({
           orderId: parseInt(editId),
@@ -530,7 +528,8 @@ function CotizadorMonoliticoContent() {
           obra,
           items,
           totalNeto,
-          isMonolitico: true
+          isMonolitico: true,
+          autoConfirm: isConfirm
         });
       } else {
         response = await guardarCotizacionMonoliticoEnOdoo({
@@ -545,15 +544,27 @@ function CotizadorMonoliticoContent() {
 
       if (response.exito) {
         if (isOdooId) {
-          alert(`¡Cotización actualizada exitosamente en Odoo!\nCotización: ${response.cotizacionName}`);
+          if (isConfirm) {
+            alert(`✅ ¡Listo! Cotización ${response.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
+          } else {
+            alert(`✅ ¡Listo! Cotización ${response.cotizacionName} actualizada como borrador en Odoo. A continuación se descargará el Presupuesto PDF.`);
+          }
         } else {
-          alert(`¡Cotización enviada exitosamente a Odoo!\nOrden de Venta: ${response.cotizacionName}`);
+          if (isConfirm) {
+            alert(`✅ ¡Listo! Orden de venta ${response.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
+          } else {
+            alert(`✅ ¡Listo! Cotización ${response.cotizacionName} guardada como borrador en Odoo. A continuación se descargará el Presupuesto PDF.`);
+          }
         }
         
         const finalBudgetName = response.cotizacionName || 'Borrador';
         setBudgetName(finalBudgetName);
 
-        await handleExportAllPDFs(finalBudgetName);
+        if (isConfirm) {
+          await handleExportAllPDFs(finalBudgetName);
+        } else {
+          await handleExportAllPDFs(finalBudgetName);
+        }
 
         localStorage.removeItem('monolitico_cotizacion_draft');
         setClientName('');
@@ -586,38 +597,46 @@ function CotizadorMonoliticoContent() {
   return (
     <div className="p-4 pb-24 bg-slate-50 min-h-screen font-sans">
       <header className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Corte de Vidrios Monolíticos</h1>
-          <div className="flex items-center gap-1.5 text-slate-500 text-sm mt-1">
-            <span>Presupuesto N°</span>
-            <div className="px-3 py-1 bg-slate-50 border border-slate-200 rounded text-slate-700 font-semibold min-w-[5rem] text-center">
-              {budgetName}
+        <div className="flex items-center gap-4">
+          <a href="/" className="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2 rounded-lg transition-colors hidden sm:flex">
+            <ArrowLeft size={16} />
+          </a>
+          <img src="/logo.png" alt="ProWindows Logo" className="h-10 sm:h-12 object-contain" />
+          <div className="hidden sm:block border-l-2 border-slate-200 pl-4">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Corte Monolítico</h2>
+            <div className="flex items-center gap-1.5 text-slate-500 text-xs mt-1">
+              <span>Presupuesto N°</span>
+              <div className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-slate-700 font-bold min-w-[4rem] text-center">
+                {budgetName}
+              </div>
             </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           <button
-            onClick={handleProcessQuote}
-            disabled={isSyncingOdoo}
-            className={`disabled:opacity-50 text-white px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all font-medium text-sm ${
+            onClick={() => handleProcessQuote(false)}
+            className={`flex items-center gap-2 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95 ${
               editId && /^\d+$/.test(editId)
-                ? 'bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400'
-                : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700'
+                : 'bg-gradient-to-r from-[#7a5973] to-[#6b4c64] hover:from-[#6b4c64] hover:to-[#5a3b53]'
             }`}
+            disabled={isSyncingOdoo}
+            title="Guardar como borrador en Odoo y generar PDF del Presupuesto"
           >
-            <Cloud size={18} />
-            {isSyncingOdoo
-              ? 'Guardando en Odoo...'
-              : editId && /^\d+$/.test(editId)
-                ? `Actualizar ${budgetName} (Odoo + PDFs)`
-                : 'Enviar a Odoo'}
+            <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
+            {isSyncingOdoo && !editId ? 'Guardando...' : 'Guardar Borrador / Presupuesto PDF'}
           </button>
+          
           <button
-            onClick={() => handleExportAllPDFs()}
-            className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all font-medium text-sm"
+            onClick={() => handleProcessQuote(true)}
+            className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95"
+            disabled={isSyncingOdoo}
+            title="Confirmar Orden en Odoo, generar Órdenes de Fabricación y PDF de Taller"
           >
-            <Printer size={18} /> Exportar PDF
+            <CheckCircle size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
+            {isSyncingOdoo ? 'Procesando...' : 'Confirmar en Odoo y Enviar a Taller'}
           </button>
+
 
         </div>
       </header>
@@ -793,10 +812,28 @@ function CotizadorMonoliticoContent() {
         </div>
       </div>
 
-      <div className="mt-6 flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <div className="mt-6 flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
         <button onClick={addItem} className="bg-[#7a5973] hover:bg-[#6b4c64] text-white px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all text-sm font-medium">
           <Plus size={18} /> Agregar Fila
         </button>
+        
+        <div className="flex flex-wrap gap-2 items-center">
+          <button
+            onClick={() => handlePrint()}
+            className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200"
+            title="Descargar Presupuesto PDF localmente"
+          >
+            <Printer size={16} /> Presupuesto PDF
+          </button>
+          
+          <button
+            onClick={() => handleExportWorkOrder()}
+            className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200"
+            title="Descargar Taller PDF localmente"
+          >
+            <Printer size={16} /> Taller PDF
+          </button>
+        </div>
       </div>
 
       {/* Footer Fijo con Resumen de Metros Cuadrados */}
@@ -813,7 +850,11 @@ function CotizadorMonoliticoContent() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4 sm:gap-6">
+            <div className="text-right hidden sm:block">
+              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Valor Promedio por m²</p>
+              <p className="text-sm font-bold text-slate-500 font-mono">${totalM2 > 0 ? Math.round(totalNeto / totalM2).toLocaleString() : '0'}</p>
+            </div>
             <div className="text-right">
               <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Total Neto</p>
               <p className="text-sm font-bold text-slate-800 font-mono">${totalNeto.toLocaleString()}</p>

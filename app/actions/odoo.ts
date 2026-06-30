@@ -36,6 +36,7 @@ export async function guardarCotizacionEnOdoo(data: {
   budgetNumber: number;
   items: any[];
   totalNeto: number;
+  autoConfirm?: boolean;
 }) {
   try {
     if (!data.clientName && !data.clientId) {
@@ -148,7 +149,8 @@ export async function guardarCotizacionEnOdoo(data: {
 
     const session = await getSession();
     const userId = session?.uid;
-    const odooQuote = await odooSales.createQuote(clienteId, lineas, rawItems, false, data.clientName, userId, finalNote);
+    const autoConfirm = data.autoConfirm !== undefined ? data.autoConfirm : false;
+    const odooQuote = await odooSales.createQuote(clienteId, lineas, rawItems, autoConfirm, data.clientName, userId, finalNote);
 
     return { exito: true, cotizacionId: odooQuote.id, cotizacionName: odooQuote.name };
   } catch (error: any) {
@@ -650,6 +652,7 @@ export async function actualizarCotizacionEnOdoo(data: {
   items: any[];
   totalNeto: number;
   isMonolitico?: boolean;
+  autoConfirm?: boolean;
 }): Promise<{ exito: boolean; cotizacionName?: string; error?: string }> {
   try {
     const session = await getSession();
@@ -758,6 +761,33 @@ export async function actualizarCotizacionEnOdoo(data: {
     // Obtener el nombre de la cotización para retornarlo
     const orderDataResp = await odoo.executeKw('sale.order', 'search_read', [[['id', '=', data.orderId]]], { fields: ['name'], limit: 1 });
     const orderName = orderDataResp.length > 0 ? orderDataResp[0].name : `SO${data.orderId}`;
+
+    if (data.autoConfirm) {
+      await odooSales.confirmOrder(data.orderId);
+      const rawItems = data.items.map((item, index) => ({
+        label: item.label || `V${index + 1}`,
+        cantidad: item.cantidad,
+        ancho: item.ancho,
+        alto: item.alto,
+        cristal1: item.cristal1 ? { tipo: item.cristal1.tipo, espesor: item.cristal1.espesor } : { tipo: '', espesor: 0 },
+        cristal2: item.cristal2 ? { tipo: item.cristal2.tipo, espesor: item.cristal2.espesor } : { tipo: '', espesor: 0 },
+        separador: item.separador ? { espesor: item.separador.espesor, color: item.separador.color } : { espesor: 0, color: '' },
+        pulido: item.pulido,
+        micropersiana: item.micropersiana,
+        palillaje: item.palillaje,
+        palillajeColor: item.palillajeColor || 'Blanco',
+        palillajeHorizontales: item.palillajeHorizontales || 0,
+        palillajeVerticales: item.palillajeVerticales || 0,
+        conForma: item.conForma || false,
+        tipoFigura: item.tipoFigura || 'triangulo',
+        medidasFigura: item.medidasFigura || { a: 0, b: 0 },
+      }));
+      try {
+        await odooSales.createManufacturingOrders(data.orderId, lineas, rawItems, data.clientName);
+      } catch (err) {
+        console.error("Error creating manufacturing orders during update:", err);
+      }
+    }
 
     return { exito: true, cotizacionName: orderName };
   } catch (error: any) {

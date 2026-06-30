@@ -8,7 +8,7 @@ import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, Triangle, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, Triangle, ArrowUp, ArrowDown, ArrowUpDown, CheckCircle } from 'lucide-react';
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { logoutFromOdoo } from '@/app/actions/auth';
 import { ClientSelector } from '@/components/ClientSelector';
@@ -372,7 +372,7 @@ function CotizadorTermopanelContent() {
 
 
 
-  const handleProcessQuote = async () => {
+  const handleProcessQuote = async (isConfirm: boolean = false) => {
     if (!clientName) {
       alert("Por favor ingrese el nombre del cliente para procesar la cotización");
       return;
@@ -390,7 +390,8 @@ function CotizadorTermopanelContent() {
           fechaEntrega,
           items,
           totalNeto,
-          isMonolitico: false
+          isMonolitico: false,
+          autoConfirm: isConfirm
         });
       } else {
         odooRes = await guardarCotizacionEnOdoo({
@@ -400,23 +401,36 @@ function CotizadorTermopanelContent() {
           fechaEntrega,
           budgetNumber: 0,
           items,
-          totalNeto
+          totalNeto,
+          autoConfirm: isConfirm
         });
       }
 
       if (odooRes.exito) {
         if (isOdooId) {
-          alert(`✅ ¡Listo! Cotización ${odooRes.cotizacionName} actualizada en Odoo. A continuación se descargarán los PDFs.`);
+          if (isConfirm) {
+            alert(`✅ ¡Listo! Cotización ${odooRes.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
+          } else {
+            alert(`✅ ¡Listo! Cotización ${odooRes.cotizacionName} actualizada como borrador en Odoo. A continuación se descargará el Presupuesto PDF.`);
+          }
         } else {
-          alert(`✅ ¡Listo! Orden de venta ${odooRes.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
+          if (isConfirm) {
+            alert(`✅ ¡Listo! Orden de venta ${odooRes.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
+          } else {
+            alert(`✅ ¡Listo! Cotización ${odooRes.cotizacionName} guardada como borrador en Odoo. A continuación se descargará el Presupuesto PDF.`);
+          }
         }
         
         const finalBudgetName = odooRes.cotizacionName || 'Borrador';
         setBudgetName(finalBudgetName);
 
-        // Generar PDFs de Presupuesto y Órdenes de Trabajo de forma secuencial
-        await handleExportPDF(finalBudgetName);
-        await handleExportWorkOrders(finalBudgetName);
+        // Generar PDFs
+        if (isConfirm) {
+          await handleExportPDF(finalBudgetName);
+          await handleExportWorkOrders(finalBudgetName);
+        } else {
+          await handleExportPDF(finalBudgetName);
+        }
 
         // Limpiar formulario para la siguiente cotización
         localStorage.removeItem('termopanel_cotizacion_draft');
@@ -473,7 +487,7 @@ function CotizadorTermopanelContent() {
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-      doc.addImage(logoBase64, 'PNG', 14, 10, 30, 30);
+      doc.addImage(logoBase64, 'PNG', 14, 10, 45, 22);
     } catch (e) {
       console.error("Error al cargar el logo en el PDF", e);
     }
@@ -537,6 +551,7 @@ function CotizadorTermopanelContent() {
         extrasList.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales y ${item.palillajeVerticales || 0} verticales)`);
       }
       if (item.conForma) extrasList.push("Con Forma");
+      if (item.descuento && item.descuento > 0) extrasList.push(`Descuento: ${item.descuento}%`);
       if (extrasList.length > 0) {
         configDesc += ` | Extras: ${extrasList.join(", ")}`;
       }
@@ -648,7 +663,7 @@ function CotizadorTermopanelContent() {
     // ======================================================
     // PÁGINA 1: TALLER CORTE VIDRIO
     // ======================================================
-    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 25, 25);
+    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
 
     pdf.setFontSize(18);
     pdf.setFont("helvetica", "bold");
@@ -790,7 +805,7 @@ function CotizadorTermopanelContent() {
     // ======================================================
     pdf.addPage();
 
-    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 25, 25);
+    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
 
     pdf.setFontSize(18);
     pdf.setFont("helvetica", "bold");
@@ -939,12 +954,15 @@ function CotizadorTermopanelContent() {
   return (
     <div className="p-4 pb-24 bg-slate-50 min-h-screen font-sans">
       <header className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Cotizador de Termopaneles</h1>
-          <div className="flex items-center gap-1.5 text-slate-500 text-sm mt-1">
-            <span>Presupuesto N°</span>
-            <div className="px-3 py-1 bg-slate-50 border border-slate-200 rounded text-slate-700 font-semibold min-w-[5rem] text-center">
-              {budgetName}
+        <div className="flex items-center gap-4">
+          <img src="/logo.png" alt="ProWindows Logo" className="h-10 sm:h-12 object-contain" />
+          <div className="hidden sm:block border-l-2 border-slate-200 pl-4">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Cotizador Estandar</h2>
+            <div className="flex items-center gap-1.5 text-slate-500 text-xs mt-1">
+              <span>Presupuesto N°</span>
+              <div className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-slate-700 font-bold min-w-[4rem] text-center">
+                {budgetName}
+              </div>
             </div>
           </div>
         </div>
@@ -954,40 +972,27 @@ function CotizadorTermopanelContent() {
           )}
 
           <button
-            onClick={handleProcessQuote}
-            className={`flex items-center gap-2 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95 ${
+            onClick={() => handleProcessQuote(false)}
+            className={`flex items-center gap-2 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95 ${
               editId && /^\d+$/.test(editId)
                 ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700'
                 : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700'
             }`}
             disabled={isSyncingOdoo || items.length === 0}
-            title={editId && /^\d+$/.test(editId) ? `Actualizar la cotización ${budgetName} en Odoo` : 'Enviar a Odoo, Imprimir Presupuesto y Generar Órdenes de Trabajo'}
+            title="Guardar como borrador en Odoo y generar PDF del Presupuesto"
           >
             <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
-            {isSyncingOdoo
-              ? 'Guardando en Odoo...'
-              : editId && /^\d+$/.test(editId)
-                ? `Actualizar ${budgetName} (Odoo + PDFs)`
-                : 'Procesar Todo (Odoo + PDFs)'}
+            {isSyncingOdoo && !editId ? 'Guardando...' : 'Guardar Borrador / Presupuesto PDF'}
           </button>
 
           <button
-            onClick={() => handleExportPDF()}
-            className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            disabled={items.length === 0}
-            title="Imprimir Presupuesto Comercial en PDF"
+            onClick={() => handleProcessQuote(true)}
+            className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95"
+            disabled={isSyncingOdoo || items.length === 0}
+            title="Confirmar Orden en Odoo, generar Órdenes de Fabricación y PDF de Taller"
           >
-            <Printer size={16} />
-            Presupuesto PDF
-          </button>
-          <button
-            onClick={() => handleExportWorkOrders()}
-            className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            disabled={items.length === 0}
-            title="Imprimir Órdenes de Trabajo en PDF"
-          >
-            <Printer size={16} />
-            Taller PDF
+            <CheckCircle size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
+            {isSyncingOdoo ? 'Procesando...' : 'Confirmar en Odoo y Enviar a Taller'}
           </button>
 
           <form action={logoutFromOdoo}>
@@ -1331,15 +1336,29 @@ function CotizadorTermopanelContent() {
         </table>
       </div>
 
-      <div className="mt-6 flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <div className="mt-6 flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
         <button
           onClick={addItem}
           className="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all hover:shadow-md text-sm font-medium"
         >
           <Plus size={18} /> Agregar Fila
         </button>
-        <div className="text-sm text-slate-500 italic">
-          * Los precios base se calculan automáticamente según el m² de vidrio.
+        <div className="flex flex-wrap gap-2 items-center">
+          <button
+            onClick={() => handleExportPDF()}
+            className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200"
+            title="Descargar Presupuesto PDF localmente"
+          >
+            <Printer size={16} /> Presupuesto PDF
+          </button>
+          
+          <button
+            onClick={() => handleExportWorkOrders()}
+            className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200"
+            title="Descargar Taller PDF localmente"
+          >
+            <Printer size={16} /> Taller PDF
+          </button>
         </div>
       </div>
 
@@ -1357,7 +1376,11 @@ function CotizadorTermopanelContent() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4 sm:gap-6">
+            <div className="text-right hidden sm:block">
+              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Valor Promedio por m²</p>
+              <p className="text-sm font-bold text-slate-500 font-mono">${totalM2 > 0 ? Math.round(totalNeto / totalM2).toLocaleString() : '0'}</p>
+            </div>
             <div className="text-right">
               <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Total Neto</p>
               <p className="text-sm font-bold text-slate-800 font-mono">${totalNeto.toLocaleString()}</p>
