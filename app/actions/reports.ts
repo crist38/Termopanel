@@ -202,8 +202,9 @@ function calcularConsumoVidrioReal(
 }
 
 export async function obtenerDatosReportes(
-  filtro: 'diario' | 'mes' | 'historico' = 'mes',
-  clienteId?: number
+  filtro: 'diario' | 'mes' | 'historico' | 'fecha_especifica' = 'mes',
+  clienteId?: number,
+  fechaEspecifica?: string
 ): Promise<{
   exito: boolean;
   data?: ReportStats;
@@ -230,6 +231,8 @@ export async function obtenerDatosReportes(
     if (tagId) {
       domain.push(['tag_ids', 'in', [tagId]]);
     }
+    // Solo incluir cotizaciones confirmadas
+    domain.push(['state', 'in', ['sale', 'done']]);
 
     const orders = await odoo.executeKw('sale.order', 'search_read', [
       domain
@@ -277,6 +280,12 @@ export async function obtenerDatosReportes(
         const orderDate = new Date(o.date_order.replace(' ', 'T'));
         return orderDate.getFullYear() === currentYear && orderDate.getMonth() === currentMonth;
       });
+    } else if (filtro === 'fecha_especifica' && fechaEspecifica) {
+      ordersFiltrados = orders.filter(o => {
+        if (!o.date_order) return false;
+        // date_order is "YYYY-MM-DD HH:MM:SS", starts with fechaEspecifica "YYYY-MM-DD"
+        return o.date_order.startsWith(fechaEspecifica);
+      });
     }
 
     // Filtrar pedidos por cliente si aplica
@@ -284,13 +293,13 @@ export async function obtenerDatosReportes(
       ordersFiltrados = ordersFiltrados.filter(o => o.partner_id && o.partner_id[0] === clienteId);
     }
 
-    // Pedidos/presupuestos a considerar en el filtro (para calcular insumos y producción, incluimos borradores y enviados)
-    const confirmedOrders = ordersFiltrados.filter(o => o.state === 'draft' || o.state === 'sent' || o.state === 'sale' || o.state === 'done');
+    // Pedidos a considerar en el filtro (solo confirmados y realizados)
+    const confirmedOrders = ordersFiltrados.filter(o => o.state === 'sale' || o.state === 'done');
 
     // Pedidos/presupuestos en este mes (para el KPI "Este Mes" que se muestra fijo)
     // También filtrados por cliente si se especifica
     const confirmedEsteMes = orders.filter(o => {
-      if (!o.date_order || (o.state !== 'draft' && o.state !== 'sent' && o.state !== 'sale' && o.state !== 'done')) return false;
+      if (!o.date_order || (o.state !== 'sale' && o.state !== 'done')) return false;
       const orderDate = new Date(o.date_order.replace(' ', 'T'));
       const matchesMonth = orderDate.getFullYear() === currentYear && orderDate.getMonth() === currentMonth;
       if (!matchesMonth) return false;
