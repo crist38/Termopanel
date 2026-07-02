@@ -14,11 +14,14 @@ import {
   Users,
   Compass,
   FileSpreadsheet,
-  RefreshCw
+  RefreshCw,
+  Printer,
+  Calendar
 } from 'lucide-react';
 
 function ReportsDashboardContent() {
-  const [filtro, setFiltro] = useState<'diario' | 'mes' | 'historico'>('mes');
+  const [filtro, setFiltro] = useState<'diario' | 'mes' | 'historico' | 'fecha_especifica'>('mes');
+  const [fechaSeleccionada, setFechaSeleccionada] = useState<string>('');
   const [clienteSeleccionado, setClienteSeleccionado] = useState<number | null>(null);
   const [clientes, setClientes] = useState<Array<{ id: number; name: string }>>([]);
   const [loading, setLoading] = useState(true);
@@ -45,11 +48,11 @@ function ReportsDashboardContent() {
   }, []);
 
   // Cargar datos de Odoo
-  const fetchReportData = async (filterVal: 'diario' | 'mes' | 'historico', clientVal: number | null) => {
+  const fetchReportData = async (filterVal: 'diario' | 'mes' | 'historico' | 'fecha_especifica', clientVal: number | null, fecha?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await obtenerDatosReportes(filterVal, clientVal || undefined);
+      const res = await obtenerDatosReportes(filterVal, clientVal || undefined, fecha);
       if (res.exito && res.data) {
         setStats(res.data);
         if (res.clientesDisponibles) {
@@ -67,18 +70,23 @@ function ReportsDashboardContent() {
   };
 
   useEffect(() => {
-    fetchReportData(filtro, clienteSeleccionado);
+    if (filtro === 'fecha_especifica' && !fechaSeleccionada) return;
+    fetchReportData(filtro, clienteSeleccionado, fechaSeleccionada);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtro, clienteSeleccionado]);
+  }, [filtro, clienteSeleccionado, fechaSeleccionada]);
 
   const handleRefresh = () => {
-    fetchReportData(filtro, clienteSeleccionado);
+    fetchReportData(filtro, clienteSeleccionado, fechaSeleccionada);
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   return (
     <div className="p-6 pb-12 bg-slate-50 min-h-screen font-sans">
       {/* Botón de retroceso */}
-      <div className="max-w-7xl mx-auto mb-6">
+      <div className="max-w-7xl mx-auto mb-6 print:hidden">
         <a
           href="/"
           className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-700 font-medium text-sm transition-colors"
@@ -92,15 +100,15 @@ function ReportsDashboardContent() {
       <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">
-            Bienvenido, {userName}
+            {filtro === 'fecha_especifica' && fechaSeleccionada ? `Reporte del ${new Date(fechaSeleccionada + 'T00:00:00').toLocaleDateString('es-CL')}` : `Bienvenido, ${userName}`}
           </h1>
-          <p className="text-slate-500 text-sm mt-1">
+          <p className="text-slate-500 text-sm mt-1 print:hidden">
             Aquí tienes un resumen de la actividad del negocio.
           </p>
         </div>
 
         {/* Controles de Filtro */}
-        <div className="flex flex-col sm:flex-row items-center gap-3 self-stretch md:self-auto w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-center gap-3 self-stretch md:self-auto w-full md:w-auto print:hidden">
           {/* Filtro por Cliente */}
           <div className="relative w-full sm:w-64">
             <select
@@ -127,12 +135,13 @@ function ReportsDashboardContent() {
           <div className="relative w-full sm:w-44">
             <select
               value={filtro}
-              onChange={(e) => setFiltro(e.target.value as 'diario' | 'mes' | 'historico')}
+              onChange={(e) => setFiltro(e.target.value as 'diario' | 'mes' | 'historico' | 'fecha_especifica')}
               className="w-full appearance-none bg-white border border-slate-200 px-4 py-2.5 pr-10 rounded-xl text-slate-700 font-semibold shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all cursor-pointer text-sm"
             >
               <option value="diario">Diario (Hoy)</option>
               <option value="mes">Este Mes</option>
               <option value="historico">Histórico</option>
+              <option value="fecha_especifica">Fecha Específica</option>
             </select>
             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
               <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
@@ -140,6 +149,30 @@ function ReportsDashboardContent() {
               </svg>
             </div>
           </div>
+
+          {/* Selector de Fecha (solo visible si filtro es fecha_especifica) */}
+          {filtro === 'fecha_especifica' && (
+            <div className="relative w-full sm:w-44">
+              <input
+                type="date"
+                value={fechaSeleccionada}
+                onChange={(e) => setFechaSeleccionada(e.target.value)}
+                className="w-full appearance-none bg-white border border-slate-200 px-4 py-2.5 pr-10 rounded-xl text-slate-700 font-semibold shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all cursor-pointer text-sm"
+              />
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+                <Calendar size={16} />
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={handlePrint}
+            className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-bold text-sm shadow-sm transition-all duration-200 transform active:scale-95 whitespace-nowrap w-full sm:w-auto"
+            title="Imprimir reporte"
+          >
+            <Printer size={16} />
+            Imprimir
+          </button>
 
           <button
             onClick={handleRefresh}
@@ -208,7 +241,7 @@ function ReportsDashboardContent() {
                 </span>
               </div>
               <div className="mt-4">
-                <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Presupuestos Emitidos</p>
+                <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Ventas Confirmadas</p>
                 <p className="text-3xl font-black text-slate-800 mt-1 font-mono">
                   {stats.presupuestosEmitidos}
                 </p>
@@ -506,18 +539,18 @@ function ReportsDashboardContent() {
             </div>
           </section>
 
-          {/* Detalle de Presupuestos / Pedidos */}
+          {/* Detalle de Ventas Confirmadas */}
           <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
             <div className="flex items-center gap-2 mb-6">
               <ClipboardList className="text-teal-600" size={18} />
-              <h2 className="text-lg font-bold text-slate-800">Detalle de Presupuestos y Pedidos</h2>
+              <h2 className="text-lg font-bold text-slate-800">Detalle de Ventas Confirmadas</h2>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-slate-100 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    <th className="pb-3">N° Presupuesto / Pedido</th>
+                    <th className="pb-3">N° Venta</th>
                     <th className="pb-3">Cliente</th>
                     <th className="pb-3 text-center w-32">Fecha</th>
                     <th className="pb-3 text-center w-28">Estado</th>
