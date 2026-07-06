@@ -6,7 +6,7 @@ import { redirect } from 'next/navigation'
 const ODOO_URL = process.env.ODOO_URL || ''
 const ODOO_DB  = process.env.ODOO_DB  || ''
 
-export interface LoginResult {
+interface LoginResult {
   success: boolean
   error?: string
   uid?: number
