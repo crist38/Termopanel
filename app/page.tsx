@@ -8,7 +8,8 @@ import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, Triangle, ArrowUp, ArrowDown, ArrowUpDown, CheckCircle } from 'lucide-react';
+import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, Triangle, ArrowUp, ArrowDown, ArrowUpDown, CheckCircle, Scissors } from 'lucide-react';
+import { CORTE_IMPORT_KEY, GrupoCorte, PiezaCorte, CorteImport } from '@/lib/types/corte';
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { logoutFromOdoo } from '@/app/actions/auth';
 import { ClientSelector } from '@/components/ClientSelector';
@@ -370,6 +371,45 @@ function CotizadorTermopanelContent() {
   const totalNeto = calcularTotal(items)
   const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
 
+  const enviarACorte = () => {
+    const validItems = items.filter(i => i.ancho > 0 && i.alto > 0);
+    if (validItems.length === 0) {
+      alert('Agrega al menos un termopanel con dimensiones para enviar a corte.');
+      return;
+    }
+
+    const gruposMap = new Map<string, GrupoCorte>();
+
+    validItems.forEach(item => {
+      const label = item.label || item.id;
+
+      const k1 = `${item.cristal1.tipo}_${item.cristal1.espesor}_1`;
+      if (!gruposMap.has(k1)) {
+        gruposMap.set(k1, { key: k1, tipo: item.cristal1.tipo, espesor: item.cristal1.espesor, cristalNum: 1, piezas: [], totalPiezas: 0 });
+      }
+      const g1 = gruposMap.get(k1)!;
+      g1.piezas.push({ id: `${item.id}_c1`, label, w: item.ancho, h: item.alto, quantity: item.cantidad });
+      g1.totalPiezas += item.cantidad;
+
+      const k2 = `${item.cristal2.tipo}_${item.cristal2.espesor}_2`;
+      if (!gruposMap.has(k2)) {
+        gruposMap.set(k2, { key: k2, tipo: item.cristal2.tipo, espesor: item.cristal2.espesor, cristalNum: 2, piezas: [], totalPiezas: 0 });
+      }
+      const g2 = gruposMap.get(k2)!;
+      g2.piezas.push({ id: `${item.id}_c2`, label, w: item.ancho, h: item.alto, quantity: item.cantidad });
+      g2.totalPiezas += item.cantidad;
+    });
+
+    const payload: CorteImport = {
+      clientName,
+      obra,
+      grupos: Array.from(gruposMap.values()),
+      timestamp: Date.now(),
+    };
+
+    localStorage.setItem(CORTE_IMPORT_KEY, JSON.stringify(payload));
+    router.push('/corte');
+  };
 
 
   const handleProcessQuote = async (isConfirm: boolean = false) => {
@@ -1344,6 +1384,16 @@ function CotizadorTermopanelContent() {
           <Plus size={18} /> Agregar Fila
         </button>
         <div className="flex flex-wrap gap-2 items-center">
+          <button
+            onClick={enviarACorte}
+            className="flex items-center gap-2 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 text-white px-3 py-2 rounded-lg text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none"
+            disabled={items.length === 0}
+            title="Enviar medidas de vidrios al optimizador de corte"
+          >
+            <Scissors size={16} />
+            Planchas a Cortar
+          </button>
+
           <button
             onClick={() => handleExportPDF()}
             className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200"
