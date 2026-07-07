@@ -63,7 +63,7 @@ export interface SaleOrderLineInput {
   x_studio_alto_m?: number;
 }
 
-function getGlassOdooName(tipo: string, espesor: number): string {
+export function getGlassOdooName(tipo: string, espesor: number): string {
   const t = tipo.toLowerCase();
   
   if (t.includes('incoloro') || t.includes('float')) {
@@ -111,7 +111,7 @@ function getGlassOdooName(tipo: string, espesor: number): string {
   return `Cristal Dim. ${tipo} ${espesor}mm`;
 }
 
-function getEscuadraName(espesor: number): string {
+export function getEscuadraName(espesor: number): string {
   const escuadraVal = espesor - 0.5;
   return `Escuadra porta sal ${escuadraVal}`;
 }
@@ -923,124 +923,6 @@ export class OdooSalesService {
       console.error('Error al publicar resumen de insumos en la SO:', e);
     }
 
-    // --- NUEVO: GENERACIÓN DE ORDEN DE COMPRA (COMPRAS) EN ODOO ---
-    try {
-      const todayStr = new Date().toISOString().split('T')[0] + ' 12:00:00';
-      const aggregatedProducts: Record<number, {
-        product_id: number;
-        name: string;
-        product_qty: number;
-        product_uom_id: number;
-      }> = {};
-
-      const addAggregation = (productId: number | null, name: string, qty: number, uomId: number | null) => {
-        if (!productId || !uomId) return;
-        if (aggregatedProducts[productId]) {
-          aggregatedProducts[productId].product_qty += qty;
-        } else {
-          aggregatedProducts[productId] = {
-            product_id: productId,
-            name,
-            product_qty: qty,
-            product_uom_id: uomId
-          };
-        }
-      };
-
-      const glassUomId = uomM2Id || uomUnitsId || 1;
-
-      // Consolidar cantidades de todos los rawItems
-      rawItems.forEach(item => {
-        const perimMl = 2 * (item.ancho + item.alto) / 1000;
-        const totalMl = parseFloat((perimMl * item.cantidad).toFixed(3));
-        const escuadraKey = getEscuadraName(item.separador.espesor);
-        const escuadrasId = escuadraProductMap[escuadraKey];
-        const escuadrasQty = 4 * item.cantidad;
-        const sepKey = `${item.separador.espesor}_${item.separador.color}`.toLowerCase();
-        const sepProductId = separadorProductMap[sepKey];
-
-        const glassArea = (item.ancho / 1000) * (item.alto / 1000) * item.cantidad;
-        const glassAreaQty = parseFloat(glassArea.toFixed(3));
-
-        const c1Key = getGlassOdooName(item.cristal1.tipo, item.cristal1.espesor);
-        const c2Key = getGlassOdooName(item.cristal2.tipo, item.cristal2.espesor);
-
-        // Cristales
-        addAggregation(glassProductMap[c1Key], c1Key, glassAreaQty, glassUomId);
-        addAggregation(glassProductMap[c2Key], c2Key, glassAreaQty, glassUomId);
-
-        // Separador
-        if (sepProductId) {
-          const sepName = item.separador.espesor === 10 ? 'Separador porta sal silica 10 mm' : (item.separador.espesor === 6 ? 'Separador Porta sal silica 6mm' : `Separador Perfil porta sal ${item.separador.espesor} mm`);
-          addAggregation(sepProductId, sepName, totalMl, uomMetrosId);
-        }
-
-        // Hotmelt, Butilo, Sal
-        addAggregation(hotmeltId, 'Hotmelt para DVH ', totalMl, uomMetrosId);
-        addAggregation(builoId, 'Butilo para DVH', totalMl, uomMetrosId);
-        addAggregation(salId, 'Sal silica Gel 1 kg.', totalMl, uomMetrosId);
-
-        // Escuadras
-        addAggregation(escuadrasId, escuadraKey, escuadrasQty, uomUnitsId);
-
-        // Pulido
-        if (item.pulido && pulidoId) {
-          addAggregation(pulidoId, 'Pulido', totalMl, uomMetrosId);
-        }
-      });
-
-      const poLines = Object.values(aggregatedProducts).map(p => [
-        0, 0, {
-          product_id: p.product_id,
-          name: p.name,
-          product_qty: parseFloat(p.product_qty.toFixed(3)),
-          product_uom_id: p.product_uom_id,
-          price_unit: 0.0,
-          date_planned: todayStr
-        }
-      ]);
-
-      if (poLines.length > 0) {
-        // Buscar o crear proveedor
-        const supplierName = "Proveedor de Insumos (Genérico)";
-        let supplierId = null;
-        const existing = await odoo.executeKw(
-          'res.partner', 'search_read',
-          [[['name', '=', supplierName]]],
-          { fields: ['id'], limit: 1 }
-        );
-        if (existing && existing.length > 0) {
-          supplierId = existing[0].id;
-        } else {
-          const newPartner = await odoo.executeKw(
-            'res.partner', 'create',
-            [[{ name: supplierName, is_company: true }]]
-          );
-          supplierId = Array.isArray(newPartner) ? newPartner[0] : newPartner;
-        }
-
-        if (supplierId) {
-          const poData = {
-            partner_id: supplierId,
-            origin: `S${saleOrderId}`,
-            order_line: poLines
-          };
-          const poResult = await odoo.executeKw('purchase.order', 'create', [[poData]]);
-          const poId = Array.isArray(poResult) ? poResult[0] : poResult;
-          
-          const poInfo = await odoo.executeKw('purchase.order', 'read', [[poId]], { fields: ['name'] });
-          const poName = poInfo && poInfo.length > 0 ? poInfo[0].name : `PO${poId}`;
-          
-          await odoo.executeKw('sale.order', 'message_post', [[saleOrderId]], {
-            body: `<b>🛒 Orden de Compra Generada:</b> Se ha creado la solicitud de presupuesto <b>${poName}</b> con los materiales e insumos de esta cotización.`,
-            message_type: 'comment',
-            subtype_xmlid: 'mail.mt_note',
-          });
-        }
-      }
-    } catch (poErr) {
-      console.error('Error al generar la Orden de Compra (compras) en Odoo:', poErr);
-    }
 
     return moIds;
   }
