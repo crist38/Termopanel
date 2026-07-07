@@ -1,10 +1,87 @@
 'use server'
 
 import { odooCustomers, OdooCustomer, CustomerInput } from '@/lib/odoo-customers';
-import { odooSales, SaleOrderLineInput, TermopanelItemData, MonoliticoItemData, OrderSearchParams } from '@/lib/odoo-sales';
+import { odooSales, SaleOrderLineInput, TermopanelItemData, MonoliticoItemData, OrderSearchParams, getGlassOdooName, getEscuadraName } from '@/lib/odoo-sales';
 import { getSession } from '@/app/actions/auth';
 import { odoo } from '@/lib/odoo';
+import { odooPurchases } from '@/lib/odoo-purchases';
+import { calcularInsumosCompra } from '@/lib/calculos/termopanel';
 
+async function _crearComprasTermopanel(items: any[], originName: string) {
+  try {
+    const insumos = calcularInsumosCompra(items);
+    
+    // 1. Pedido a Alar (Vidrios)
+    if (insumos.vidrios.length > 0) {
+      const vendorAlarId = await odooPurchases.getOrCreateVendor('Alar');
+      const linesAlar = [];
+      for (const v of insumos.vidrios) {
+        if (v.planchasNormales > 0) {
+          const prodName = getGlassOdooName(v.tipo, v.espesor) + ' (Plancha Normal)';
+          const productId = await odooPurchases.getOrCreateProduct(prodName);
+          linesAlar.push({ productId, name: prodName, qty: v.planchasNormales });
+        }
+        if (v.planchasJumbo > 0) {
+          const prodName = getGlassOdooName(v.tipo, v.espesor) + ' (Plancha Jumbo)';
+          const productId = await odooPurchases.getOrCreateProduct(prodName);
+          linesAlar.push({ productId, name: prodName, qty: v.planchasJumbo });
+        }
+      }
+      if (linesAlar.length > 0) {
+        await odooPurchases.createPurchaseOrder(vendorAlarId, linesAlar, `Suministro de Cristales - ${originName}`);
+      }
+    }
+
+    // 2. Pedido a Soluex (Insumos)
+    const linesSoluex = [];
+    
+    if (insumos.hotmeltCajas > 0) {
+      const prodName = 'Hotmelt para DVH ';
+      const productId = await odooPurchases.getOrCreateProduct(prodName);
+      linesSoluex.push({ productId, name: prodName, qty: insumos.hotmeltCajas });
+    }
+    
+    if (insumos.butiloKg > 0) {
+      const prodName = 'Butilo para DVH';
+      const productId = await odooPurchases.getOrCreateProduct(prodName);
+      linesSoluex.push({ productId, name: prodName, qty: insumos.butiloKg });
+    }
+    
+    if (insumos.salCajas > 0) {
+      const prodName = 'Sal silica Gel 1 kg.';
+      const productId = await odooPurchases.getOrCreateProduct(prodName);
+      linesSoluex.push({ productId, name: prodName, qty: insumos.salCajas });
+    }
+
+    for (const sep of insumos.separadoresDetalle) {
+      if (sep.tiras > 0) {
+        let prodName = `Separador Perfil porta sal ${sep.espesor} mm`;
+        if (sep.espesor === 10) prodName = 'Separador porta sal silica 10 mm';
+        else if (sep.espesor === 8) prodName = 'Separador Perfil porta sal silica 8 mm';
+        else if (sep.espesor === 6) prodName = 'Separador Porta sal silica 6mm';
+        
+        const productId = await odooPurchases.getOrCreateProduct(prodName);
+        linesSoluex.push({ productId, name: prodName, qty: sep.tiras });
+      }
+    }
+    
+    for (const esc of insumos.escuadrasDetalle) {
+      if (esc.cantidad > 0) {
+        const prodName = getEscuadraName(esc.espesor);
+        const productId = await odooPurchases.getOrCreateProduct(prodName);
+        linesSoluex.push({ productId, name: prodName, qty: esc.cantidad });
+      }
+    }
+
+    if (linesSoluex.length > 0) {
+      const vendorSoluexId = await odooPurchases.getOrCreateVendor('Soluex');
+      await odooPurchases.createPurchaseOrder(vendorSoluexId, linesSoluex, `Suministro de Insumos - ${originName}`);
+    }
+
+  } catch (error) {
+    console.error('Error creando Pedidos de Compra automáticos:', error);
+  }
+}
 
 export async function buscarClientesOdoo(query: string): Promise<{ exito: boolean; data?: OdooCustomer[]; error?: string }> {
   try {
@@ -50,78 +127,70 @@ export async function guardarCotizacionEnOdoo(data: {
         name: data.clientName || 'Cliente sin nombre',
       });
     }
-    // Si en el futuro agregas email o RUT al formulario, pásalos aquí:
-    // email: data.clientEmail,
-    // vat: data.clientRut
-    // 2. Preparar las líneas de la cotización
-    // Odoo requiere un product_id válido en cada línea para poder confirmar pedidos.
-    // Se usa un producto genérico de tipo "service" configurado en la variable de entorno.
+    
     if (!process.env.ODOO_DEFAULT_PRODUCT_ID) {
       return { exito: false, error: 'Variable de entorno ODOO_DEFAULT_PRODUCT_ID no configurada en el servidor.' };
     }
-    const defaultProductId = parseInt(process.env.ODOO_DEFAULT_PRODUCT_ID);
+    const genericProductId = parseInt(process.env.ODOO_DEFAULT_PRODUCT_ID);
 
     const lineas: SaleOrderLineInput[] = data.items.map((item, index) => {
-      const extras = [];
+      // 3. Crear una descripción detallada para la orden
+      const itemLabel = item.label || `V${index + 1}`;
+      const detalles: string[] = [];
+      detalles.push(`[${itemLabel}] Cantidad: ${item.cantidad}`);
+      detalles.push(`Dimensiones: ${item.ancho} x ${item.alto} mm`);
+      detalles.push(`Cristal 1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`);
+      detalles.push(`Cristal 2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`);
+      detalles.push(`Separador: ${item.separador.espesor}mm - ${item.separador.color}`);
+      
+      const extras: string[] = [];
       if (item.pulido) extras.push('Pulido');
       if (item.micropersiana) extras.push('Micropersiana');
-      if (item.palillaje) {
-        extras.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales, ${item.palillajeVerticales || 0} verticales)`);
-      }
+      if (item.palillaje) extras.push(`Palillaje (${item.palillajeColor || ''})`);
       if (item.conForma) {
-        if (item.tipoFigura) {
-          const med = item.medidasFigura || {};
-          let shapeDesc = '';
-          if (item.tipoFigura === 'triangulo') shapeDesc = `Triángulo: Base:${med.a || 0}, Altura:${med.b || 0}`;
-          else if (item.tipoFigura === 'trapecio') shapeDesc = `Trapecio: Ancho:${med.a || 0}, Alt.Izq:${med.b1 || 0}, Alt.Der:${med.b2 || 0}`;
-          else if (item.tipoFigura === 'arco') shapeDesc = `Arco: Ancho:${med.a || 0}, Alt.Base:${med.b || 0}`;
-          else if (item.tipoFigura === 'medio_arco') shapeDesc = `Medio Arco: Ancho:${med.a || 0}, Alt.Recta:${med.b || 0}, Alt.Total:${med.b1 || 0}`;
-          else if (item.tipoFigura === 'circulo') shapeDesc = `Círculo: Diámetro:${med.a || 0}`;
-          extras.push(`Con Forma (${shapeDesc})`);
+        let formaDesc = `Forma especial (${item.tipoFigura})`;
+        if (item.medidasFigura) {
+           const med = item.medidasFigura;
+           if (item.tipoFigura === 'triangulo' || item.tipoFigura === 'arco') {
+              formaDesc += ` a:${med.a}, b:${med.b}`;
+           } else if (item.tipoFigura === 'trapecio' || item.tipoFigura === 'medio_arco') {
+              formaDesc += ` a:${med.a}, b:${med.b}, b1:${med.b1}`;
+           } else if (item.tipoFigura === 'circulo') {
+              formaDesc += ` a:${med.a}`;
+           }
         }
+        extras.push(formaDesc);
+      }
+      
+      if (extras.length > 0) {
+        detalles.push(`Extras: ${extras.join(', ')}`);
+      }
+      
+      if (item.esPrecioManual) {
+        detalles.push(`(Precio modificado manualmente)`);
       }
 
-      const itemLabel = item.label || `V${index + 1}`;
-
-      const desc = [
-        `[${itemLabel}]`,
-        `Cantidad: ${item.cantidad} unidad${item.cantidad !== 1 ? 'es' : ''}`,
-        `Termopanel ${item.ancho} x ${item.alto} mm`,
-        `Cristal 1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm`,
-        `Cristal 2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm`,
-        `Separador: ${item.separador.espesor}mm color ${item.separador.color}`,
-        ...(extras.length > 0 ? [`Extras: ${extras.join(', ')}`] : []),
-      ].join(' | ');
-
-      // Las dimensiones se envían en metros a x_studio_ancho_m y x_studio_alto_m.
-      // Para que Odoo calcule la cantidad en m² correspondiente a la cantidad total de piezas
-      // (ya que Odoo calcula cantidad = ancho * alto), escalamos la altura por la cantidad de piezas.
       const anchoM = item.ancho / 1000;
-      const altoM = (item.alto / 1000) * item.cantidad;
-
-      // Calculamos la cantidad redondeada a 2 decimales que computará Odoo
+      const altoM = (item.alto / 1000) * item.cantidad; // Area total en Odoo
+      // Para un producto genérico "Termopanel", vendemos por unidad o por m2. 
+      // Calcularemos la cantidad en m2 totales, o bien lo enviamos como unidades.
+      // Usaremos cantidad = m2 totales del item para que las métricas de Odoo cuadren, y ajustamos el precio unitario.
       const qtyRounded = Math.round(anchoM * altoM * 100) / 100;
-      
-      // El total de la línea es precioUnitario * cantidad
       const totalPrice = item.precioUnitario * item.cantidad;
-      
-      // Calculamos el precio unitario por m² tal que qtyRounded * priceUnitM2 = totalPrice
       const priceUnitM2 = qtyRounded > 0 ? Math.round(totalPrice / qtyRounded) : 0;
 
       return {
-        product_id: defaultProductId,
-        name: desc,
+        product_id: genericProductId,
+        name: detalles.join('\n'),
         product_uom_qty: qtyRounded,
         price_unit: priceUnitM2,
+        // Enviar custom fields si existen en odoo
         x_studio_ancho_m: anchoM,
         x_studio_alto_m: altoM,
       };
     });
 
-
-
-    // 3. Preparar datos brutos de los items para las órdenes de trabajo por taller
-    const rawItems: TermopanelItemData[] = data.items.map((item, index) => ({
+    const rawItems = data.items.map((item, index) => ({
       label: item.label || `V${index + 1}`,
       cantidad: item.cantidad,
       ancho: item.ancho,
@@ -132,11 +201,8 @@ export async function guardarCotizacionEnOdoo(data: {
       pulido: item.pulido,
       micropersiana: item.micropersiana,
       palillaje: item.palillaje,
-      palillajeColor: item.palillajeColor || 'Blanco',
-      palillajeHorizontales: item.palillajeHorizontales || 0,
-      palillajeVerticales: item.palillajeVerticales || 0,
-      conForma: item.conForma || false,
-      tipoFigura: item.tipoFigura || 'triangulo',
+      conForma: item.conForma,
+      tipoFigura: item.tipoFigura,
       medidasFigura: item.medidasFigura || { a: 0, b: 0 },
     }));
 
@@ -151,6 +217,10 @@ export async function guardarCotizacionEnOdoo(data: {
     const userId = session?.uid;
     const autoConfirm = data.autoConfirm !== undefined ? data.autoConfirm : false;
     const odooQuote = await odooSales.createQuote(clienteId, lineas, rawItems, autoConfirm, data.clientName, userId, finalNote);
+
+    if (autoConfirm) {
+      await _crearComprasTermopanel(data.items, odooQuote.name);
+    }
 
     return { exito: true, cotizacionId: odooQuote.id, cotizacionName: odooQuote.name };
   } catch (error: any) {
@@ -502,6 +572,9 @@ export async function confirmarCotizacionOdoo(
         parseTermopanelLine(line.name, i)
       );
       await odooSales.createManufacturingOrders(orderId, lines, rawItems, clientName);
+      
+      // Generar automáticamente las órdenes de compra para Alar (vidrios) y Soluex (insumos)
+      await _crearComprasTermopanel(rawItems, order.name);
     }
 
     return { exito: true };
