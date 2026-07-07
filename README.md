@@ -105,6 +105,9 @@ La integración se maneja desde el servidor (Next.js Server Actions), garantizan
 
 ## 📋 Changelog
 
+### v2.5 - Julio 2026
+- ✅ **Distinción Visual de Botones al Editar**: Al editar una cotización existente, el botón "Actualizar Borrador / PDF" ahora se muestra en **azul** (gradiente `blue` → `cyan`), diferenciándose claramente del botón verde "Confirmar en Odoo y Enviar a Taller". Esto evita confusión visual al operar sobre cotizaciones ya existentes.
+
 ### v2.4 - Junio 2026
 - ✅ **Remoción de Rectángulo y Nuevas Formas (Medio Arco & Círculo)**: Se quitó la forma estándar de Rectángulo del cotizador de formas y se agregaron las dos nuevas formas geométricas solicitadas: **Medio Arco** (definido por Ancho, Altura Recta y Altura Total) y **Círculo** (definido por Diámetro).
 - ✅ **Cálculos y PDF Vectorial**: Se implementaron las fórmulas matemáticas precisas para el área y perímetro de las nuevas formas, y se extendió el renderizado vectorial de jsPDF (`drawShapeInPdf`) para dibujarlas de forma nativa en los PDFs de presupuestos y órdenes de taller, manteniendo soporte de compatibilidad para renderizar rectángulos en cotizaciones previas.
