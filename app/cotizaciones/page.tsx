@@ -441,7 +441,11 @@ export default function CotizacionesPage() {
       doc.text(parsed.cant, 43, yPos);
       doc.text(parsed.dim, 57, yPos);
       doc.text(splitConfig, 84, yPos);
-      doc.text(`$${line.price_unit.toLocaleString('es-CL')}`, 152, yPos);
+      
+      const displayedCant = parseFloat(parsed.cant) || 1;
+      const unitario = Math.round(line.price_subtotal / displayedCant);
+      doc.text(`$${unitario.toLocaleString('es-CL')}`, 152, yPos);
+      
       doc.text(`$${line.price_subtotal.toLocaleString('es-CL')}`, 176, yPos);
 
       yPos += (lineCount * 5) + 5;
