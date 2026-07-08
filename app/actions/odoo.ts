@@ -7,8 +7,11 @@ import { odoo } from '@/lib/odoo';
 import { odooPurchases } from '@/lib/odoo-purchases';
 import { calcularInsumosCompra } from '@/lib/calculos/termopanel';
 
-async function _crearComprasTermopanel(items: any[], originName: string) {
+async function _crearComprasTermopanel(items: any[], originName: string, userId?: number) {
   try {
+    // 1. Limpiar órdenes genéricas que Odoo haya podido autogenerar
+    await odooPurchases.cancelGenericMTOOrders(originName);
+
     const insumos = calcularInsumosCompra(items);
     
     // 1. Pedido a Alar (Vidrios)
@@ -28,7 +31,7 @@ async function _crearComprasTermopanel(items: any[], originName: string) {
         }
       }
       if (linesAlar.length > 0) {
-        await odooPurchases.createPurchaseOrder(vendorAlarId, linesAlar, `Suministro de Cristales - ${originName}`);
+        await odooPurchases.createPurchaseOrder(vendorAlarId, linesAlar, `Suministro de Cristales - ${originName}`, userId);
       }
     }
 
@@ -75,7 +78,7 @@ async function _crearComprasTermopanel(items: any[], originName: string) {
 
     if (linesSoluex.length > 0) {
       const vendorSoluexId = await odooPurchases.getOrCreateVendor('Soluex');
-      await odooPurchases.createPurchaseOrder(vendorSoluexId, linesSoluex, `Suministro de Insumos - ${originName}`);
+      await odooPurchases.createPurchaseOrder(vendorSoluexId, linesSoluex, `Suministro de Insumos - ${originName}`, userId);
     }
 
   } catch (error) {
@@ -219,7 +222,7 @@ export async function guardarCotizacionEnOdoo(data: {
     const odooQuote = await odooSales.createQuote(clienteId, lineas, rawItems, autoConfirm, data.clientName, userId, finalNote);
 
     if (autoConfirm) {
-      await _crearComprasTermopanel(data.items, odooQuote.name);
+      await _crearComprasTermopanel(data.items, odooQuote.name, userId);
     }
 
     return { exito: true, cotizacionId: odooQuote.id, cotizacionName: odooQuote.name };
@@ -574,7 +577,7 @@ export async function confirmarCotizacionOdoo(
       await odooSales.createManufacturingOrders(orderId, lines, rawItems, clientName);
       
       // Generar automáticamente las órdenes de compra para Alar (vidrios) y Soluex (insumos)
-      await _crearComprasTermopanel(rawItems, order.name);
+      await _crearComprasTermopanel(rawItems, order.name, session.uid);
     }
 
     return { exito: true };
