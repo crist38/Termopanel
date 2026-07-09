@@ -373,7 +373,7 @@ export async function cancelarCotizacion(orderId: number): Promise<{ exito: bool
 // ─── Helpers de parseo de descripciones de línea ─────────────────────────────
 // Reconstruyen los datos estructurados a partir del texto guardado en Odoo.
 
-function parseTermopanelLine(name: string, idx: number): TermopanelItemData {
+function parseTermopanelLine(name: string, idx: number, line?: any): TermopanelItemData {
   const parts = name.split(' | ').map(p => p.trim());
 
   // Label: primera parte como "[V1]"
@@ -385,23 +385,30 @@ function parseTermopanelLine(name: string, idx: number): TermopanelItemData {
   const cantidad = parseInt(cantPart?.match(/cantidad:\s*(\d+)/i)?.[1] || '1') || 1;
 
   // Dimensiones "Termopanel 800 x 1200 mm"
-  const dimPart = parts.find(p => /^termopanel\s+\d+/i.test(p));
+  const dimPart = parts.find(p => /^termopanel/i.test(p) || /\d+\s*x\s*\d+/i.test(p));
   const dimMatch = dimPart?.match(/(\d+)\s*x\s*(\d+)/i);
-  const ancho = parseInt(dimMatch?.[1] || '0') || 0;
-  const alto  = parseInt(dimMatch?.[2] || '0') || 0;
+  let ancho = parseInt(dimMatch?.[1] || '0') || 0;
+  let alto  = parseInt(dimMatch?.[2] || '0') || 0;
+
+  if (ancho === 0 && alto === 0 && line) {
+    if (line.x_studio_ancho_m != null && line.x_studio_alto_m != null) {
+      ancho = Math.round(line.x_studio_ancho_m * 1000);
+      alto = Math.round(line.x_studio_alto_m * 1000);
+    }
+  }
 
   // Cristal 1
   const c1Part  = parts.find(p => /^cristal 1:/i.test(p));
-  const c1Match = c1Part?.match(/cristal 1:\s*(.+?)\s+(\d+)mm/i);
+  const c1Match = c1Part?.match(/cristal 1:\s*(.*?)(?:\s*(\d+)\s*mm)?$/i);
   const cristal1 = c1Match
-    ? { tipo: c1Match[1].trim(), espesor: parseInt(c1Match[2]) }
+    ? { tipo: c1Match[1].trim(), espesor: parseInt(c1Match[2] || '0') }
     : { tipo: 'Float', espesor: 6 };
 
   // Cristal 2
   const c2Part  = parts.find(p => /^cristal 2:/i.test(p));
-  const c2Match = c2Part?.match(/cristal 2:\s*(.+?)\s+(\d+)mm/i);
+  const c2Match = c2Part?.match(/cristal 2:\s*(.*?)(?:\s*(\d+)\s*mm)?$/i);
   const cristal2 = c2Match
-    ? { tipo: c2Match[1].trim(), espesor: parseInt(c2Match[2]) }
+    ? { tipo: c2Match[1].trim(), espesor: parseInt(c2Match[2] || '0') }
     : { tipo: 'Float', espesor: 6 };
 
   // Separador "Separador: 12mm color Negro"
@@ -489,7 +496,7 @@ function parseTermopanelLine(name: string, idx: number): TermopanelItemData {
   };
 }
 
-function parseMonoliticoLine(name: string, idx: number): MonoliticoItemData {
+function parseMonoliticoLine(name: string, idx: number, line?: any): MonoliticoItemData {
   const parts = name.split(' | ').map(p => p.trim());
 
   // Primera parte: "[V1] Cantidad: 2"
@@ -500,16 +507,23 @@ function parseMonoliticoLine(name: string, idx: number): MonoliticoItemData {
   const cantidad   = parseInt(cantMatch?.[1] || '1') || 1;
 
   // Dimensiones "Cristal Monolítico 800 x 1200 mm"
-  const dimPart  = parts.find(p => /cristal mon/i.test(p));
+  const dimPart = parts.find(p => /^cristal monol/i.test(p) || /\d+\s*x\s*\d+/i.test(p));
   const dimMatch = dimPart?.match(/(\d+)\s*x\s*(\d+)/i);
-  const ancho    = parseInt(dimMatch?.[1] || '0') || 0;
-  const alto     = parseInt(dimMatch?.[2] || '0') || 0;
+  let ancho    = parseInt(dimMatch?.[1] || '0') || 0;
+  let alto     = parseInt(dimMatch?.[2] || '0') || 0;
 
-  // Cristal "Cristal: Float 6mm"
-  const cristalPart  = parts.find(p => /^cristal:/i.test(p));
-  const cristalMatch = cristalPart?.match(/cristal:\s*(.+?)\s+(\d+)mm/i);
-  const cristal = cristalMatch
-    ? { tipo: cristalMatch[1].trim(), espesor: parseInt(cristalMatch[2]) }
+  if (ancho === 0 && alto === 0 && line) {
+    if (line.x_studio_ancho_m != null && line.x_studio_alto_m != null) {
+      ancho = Math.round(line.x_studio_ancho_m * 1000);
+      alto = Math.round(line.x_studio_alto_m * 1000);
+    }
+  }
+
+  // Cristal
+  const cPart = parts.find(p => /^cristal:/i.test(p));
+  const cMatch = cPart?.match(/cristal:\s*(.*?)(?:\s*(\d+)\s*mm?)?$/i);
+  const cristal = cMatch
+    ? { tipo: cMatch[1].trim(), espesor: parseInt(cMatch[2] || '0') }
     : { tipo: 'Float', espesor: 6 };
 
   return { label, cantidad, ancho, alto, cristal };
@@ -679,7 +693,7 @@ export async function obtenerCotizacionParaEditar(orderId: number): Promise<{
     let items: any[] = [];
     if (isMonolitico) {
       items = productOrderLines.map((line: any, i: number) => {
-        const parsed = parseMonoliticoLine(line.name, i);
+        const parsed = parseMonoliticoLine(line.name, i, line);
         const qty = parsed.cantidad || 1;
         const precioUnitario = Math.round(line.price_subtotal / qty);
         
@@ -691,7 +705,7 @@ export async function obtenerCotizacionParaEditar(orderId: number): Promise<{
       });
     } else {
       items = productOrderLines.map((line: any, i: number) => {
-        const parsed = parseTermopanelLine(line.name, i);
+        const parsed = parseTermopanelLine(line.name, i, line);
         const qty = parsed.cantidad || 1;
         const precioUnitario = Math.round(line.price_subtotal / qty);
 
