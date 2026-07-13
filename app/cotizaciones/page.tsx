@@ -592,11 +592,21 @@ export default function CotizacionesPage() {
       const c2Part = parts.find(p => /^(cristal 2|c2):/i.test(p));
       let cristal2_tipo = "";
       let cristal2_espesor = 0;
+      let hasCristal2 = false;
       if (c2Part) {
-        const match = c2Part.match(/^(?:cristal 2|c2):\s*(.+?)\s+(\d+)\s*mm/i);
-        if (match) {
-          cristal2_tipo = match[1].trim();
-          cristal2_espesor = parseInt(match[2], 10) || 6;
+        hasCristal2 = true;
+        // Try strict match first: "Incoloro 6mm"
+        const matchStrict = c2Part.match(/^(?:cristal 2|c2):\s*(.+?)\s+(\d+)\s*mm/i);
+        if (matchStrict) {
+          cristal2_tipo = matchStrict[1].trim();
+          cristal2_espesor = parseInt(matchStrict[2], 10) || 6;
+        } else {
+          // Flexible match: extract whatever is after the colon
+          const matchFlex = c2Part.match(/^(?:cristal 2|c2):\s*(.+?)(?:\s+(\d+)\s*mm?)?$/i);
+          if (matchFlex) {
+            cristal2_tipo = matchFlex[1].trim();
+            cristal2_espesor = matchFlex[2] ? (parseInt(matchFlex[2], 10) || 6) : 6;
+          }
         }
       }
 
@@ -604,16 +614,19 @@ export default function CotizacionesPage() {
       const sepPart = parts.find(p => /^(separador|sep):/i.test(p));
       let sep_espesor = 0;
       let sep_color = "";
+      let hasSeparador = false;
       if (sepPart) {
-        const sepMatch1 = sepPart.match(/separador:\s*(\d+)mm\s+color\s+(.+)/i);
+        hasSeparador = true;
+        const sepMatch1 = sepPart.match(/separador:\s*(\d+)\s*mm\s+color\s+(.+)/i);
         if (sepMatch1) {
           sep_espesor = parseInt(sepMatch1[1]);
           sep_color = sepMatch1[2].trim();
         } else {
-          const sepMatch2 = sepPart.match(/sep:\s*(\d+)mm\s+(.+)/i);
+          // Flexible: "Separador: 12mm Negro" or "Sep: 12mm Negro"
+          const sepMatch2 = sepPart.match(/(?:separador|sep):\s*(\d+)\s*mm?\s*(.+)?/i);
           if (sepMatch2) {
-            sep_espesor = parseInt(sepMatch2[1]);
-            sep_color = sepMatch2[2].trim();
+            sep_espesor = parseInt(sepMatch2[1]) || 12;
+            sep_color = (sepMatch2[2] || "Negro").trim();
           }
         }
       }
@@ -651,7 +664,7 @@ export default function CotizacionesPage() {
         }
       }
 
-      const isTermopanel = name.toLowerCase().includes("termopanel") || cristal2_espesor > 0 || sep_espesor > 0;
+      const isTermopanel = name.toLowerCase().includes("termopanel") || hasCristal2 || hasSeparador || cristal2_espesor > 0 || sep_espesor > 0;
 
       return {
         label,
@@ -659,8 +672,8 @@ export default function CotizacionesPage() {
         ancho,
         alto,
         cristal1: { tipo: cristal1_tipo, espesor: cristal1_espesor },
-        cristal2: cristal2_espesor > 0 ? { tipo: cristal2_tipo, espesor: cristal2_espesor } : null,
-        separador: sep_espesor > 0 ? { espesor: sep_espesor, color: sep_color } : null,
+        cristal2: hasCristal2 ? { tipo: cristal2_tipo, espesor: cristal2_espesor } : null,
+        separador: hasSeparador ? { espesor: sep_espesor, color: sep_color } : null,
         extrasText,
         isTermopanel,
       };
