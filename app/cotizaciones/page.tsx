@@ -1272,16 +1272,6 @@ export default function CotizacionesPage() {
                   {/* Action buttons */}
                   <div className="flex items-center justify-between gap-3 flex-wrap bg-slate-50 border border-slate-200 rounded-xl p-3.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      {detail.state === 'draft' && (
-                        <button
-                          onClick={handleEditarCotizacion}
-                          className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-1.5 rounded-lg font-semibold transition-colors shadow-sm"
-                        >
-                          <Edit3 size={12} />
-                          Editar Cotización
-                        </button>
-                      )}
-
                       {detail.state === 'cancel' && (
                         <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg">
                           <XCircle size={12} />
