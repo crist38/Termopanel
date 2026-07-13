@@ -535,7 +535,22 @@ export default function CotizacionesPage() {
 
     const parsedItems = productLines.map((line, index) => {
       const name = line.name || "";
-      const parts = name.split(" | ").map(p => p.trim());
+      // Handle both pipe-separated (new) and newline-separated (old) formats
+      const rawSplit = name.includes(" | ")
+        ? name.split(" | ").map(p => p.trim())
+        : name.split(/\n/).map(p => p.trim());
+      // Old format can have "[V1] Cantidad: 4" merged in one chunk — split it
+      const parts: string[] = [];
+      for (const rp of rawSplit) {
+        const bracketEnd = rp.indexOf("]");
+        if (rp.startsWith("[") && bracketEnd !== -1 && bracketEnd < rp.length - 1) {
+          parts.push(rp.slice(0, bracketEnd + 1).trim());
+          const rest = rp.slice(bracketEnd + 1).trim();
+          if (rest) parts.push(rest);
+        } else {
+          parts.push(rp);
+        }
+      }
 
       // Cantidad
       let cantidad = 1;
@@ -547,13 +562,20 @@ export default function CotizacionesPage() {
         }
       }
 
-      // Dimensiones
+      // Dimensiones — soporta "Termopanel 800 x 1200 mm", "Dimensiones: 800 x 1200 mm" y "Cristal Monolítico ..."
       let ancho = 0;
       let alto = 0;
-      const dimObj = parseDimensions(name);
-      if (dimObj) {
-        ancho = dimObj.ancho;
-        alto = dimObj.alto;
+      const dimPart = parts.find(p =>
+        /termopanel\s+\d/i.test(p) ||
+        /^dimensiones?:/i.test(p) ||
+        /cristal monol/i.test(p)
+      );
+      if (dimPart) {
+        const match = dimPart.match(/(\d+)\s*x\s*(\d+)/i);
+        if (match) {
+          ancho = parseInt(match[1], 10);
+          alto = parseInt(match[2], 10);
+        }
       } else if (line.x_studio_ancho_m != null && line.x_studio_alto_m != null) {
         ancho = Math.round(line.x_studio_ancho_m * 1000);
         alto = Math.round((line.x_studio_alto_m * 1000) / cantidad);
@@ -570,7 +592,6 @@ export default function CotizacionesPage() {
           cristal1_espesor = parseInt(match[2], 10) || 6;
         }
       } else {
-        // Fallback search for a pattern like "Incoloro 6mm"
         for (const part of parts) {
           const match = part.match(/^(.+?)\s+(\d+)\s*mm$/i);
           if (
@@ -595,13 +616,11 @@ export default function CotizacionesPage() {
       let hasCristal2 = false;
       if (c2Part) {
         hasCristal2 = true;
-        // Try strict match first: "Incoloro 6mm"
         const matchStrict = c2Part.match(/^(?:cristal 2|c2):\s*(.+?)\s+(\d+)\s*mm/i);
         if (matchStrict) {
           cristal2_tipo = matchStrict[1].trim();
           cristal2_espesor = parseInt(matchStrict[2], 10) || 6;
         } else {
-          // Flexible match: extract whatever is after the colon
           const matchFlex = c2Part.match(/^(?:cristal 2|c2):\s*(.+?)(?:\s+(\d+)\s*mm?)?$/i);
           if (matchFlex) {
             cristal2_tipo = matchFlex[1].trim();
@@ -611,19 +630,19 @@ export default function CotizacionesPage() {
       }
 
       // Separador
-      const sepPart = parts.find(p => /^(separador|sep):/i.test(p));
+      const sepPart = parts.find(p => /^(separador|sep)(?:-|:)/i.test(p));
       let sep_espesor = 0;
       let sep_color = "";
       let hasSeparador = false;
       if (sepPart) {
         hasSeparador = true;
-        const sepMatch1 = sepPart.match(/separador:\s*(\d+)\s*mm\s+color\s+(.+)/i);
+        const sepMatch1 = sepPart.match(/separador(?:-|:)\s*(\d+)\s*mm\s+color\s+(.+)/i);
         if (sepMatch1) {
           sep_espesor = parseInt(sepMatch1[1]);
           sep_color = sepMatch1[2].trim();
         } else {
-          // Flexible: "Separador: 12mm Negro" or "Sep: 12mm Negro"
-          const sepMatch2 = sepPart.match(/(?:separador|sep):\s*(\d+)\s*mm?\s*(.+)?/i);
+          // Flexible: "Separador: 12mm - Negro", "Separador: 12mm Negro", "Sep: 12mm color Negro"
+          const sepMatch2 = sepPart.match(/(?:separador|sep)[:\-]\s*(\d+)\s*mm?(?:\s+(?:color\s+)?|\s*-\s*)(.+)?/i);
           if (sepMatch2) {
             sep_espesor = parseInt(sepMatch2[1]) || 12;
             sep_color = (sepMatch2[2] || "Negro").trim();
@@ -631,9 +650,9 @@ export default function CotizacionesPage() {
         }
       }
 
-      // Label / Ref
-      let label = `L${index + 1}`;
-      const refMatch = parts[0]?.match(/^\[([^\]]+)\]$/);
+      // Label / Ref — extrae el contenido entre [ ] al inicio (sin requerir fin de cadena)
+      let label = `V${index + 1}`;
+      const refMatch = parts[0]?.match(/^\[([^\]]+)\]/);
       if (refMatch) {
         label = refMatch[1];
       }
