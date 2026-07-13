@@ -541,24 +541,26 @@ function ShapesCADCotizadorContent() {
       console.error("Error al cargar el logo en el PDF", e);
     }
 
-    doc.setFontSize(20);
-    doc.text("Presupuesto Termopaneles con Formas", 50, 25);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("Presupuesto Termopaneles con Formas", 105, 20, { align: "center" });
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 100, 100);
+    doc.text(`N° ${finalName}`, 196, 13, { align: "right" });
+    doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 196, 20, { align: "right" });
+    doc.setTextColor(0, 0, 0);
 
     doc.setFontSize(10);
-    doc.text(`N° Presupuesto: ${finalName}`, 150, 22);
-    doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 150, 28);
-
-    doc.setFontSize(12);
-    doc.text("Información del Cliente", 14, 45);
-    doc.setFontSize(10);
-    doc.text(`Nombre: ${clientName}`, 14, 53);
-    
-    let currentY = 53;
+    let currentY = 35;
+    doc.text(`Cliente: ${clientName}`, 14, currentY);
     if (obra.trim()) {
-      currentY += 8;
+      currentY += 7;
       doc.text(`Obra: ${obra.trim()}`, 14, currentY);
     }
-    currentY += 8;
+    currentY += 7;
     const totalM2 = items.reduce((acc, item) => {
       const calc = calcularItem(item);
       return acc + calc.metrosCuadrados;
@@ -712,22 +714,25 @@ function ShapesCADCotizadorContent() {
     if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
     pdf.setFontSize(18);
     pdf.setFont("helvetica", "bold");
-    pdf.text("ORDEN DE TRABAJO", 45, 20);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text("ORDEN DE TRABAJO", 105, 20, { align: "center" });
     pdf.setFontSize(13);
     pdf.setTextColor(80, 80, 80);
-    pdf.text("Taller Corte Vidrio (Formas)", 45, 28);
+    pdf.text("Taller Corte Vidrio (Formas)", 105, 28, { align: "center" });
     pdf.setTextColor(0, 0, 0);
 
     pdf.setFontSize(9);
     pdf.setFont("helvetica", "normal");
-    pdf.text(`Ref: ${finalName}`, 155, 18);
-    pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
-    pdf.text(`Cliente: ${clientName}`, 155, 30);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(`Ref: ${finalName}`, 196, 13, { align: "right" });
+    pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 196, 20, { align: "right" });
+    pdf.text(`Cliente: ${clientName}`, 196, 27, { align: "right" });
     let topHeaderOffset = 38;
     if (obra.trim()) {
-      pdf.text(`Obra: ${obra.trim()}`, 155, 36);
+      pdf.text(`Obra: ${obra.trim()}`, 196, 34, { align: "right" });
       topHeaderOffset = 44;
     }
+    pdf.setTextColor(0, 0, 0);
 
     pdf.setDrawColor(200, 200, 200);
     pdf.line(14, topHeaderOffset, 196, topHeaderOffset);
@@ -824,21 +829,26 @@ function ShapesCADCotizadorContent() {
     pdf.addPage();
     if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
     pdf.setFontSize(18);
-    pdf.text("ORDEN DE TRABAJO", 45, 20);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(0, 0, 0);
+    pdf.text("ORDEN DE TRABAJO", 105, 20, { align: "center" });
     pdf.setFontSize(13);
     pdf.setTextColor(80, 80, 80);
-    pdf.text("Taller Termopaneles (Formas)", 45, 28);
+    pdf.text("Taller Termopaneles (Formas)", 105, 28, { align: "center" });
     pdf.setTextColor(0, 0, 0);
 
     pdf.setFontSize(9);
-    pdf.text(`Ref: ${finalName}`, 155, 18);
-    pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
-    pdf.text(`Cliente: ${clientName}`, 155, 30);
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(`Ref: ${finalName}`, 196, 13, { align: "right" });
+    pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 196, 20, { align: "right" });
+    pdf.text(`Cliente: ${clientName}`, 196, 27, { align: "right" });
     topHeaderOffset = 38;
     if (obra.trim()) {
-      pdf.text(`Obra: ${obra.trim()}`, 155, 36);
+      pdf.text(`Obra: ${obra.trim()}`, 196, 34, { align: "right" });
       topHeaderOffset = 44;
     }
+    pdf.setTextColor(0, 0, 0);
 
     pdf.line(14, topHeaderOffset, 196, topHeaderOffset);
 
