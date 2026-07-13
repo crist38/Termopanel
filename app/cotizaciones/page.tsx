@@ -388,20 +388,26 @@ export default function CotizacionesPage() {
     }
 
     // Encabezado
-    doc.setFontSize(20);
-    doc.text("Presupuesto Termopaneles", 50, 25);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("Presupuesto Termopaneles", 105, 20, { align: "center" });
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(80, 80, 80);
+    doc.text(`N° ${detail.name}`, 105, 28, { align: "center" });
+    doc.setTextColor(0, 0, 0);
 
-    doc.setFontSize(10);
-    doc.text(`N° Presupuesto: ${detail.name}`, 150, 22);
-    doc.text(`Fecha: ${formatDate(detail.date_order)}`, 150, 28);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Fecha: ${formatDate(detail.date_order)}`, 196, 18, { align: "right" });
+    doc.text(`Cliente: ${detail.partner_id?.[1] ?? "—"}`, 196, 25, { align: "right" });
+    doc.setTextColor(0, 0, 0);
 
     // Información del Cliente
-    doc.setFontSize(12);
-    doc.text("Información del Cliente", 14, 45);
-    doc.setFontSize(10);
-    doc.text(`Nombre: ${detail.partner_id?.[1] ?? "—"}`, 14, 53);
     
-    let currentY = 53;
+    let currentY = 38;
     currentY += 8;
 
     // Calcular total m2 de las líneas que no son notas o secciones
@@ -725,17 +731,20 @@ export default function CotizacionesPage() {
 
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text("ORDEN DE TRABAJO", 45, 20);
+    doc.setTextColor(0, 0, 0);
+    doc.text("ORDEN DE TRABAJO", 105, 20, { align: "center" });
     doc.setFontSize(13);
     doc.setTextColor(80, 80, 80);
-    doc.text("Taller Corte Vidrio", 45, 28);
+    doc.text("Taller Corte Vidrio", 105, 28, { align: "center" });
     doc.setTextColor(0, 0, 0);
 
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    doc.text(`Ref: ${detail.name}`, 155, 18);
-    doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
-    doc.text(`Cliente: ${clientName}`, 155, 30);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Ref: ${detail.name}`, 196, 13, { align: "right" });
+    doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 196, 20, { align: "right" });
+    doc.text(`Cliente: ${clientName}`, 196, 27, { align: "right" });
+    doc.setTextColor(0, 0, 0);
     let topHeaderOffset = 38;
 
     // Line separator
@@ -846,17 +855,19 @@ export default function CotizacionesPage() {
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0, 0, 0);
-      doc.text("ORDEN DE TRABAJO", 45, 20);
+      doc.text("ORDEN DE TRABAJO", 105, 20, { align: "center" });
       doc.setFontSize(13);
       doc.setTextColor(80, 80, 80);
-      doc.text("Taller Termopaneles", 45, 28);
+      doc.text("Taller Termopaneles", 105, 28, { align: "center" });
       doc.setTextColor(0, 0, 0);
 
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      doc.text(`Ref: ${detail.name}`, 155, 18);
-      doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
-      doc.text(`Cliente: ${clientName}`, 155, 30);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Ref: ${detail.name}`, 196, 13, { align: "right" });
+      doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 196, 20, { align: "right" });
+      doc.text(`Cliente: ${clientName}`, 196, 27, { align: "right" });
+      doc.setTextColor(0, 0, 0);
       topHeaderOffset = 38;
 
       // Line separator

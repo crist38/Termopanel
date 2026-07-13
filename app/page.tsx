@@ -533,26 +533,28 @@ function CotizadorTermopanelContent() {
     }
 
     // Encabezado
-    doc.setFontSize(20);
-    doc.text("Presupuesto Termopaneles", 50, 25);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("Presupuesto Termopaneles", 105, 20, { align: "center" });
 
-    doc.setFontSize(10);
-    doc.text(`N° Presupuesto: ${finalName}`, 150, 22);
-    doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 150, 28);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 100, 100);
+    doc.text(`N° ${finalName}`, 196, 13, { align: "right" });
+    doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 196, 20, { align: "right" });
+    doc.setTextColor(0, 0, 0);
 
     // Información del Cliente
-    doc.setFontSize(12);
-    doc.text("Información del Cliente", 14, 45);
     doc.setFontSize(10);
-    doc.text(`Nombre: ${clientName}`, 14, 53);
-    
-    let currentY = 53;
+    let currentY = 35;
+    doc.text(`Cliente: ${clientName}`, 14, currentY);
     if (obra.trim()) {
-      currentY += 8;
+      currentY += 7;
       doc.text(`Obra: ${obra.trim()}`, 14, currentY);
     }
     if (fechaEntrega.trim()) {
-      currentY += 8;
+      currentY += 7;
       let formattedFechaEntrega = fechaEntrega;
       if (/^\d{4}-\d{2}-\d{2}$/.test(fechaEntrega)) {
         const [year, month, day] = fechaEntrega.split('-');
@@ -560,7 +562,7 @@ function CotizadorTermopanelContent() {
       }
       doc.text(`Fecha de Entrega: ${formattedFechaEntrega}`, 14, currentY);
     }
-    currentY += 8;
+    currentY += 7;
     const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
     doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} m²`, 14, currentY);
 
@@ -707,22 +709,24 @@ function CotizadorTermopanelContent() {
 
     pdf.setFontSize(18);
     pdf.setFont("helvetica", "bold");
-    pdf.text("ORDEN DE TRABAJO", 45, 20);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text("ORDEN DE TRABAJO", 105, 20, { align: "center" });
     pdf.setFontSize(13);
     pdf.setTextColor(80, 80, 80);
-    pdf.text("Taller Corte Vidrio", 45, 28);
+    pdf.text("Taller Corte Vidrio", 105, 28, { align: "center" });
     pdf.setTextColor(0, 0, 0);
 
     pdf.setFontSize(9);
     pdf.setFont("helvetica", "normal");
-    pdf.text(`Ref: ${finalName}`, 155, 18);
-    pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
-    pdf.text(`Cliente: ${clientName}`, 155, 30);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(`Ref: ${finalName}`, 196, 13, { align: "right" });
+    pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 196, 20, { align: "right" });
+    pdf.text(`Cliente: ${clientName}`, 196, 27, { align: "right" });
     let topHeaderOffset = 38;
-    let rightY = 30;
+    let rightY = 27;
     if (obra.trim()) {
-      pdf.text(`Obra: ${obra.trim()}`, 155, 36);
-      rightY = 36;
+      pdf.text(`Obra: ${obra.trim()}`, 196, 34, { align: "right" });
+      rightY = 34;
       topHeaderOffset = 44;
     }
     if (fechaEntrega.trim()) {
@@ -731,9 +735,10 @@ function CotizadorTermopanelContent() {
         const [year, month, day] = fechaEntrega.split('-');
         formattedFechaEntrega = `${day}/${month}/${year}`;
       }
-      pdf.text(`F. Entrega: ${formattedFechaEntrega}`, 155, rightY + 6);
-      topHeaderOffset = rightY + 12;
+      pdf.text(`F. Entrega: ${formattedFechaEntrega}`, 196, rightY + 7, { align: "right" });
+      topHeaderOffset = rightY + 13;
     }
+    pdf.setTextColor(0, 0, 0);
 
     // Línea separadora
     pdf.setDrawColor(200, 200, 200);
@@ -850,21 +855,22 @@ function CotizadorTermopanelContent() {
     pdf.setFontSize(18);
     pdf.setFont("helvetica", "bold");
     pdf.setTextColor(0, 0, 0);
-    pdf.text("ORDEN DE TRABAJO", 45, 20);
+    pdf.text("ORDEN DE TRABAJO", 105, 20, { align: "center" });
     pdf.setFontSize(13);
     pdf.setTextColor(80, 80, 80);
-    pdf.text("Taller Termopaneles", 45, 28);
+    pdf.text("Taller Termopaneles", 105, 28, { align: "center" });
     pdf.setTextColor(0, 0, 0);
 
     pdf.setFontSize(9);
     pdf.setFont("helvetica", "normal");
-    pdf.text(`Ref: ${finalName}`, 155, 18);
-    pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
-    pdf.text(`Cliente: ${clientName}`, 155, 30);
-    let rightYArmado = 30;
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(`Ref: ${finalName}`, 196, 13, { align: "right" });
+    pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 196, 20, { align: "right" });
+    pdf.text(`Cliente: ${clientName}`, 196, 27, { align: "right" });
+    let rightYArmado = 27;
     if (obra.trim()) {
-      pdf.text(`Obra: ${obra.trim()}`, 155, 36);
-      rightYArmado = 36;
+      pdf.text(`Obra: ${obra.trim()}`, 196, 34, { align: "right" });
+      rightYArmado = 34;
       topHeaderOffset = 44;
     }
     if (fechaEntrega.trim()) {
@@ -873,9 +879,10 @@ function CotizadorTermopanelContent() {
         const [year, month, day] = fechaEntrega.split('-');
         formattedFechaEntrega = `${day}/${month}/${year}`;
       }
-      pdf.text(`F. Entrega: ${formattedFechaEntrega}`, 155, rightYArmado + 6);
-      topHeaderOffset = rightYArmado + 12;
+      pdf.text(`F. Entrega: ${formattedFechaEntrega}`, 196, rightYArmado + 7, { align: "right" });
+      topHeaderOffset = rightYArmado + 13;
     }
+    pdf.setTextColor(0, 0, 0);
 
     // Línea separadora
     pdf.setDrawColor(200, 200, 200);
