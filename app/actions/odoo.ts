@@ -402,14 +402,14 @@ function parseTermopanelLine(name: string, idx: number, line?: any): TermopanelI
   const c1Match = c1Part?.match(/cristal 1:\s*(.*?)(?:\s*(\d+)\s*mm)?$/i);
   const cristal1 = c1Match
     ? { tipo: c1Match[1].trim(), espesor: parseInt(c1Match[2] || '0') }
-    : { tipo: 'Float', espesor: 6 };
+    : { tipo: 'Incoloro', espesor: 6 };
 
   // Cristal 2
   const c2Part  = parts.find(p => /^cristal 2:/i.test(p));
   const c2Match = c2Part?.match(/cristal 2:\s*(.*?)(?:\s*(\d+)\s*mm)?$/i);
   const cristal2 = c2Match
     ? { tipo: c2Match[1].trim(), espesor: parseInt(c2Match[2] || '0') }
-    : { tipo: 'Float', espesor: 6 };
+    : { tipo: 'Incoloro', espesor: 6 };
 
   // Separador "Separador: 12mm color Negro"
   const sepPart  = parts.find(p => /^separador:/i.test(p));
@@ -524,7 +524,7 @@ function parseMonoliticoLine(name: string, idx: number, line?: any): MonoliticoI
   const cMatch = cPart?.match(/cristal:\s*(.*?)(?:\s*(\d+)\s*mm?)?$/i);
   const cristal = cMatch
     ? { tipo: cMatch[1].trim(), espesor: parseInt(cMatch[2] || '0') }
-    : { tipo: 'Float', espesor: 6 };
+    : { tipo: 'Incoloro', espesor: 6 };
 
   return { label, cantidad, ancho, alto, cristal };
 }
