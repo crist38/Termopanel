@@ -258,27 +258,25 @@ function CotizadorMonoliticoContent() {
       });
       doc.addImage(logoBase64, 'PNG', 14, 10, 45, 22);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(20);
-      doc.text("PRO WINDOWS", 50, yPos);
-      yPos += 10;
-      doc.setFontSize(14);
-      doc.text("COTIZACIÓN DE CRISTALES MONOLÍTICOS", 50, yPos);
+      doc.setFontSize(18);
+      doc.setTextColor(0, 0, 0);
+      doc.text("COTIZACIÓN DE CRISTALES MONOLÍTICOS", 105, 20, { align: "center" });
     } catch (e) {
       console.error("Error al cargar el logo en el PDF", e);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(20);
-      doc.text("PRO WINDOWS", 14, yPos);
-      yPos += 15;
-      doc.setFontSize(14);
-      doc.text("COTIZACIÓN DE CRISTALES MONOLÍTICOS", 14, yPos);
+      doc.setFontSize(18);
+      doc.text("COTIZACIÓN DE CRISTALES MONOLÍTICOS", 105, 20, { align: "center" });
     }
     
-    yPos += 12;
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    doc.text(`Presupuesto N°: ${finalName}`, 14, yPos);
-    doc.text(`Fecha: ${budgetDate}`, 120, yPos);
-    yPos += 7;
+    doc.setTextColor(100, 100, 100);
+    doc.text(`N° ${finalName}`, 196, 13, { align: "right" });
+    doc.text(`Fecha: ${budgetDate}`, 196, 20, { align: "right" });
+    doc.setTextColor(0, 0, 0);
+
+    doc.setFontSize(10);
+    yPos = 34;
     doc.text(`Cliente: ${clientName || 'Sin Cliente'}`, 14, yPos);
     if (obra.trim()) {
       yPos += 7;
@@ -409,22 +407,25 @@ function CotizadorMonoliticoContent() {
 
     pdf.setFontSize(18);
     pdf.setFont("helvetica", "bold");
-    pdf.text("ORDEN DE TRABAJO", 45, 20);
+    pdf.setTextColor(0, 0, 0);
+    pdf.text("ORDEN DE TRABAJO", 105, 20, { align: "center" });
     pdf.setFontSize(13);
     pdf.setTextColor(80, 80, 80);
-    pdf.text("Taller Corte Vidrio", 45, 28);
+    pdf.text("Taller Corte Vidrio", 105, 28, { align: "center" });
     pdf.setTextColor(0, 0, 0);
 
     pdf.setFontSize(9);
     pdf.setFont("helvetica", "normal");
-    pdf.text(`Ref: ${finalName}`, 155, 18);
-    pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 155, 24);
-    pdf.text(`Cliente: ${clientName || 'Sin Cliente'}`, 155, 30);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text(`Ref: ${finalName}`, 196, 13, { align: "right" });
+    pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 196, 20, { align: "right" });
+    pdf.text(`Cliente: ${clientName || 'Sin Cliente'}`, 196, 27, { align: "right" });
     let topHeaderOffset = 38;
     if (obra.trim()) {
-      pdf.text(`Obra: ${obra.trim()}`, 155, 36);
+      pdf.text(`Obra: ${obra.trim()}`, 196, 34, { align: "right" });
       topHeaderOffset = 44;
     }
+    pdf.setTextColor(0, 0, 0);
 
     pdf.setDrawColor(200, 200, 200);
     pdf.line(14, topHeaderOffset, 196, topHeaderOffset);
