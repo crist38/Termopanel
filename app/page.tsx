@@ -248,13 +248,19 @@ function CotizadorTermopanelContent() {
 
 
   function getEspesores(tipo: string) {
-    if (!config) return [];
-    return config.vidrios.filter(v => v.tipo === tipo).map(v => v.espesor).sort((a, b) => a - b)
+    if (!config || !tipo) return [];
+    const normalizedTipo = tipo.trim().toLowerCase();
+    return Array.from(new Set(
+      config.vidrios
+        .filter(v => v.tipo.trim().toLowerCase() === normalizedTipo)
+        .map(v => v.espesor)
+    )).sort((a, b) => a - b);
   }
 
   function getPrecioVidrio(tipo: string, espesor: number) {
-    if (!config) return 0;
-    return config.vidrios.find(v => v.tipo === tipo && v.espesor === espesor)?.precio || 0
+    if (!config || !tipo) return 0;
+    const normalizedTipo = tipo.trim().toLowerCase();
+    return config.vidrios.find(v => v.tipo.trim().toLowerCase() === normalizedTipo && v.espesor === espesor)?.precio || 0;
   }
 
   function updateItem(id: string, field: keyof TermopanelItem | string, value: any) {
