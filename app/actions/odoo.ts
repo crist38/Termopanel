@@ -168,6 +168,9 @@ export async function guardarCotizacionEnOdoo(data: {
       if (extras.length > 0) {
         detalles.push(`Extras: ${extras.join(', ')}`);
       }
+      if (item.descuento && item.descuento > 0) {
+        detalles.push(`Descuento: ${item.descuento}%`);
+      }
       
       if (item.esPrecioManual) {
         detalles.push(`(Precio modificado manualmente)`);
@@ -187,6 +190,7 @@ export async function guardarCotizacionEnOdoo(data: {
         name: detalles.join('\n'),
         product_uom_qty: qtyRounded,
         price_unit: priceUnitM2,
+        discount: item.descuento || 0,
         // Enviar custom fields si existen en odoo
         x_studio_ancho_m: anchoM,
         x_studio_alto_m: altoM,
@@ -207,6 +211,7 @@ export async function guardarCotizacionEnOdoo(data: {
       conForma: item.conForma,
       tipoFigura: item.tipoFigura,
       medidasFigura: item.medidasFigura || { a: 0, b: 0 },
+      descuento: item.descuento || 0,
     }));
 
     // 4. Crear cotización, confirmarla y crear órdenes de fabricación de forma síncrona.
@@ -259,7 +264,10 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
 
     const lineas: SaleOrderLineInput[] = data.items.map((item, index) => {
       const itemLabel = item.label || `V${index + 1}`;
-      const desc = `[${itemLabel}] Cantidad: ${item.cantidad} | Cristal Monolítico ${item.ancho} x ${item.alto} mm | Cristal: ${item.cristal.tipo} ${item.cristal.espesor}mm`;
+      let desc = `[${itemLabel}] Cantidad: ${item.cantidad} | Cristal Monolítico ${item.ancho} x ${item.alto} mm | Cristal: ${item.cristal.tipo} ${item.cristal.espesor}mm`;
+      if (item.descuento && item.descuento > 0) {
+        desc += ` | Descuento: ${item.descuento}%`;
+      }
 
       const anchoM = item.ancho / 1000;
       const altoM = (item.alto / 1000) * item.cantidad;
@@ -272,6 +280,7 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
         name: desc,
         product_uom_qty: qtyRounded,
         price_unit: priceUnitM2,
+        discount: item.descuento || 0,
         x_studio_ancho_m: anchoM,
         x_studio_alto_m: altoM,
       };
@@ -283,6 +292,7 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
       ancho: item.ancho,
       alto: item.alto,
       cristal: { tipo: item.cristal.tipo, espesor: item.cristal.espesor },
+      descuento: item.descuento || 0,
     }));
 
     let finalNote = data.obra || '';
@@ -374,19 +384,20 @@ export async function cancelarCotizacion(orderId: number): Promise<{ exito: bool
 // Reconstruyen los datos estructurados a partir del texto guardado en Odoo.
 
 function parseTermopanelLine(name: string, idx: number, line?: any): TermopanelItemData {
-  const parts = name.split(' | ').map(p => p.trim());
+  // Dividir por saltos de línea o tuberías '|'
+  const parts = name.split(/[\n\r|]+/).map(p => p.trim()).filter(Boolean);
 
   // Label: primera parte como "[V1]"
-  const labelMatch = parts[0]?.match(/^\[([^\]]+)\]/);
+  const labelMatch = name.match(/\[([^\]]+)\]/);
   const label = labelMatch ? labelMatch[1] : `V${idx + 1}`;
 
   // Cantidad
   const cantPart = parts.find(p => /cantidad:/i.test(p));
-  const cantidad = parseInt(cantPart?.match(/cantidad:\s*(\d+)/i)?.[1] || '1') || 1;
+  const cantidad = parseInt(cantPart?.match(/cantidad:\s*(\d+)/i)?.[1] || name.match(/cantidad:\s*(\d+)/i)?.[1] || '1') || 1;
 
   // Dimensiones "Termopanel 800 x 1200 mm"
   const dimPart = parts.find(p => /^termopanel/i.test(p) || /\d+\s*x\s*\d+/i.test(p));
-  const dimMatch = dimPart?.match(/(\d+)\s*x\s*(\d+)/i);
+  const dimMatch = (dimPart || name).match(/(\d+)\s*x\s*(\d+)/i);
   let ancho = parseInt(dimMatch?.[1] || '0') || 0;
   let alto  = parseInt(dimMatch?.[2] || '0') || 0;
 
@@ -398,25 +409,48 @@ function parseTermopanelLine(name: string, idx: number, line?: any): TermopanelI
   }
 
   // Cristal 1
-  const c1Part  = parts.find(p => /^cristal 1:/i.test(p));
-  const c1Match = c1Part?.match(/cristal 1:\s*(.*?)(?:\s*(\d+)\s*mm)?$/i);
-  const cristal1 = c1Match
-    ? { tipo: c1Match[1].trim(), espesor: parseInt(c1Match[2] || '0') }
-    : { tipo: 'Incoloro', espesor: 6 };
+  const c1Part = parts.find(p => /cristal 1:/i.test(p));
+  let cristal1 = { tipo: 'Incoloro', espesor: 4 };
+  if (c1Part) {
+    const text = c1Part.replace(/^.*cristal 1:\s*/i, '').trim();
+    const thickMatch = text.match(/(\d+)\s*mm$/i);
+    if (thickMatch) {
+      const esp = parseInt(thickMatch[1], 10);
+      const tipo = text.replace(/\s*\d+\s*mm$/i, '').trim();
+      cristal1 = { tipo: tipo || 'Incoloro', espesor: esp || 4 };
+    } else {
+      cristal1 = { tipo: text || 'Incoloro', espesor: 4 };
+    }
+  }
 
   // Cristal 2
-  const c2Part  = parts.find(p => /^cristal 2:/i.test(p));
-  const c2Match = c2Part?.match(/cristal 2:\s*(.*?)(?:\s*(\d+)\s*mm)?$/i);
-  const cristal2 = c2Match
-    ? { tipo: c2Match[1].trim(), espesor: parseInt(c2Match[2] || '0') }
-    : { tipo: 'Incoloro', espesor: 6 };
+  const c2Part = parts.find(p => /cristal 2:/i.test(p));
+  let cristal2 = { tipo: 'Incoloro', espesor: 4 };
+  if (c2Part) {
+    const text = c2Part.replace(/^.*cristal 2:\s*/i, '').trim();
+    const thickMatch = text.match(/(\d+)\s*mm$/i);
+    if (thickMatch) {
+      const esp = parseInt(thickMatch[1], 10);
+      const tipo = text.replace(/\s*\d+\s*mm$/i, '').trim();
+      cristal2 = { tipo: tipo || 'Incoloro', espesor: esp || 4 };
+    } else {
+      cristal2 = { tipo: text || 'Incoloro', espesor: 4 };
+    }
+  }
 
-  // Separador "Separador: 12mm color Negro"
-  const sepPart  = parts.find(p => /^separador:/i.test(p));
-  const sepMatch = sepPart?.match(/separador:\s*(\d+)mm\s+color\s+(.+)/i);
-  const separador = sepMatch
-    ? { espesor: parseInt(sepMatch[1]), color: sepMatch[2].trim() }
-    : { espesor: 12, color: 'Negro' };
+  // Separador "Separador: 12mm color Negro" o "Separador: 12mm - Negro"
+  const sepPart = parts.find(p => /separador:/i.test(p));
+  let separador = { espesor: 12, color: 'Negro' };
+  if (sepPart) {
+    const text = sepPart.replace(/^.*separador:\s*/i, '').trim();
+    const m = text.match(/(\d+)\s*mm(?:\s+(?:color|-)\s*|\s+)(.+)/i);
+    if (m) {
+      separador = { espesor: parseInt(m[1], 10) || 12, color: m[2].trim() };
+    } else {
+      const espM = text.match(/(\d+)\s*mm/i);
+      if (espM) separador.espesor = parseInt(espM[1], 10) || 12;
+    }
+  }
 
   // Extras (opcional)
   const extrasPart = parts.find(p => /^extras:/i.test(p));
@@ -476,6 +510,13 @@ function parseTermopanelLine(name: string, idx: number, line?: any): TermopanelI
     }
   }
 
+  // Descuento
+  const descMatch = name.match(/descuento:\s*(\d+)%/i) || name.match(/descuento:\s*(\d+)/i);
+  let descuento = descMatch ? parseInt(descMatch[1]) : 0;
+  if (!descuento && line && typeof line.discount === 'number' && line.discount > 0) {
+    descuento = Math.round(line.discount);
+  }
+
   return {
     label,
     cantidad,
@@ -493,22 +534,23 @@ function parseTermopanelLine(name: string, idx: number, line?: any): TermopanelI
     conForma,
     tipoFigura,
     medidasFigura,
+    descuento,
   };
 }
 
 function parseMonoliticoLine(name: string, idx: number, line?: any): MonoliticoItemData {
-  const parts = name.split(' | ').map(p => p.trim());
+  const parts = name.split(/[\n\r|]+/).map(p => p.trim()).filter(Boolean);
 
   // Primera parte: "[V1] Cantidad: 2"
   const firstPart  = parts[0] || '';
-  const labelMatch = firstPart.match(/^\[([^\]]+)\]/);
+  const labelMatch = name.match(/\[([^\]]+)\]/);
   const label      = labelMatch ? labelMatch[1] : `V${idx + 1}`;
-  const cantMatch  = firstPart.match(/cantidad:\s*(\d+)/i);
+  const cantMatch  = name.match(/cantidad:\s*(\d+)/i);
   const cantidad   = parseInt(cantMatch?.[1] || '1') || 1;
 
   // Dimensiones "Cristal Monolítico 800 x 1200 mm"
   const dimPart = parts.find(p => /^cristal monol/i.test(p) || /\d+\s*x\s*\d+/i.test(p));
-  const dimMatch = dimPart?.match(/(\d+)\s*x\s*(\d+)/i);
+  const dimMatch = (dimPart || name).match(/(\d+)\s*x\s*(\d+)/i);
   let ancho    = parseInt(dimMatch?.[1] || '0') || 0;
   let alto     = parseInt(dimMatch?.[2] || '0') || 0;
 
@@ -520,13 +562,28 @@ function parseMonoliticoLine(name: string, idx: number, line?: any): MonoliticoI
   }
 
   // Cristal
-  const cPart = parts.find(p => /^cristal:/i.test(p));
-  const cMatch = cPart?.match(/cristal:\s*(.*?)(?:\s*(\d+)\s*mm?)?$/i);
-  const cristal = cMatch
-    ? { tipo: cMatch[1].trim(), espesor: parseInt(cMatch[2] || '0') }
-    : { tipo: 'Incoloro', espesor: 6 };
+  const cPart = parts.find(p => /cristal:/i.test(p));
+  let cristal = { tipo: 'Incoloro', espesor: 6 };
+  if (cPart) {
+    const text = cPart.replace(/^.*cristal:\s*/i, '').trim();
+    const thickMatch = text.match(/(\d+)\s*mm$/i);
+    if (thickMatch) {
+      const esp = parseInt(thickMatch[1], 10);
+      const tipo = text.replace(/\s*\d+\s*mm$/i, '').trim();
+      cristal = { tipo: tipo || 'Incoloro', espesor: esp || 6 };
+    } else {
+      cristal = { tipo: text || 'Incoloro', espesor: 6 };
+    }
+  }
 
-  return { label, cantidad, ancho, alto, cristal };
+  // Descuento
+  const descMatch = name.match(/descuento:\s*(\d+)%/i) || name.match(/descuento:\s*(\d+)/i);
+  let descuento = descMatch ? parseInt(descMatch[1]) : 0;
+  if (!descuento && line && typeof line.discount === 'number' && line.discount > 0) {
+    descuento = Math.round(line.discount);
+  }
+
+  return { label, cantidad, ancho, alto, cristal, descuento };
 }
 
 // ─── Confirmar Cotización y Crear Órdenes de Taller ──────────────────────────
@@ -771,6 +828,9 @@ export async function actualizarCotizacionEnOdoo(data: {
       let desc = '';
       if (data.isMonolitico) {
         desc = `[${itemLabel}] Cantidad: ${item.cantidad} | Cristal Monolítico ${item.ancho} x ${item.alto} mm | Cristal: ${item.cristal.tipo} ${item.cristal.espesor}mm`;
+        if (item.descuento && item.descuento > 0) {
+          desc += ` | Descuento: ${item.descuento}%`;
+        }
       } else {
         const extras = [];
         if (item.pulido) extras.push('Pulido');
@@ -789,6 +849,9 @@ export async function actualizarCotizacionEnOdoo(data: {
             else if (item.tipoFigura === 'circulo') shapeDesc = `Círculo: Diámetro:${med.a || 0}`;
             extras.push(`Con Forma (${shapeDesc})`);
           }
+        }
+        if (item.descuento && item.descuento > 0) {
+          extras.push(`Descuento: ${item.descuento}%`);
         }
 
         desc = [
@@ -813,6 +876,7 @@ export async function actualizarCotizacionEnOdoo(data: {
         name: desc,
         product_uom_qty: qtyRounded,
         price_unit: priceUnitM2,
+        discount: item.descuento || 0,
         x_studio_ancho_m: anchoM,
         x_studio_alto_m: altoM,
       };
@@ -827,6 +891,7 @@ export async function actualizarCotizacionEnOdoo(data: {
         product_uom_qty: line.product_uom_qty,
         product_uom_id: 1,
         price_unit: line.price_unit,
+        ...(line.discount !== undefined && { discount: line.discount }),
         ...(line.x_studio_ancho_m !== undefined && { x_studio_ancho_m: line.x_studio_ancho_m }),
         ...(line.x_studio_alto_m !== undefined && { x_studio_alto_m: line.x_studio_alto_m }),
       }])
