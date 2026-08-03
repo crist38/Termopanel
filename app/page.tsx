@@ -124,6 +124,7 @@ function CotizadorTermopanelContent() {
             setBudgetName(res.budgetName || 'Borrador');
             const loadedItems = (res.items || []).map((it: any) => ({
               ...it,
+              descuento: it.descuento || 0,
               esPrecioManual: it.precioUnitario > 0
             }));
             setItems(loadedItems);

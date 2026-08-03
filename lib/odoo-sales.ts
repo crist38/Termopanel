@@ -58,6 +58,7 @@ export interface SaleOrderLineInput {
   name: string;
   product_uom_qty: number; // Cantidad en m2 (total_area) o piezas
   price_unit: number;      // Precio unitario
+  discount?: number;       // Porcentaje de descuento
   is_note?: boolean;
   x_studio_ancho_m?: number;
   x_studio_alto_m?: number;
@@ -226,6 +227,7 @@ export class OdooSalesService {
         product_uom_qty: line.product_uom_qty, // Cantidad calculada (m2 redondeado)
         product_uom_id: 1,                     // UOM = Units (id:1)
         price_unit: line.price_unit,           // Precio unitario por m2
+        ...(line.discount !== undefined && { discount: line.discount }),
         ...(line.x_studio_ancho_m !== undefined && { x_studio_ancho_m: line.x_studio_ancho_m }),
         ...(line.x_studio_alto_m !== undefined && { x_studio_alto_m: line.x_studio_alto_m }),
       }];
@@ -1164,6 +1166,7 @@ export interface TermopanelItemData {
   conForma?: boolean;
   tipoFigura?: 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo';
   medidasFigura?: { a: number; b: number; b1?: number; b2?: number };
+  descuento?: number;
 }
 
 export interface MonoliticoItemData {
@@ -1172,6 +1175,7 @@ export interface MonoliticoItemData {
   ancho: number;
   alto: number;
   cristal: { tipo: string; espesor: number };
+  descuento?: number;
 }
 
 export const odooSales = new OdooSalesService();
