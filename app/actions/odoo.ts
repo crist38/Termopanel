@@ -149,7 +149,7 @@ export async function guardarCotizacionEnOdoo(data: {
       const extras: string[] = [];
       if (item.pulido) extras.push('Pulido');
       if (item.micropersiana) extras.push('Micropersiana');
-      if (item.palillaje) extras.push(`Palillaje (${item.palillajeColor || ''})`);
+      if (item.palillaje) extras.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales, ${item.palillajeVerticales || 0} verticales)`);
       if (item.conForma) {
         let formaDesc = `Forma especial (${item.tipoFigura})`;
         if (item.medidasFigura) {
@@ -208,6 +208,9 @@ export async function guardarCotizacionEnOdoo(data: {
       pulido: item.pulido,
       micropersiana: item.micropersiana,
       palillaje: item.palillaje,
+      palillajeColor: item.palillajeColor || 'Blanco',
+      palillajeHorizontales: item.palillajeHorizontales || 0,
+      palillajeVerticales: item.palillajeVerticales || 0,
       conForma: item.conForma,
       tipoFigura: item.tipoFigura,
       medidasFigura: item.medidasFigura || { a: 0, b: 0 },
@@ -453,21 +456,44 @@ function parseTermopanelLine(name: string, idx: number, line?: any): TermopanelI
   }
 
   // Extras (opcional)
+  const fullTextLower = name.toLowerCase();
   const extrasPart = parts.find(p => /^extras:/i.test(p));
-  const extrasStr  = (extrasPart || '').toLowerCase();
+  const extrasStr  = (extrasPart || fullTextLower).toLowerCase();
 
-  const palillaje     = extrasStr.includes('palillaje');
+  const palillaje = fullTextLower.includes('palillaje');
   let palillajeColor = 'Blanco';
   let palillajeHorizontales = 0;
   let palillajeVerticales = 0;
 
   if (palillaje) {
-    const match = extrasStr.match(/palillaje\s*\(\s*([^,)]+)\s*,\s*(?:h:\s*)?(\d+)\s*(?:horizontales)?\s*,?\s*(?:v:\s*)?(\d+)\s*(?:verticales)?/i);
-    if (match) {
-      const rawColor = match[1].trim();
-      palillajeColor = rawColor.charAt(0).toUpperCase() + rawColor.slice(1);
-      palillajeHorizontales = parseInt(match[2], 10) || 0;
-      palillajeVerticales = parseInt(match[3], 10) || 0;
+    // 1. Color: Buscar palabra dentro del paréntesis de palillaje
+    const colorMatch = fullTextLower.match(/palillaje[^(]*\(\s*(?:color:\s*)?([a-záéíóúñ]+)/i);
+    if (colorMatch && colorMatch[1]) {
+      const rawColor = colorMatch[1].trim();
+      if (!/^\d+$/.test(rawColor) && !['h', 'v', 'horizontales', 'verticales'].includes(rawColor)) {
+        palillajeColor = rawColor.charAt(0).toUpperCase() + rawColor.slice(1);
+      }
+    }
+
+    // 2. Horizontales: p.ej. "2 horizontales", "h: 2", "h:2", "horizontales: 2"
+    const horizMatch = fullTextLower.match(/(\d+)\s*(?:horizontales|horiz|h\b)|(?:h|horizontales):\s*(\d+)/i);
+    if (horizMatch) {
+      palillajeHorizontales = parseInt(horizMatch[1] || horizMatch[2], 10) || 0;
+    }
+
+    // 3. Verticales: p.ej. "3 verticales", "v: 3", "v:3", "verticales: 3"
+    const vertMatch = fullTextLower.match(/(\d+)\s*(?:verticales|vert|v\b)|(?:v|verticales):\s*(\d+)/i);
+    if (vertMatch) {
+      palillajeVerticales = parseInt(vertMatch[1] || vertMatch[2], 10) || 0;
+    }
+
+    // 4. Fallback si no se detectaron horizontales y verticales por palabras clave
+    if (palillajeHorizontales === 0 && palillajeVerticales === 0) {
+      const fallbackNums = fullTextLower.match(/palillaje\s*\(\s*[^,)]+\s*,\s*(\d+)\s*(?:,|y|\s)\s*(\d+)/i);
+      if (fallbackNums) {
+        palillajeHorizontales = parseInt(fallbackNums[1], 10) || 0;
+        palillajeVerticales = parseInt(fallbackNums[2], 10) || 0;
+      }
     }
   }
 
