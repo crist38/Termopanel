@@ -237,6 +237,9 @@ export class OdooSalesService {
     const orderData: any = {
       partner_id: partnerId,
       order_line: orderLinesTuples,
+      // Desactivar lista de precios para evitar que Odoo sobreescriba
+      // el price_unit con la tarifa asignada al cliente
+      pricelist_id: false,
     };
     if (userId) orderData.user_id = userId;
     if (tagId) {
@@ -272,6 +275,8 @@ export class OdooSalesService {
   /**
    * Sobreescribe el price_unit de cada línea de la orden con el precio correcto de la app,
    * ignorando la lista de precios de Odoo.
+   * Escribe directamente en sale.order.line para evitar que Odoo dispare
+   * el recomputo de precios basado en la lista de precios del cliente.
    */
   async forceLinePrices(orderId: number, lines: SaleOrderLineInput[]): Promise<void> {
     const orderLines = await odoo.executeKw(
@@ -282,19 +287,14 @@ export class OdooSalesService {
 
     const productLines = lines.filter(l => !l.is_note);
 
-    const bulkUpdates = [];
+    // Escribir directamente en sale.order.line para evitar que Odoo recalcule
+    // el precio según la lista de precios del cliente (pricelist)
     for (let i = 0; i < Math.min(orderLines.length, productLines.length); i++) {
       const lineId  = orderLines[i].id;
       const appLine = productLines[i];
-      bulkUpdates.push([1, lineId, {
-        price_unit: appLine.price_unit,
-      }]);
-    }
-
-    if (bulkUpdates.length > 0) {
-      await odoo.executeKw('sale.order', 'write', [
-        [orderId],
-        { order_line: bulkUpdates }
+      await odoo.executeKw('sale.order.line', 'write', [
+        [lineId],
+        { price_unit: appLine.price_unit }
       ]);
     }
   }
@@ -1064,7 +1064,14 @@ export class OdooSalesService {
     });
 
     const tagId = await this.getOrCreateTermopanelTagId();
-    const orderData: any = { partner_id: partnerId, order_line: orderLinesTuples };
+    const orderData: any = {
+      partner_id: partnerId,
+      order_line: orderLinesTuples,
+      // Desactivar lista de precios para evitar que Odoo sobreescriba
+      // el price_unit con la tarifa asignada al cliente
+      pricelist_id: false,
+    };
+
     if (userId) orderData.user_id = userId;
     if (tagId) {
       orderData.tag_ids = [[6, 0, [tagId]]];
