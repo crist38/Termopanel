@@ -190,7 +190,7 @@ export async function guardarCotizacionEnOdoo(data: {
         name: detalles.join('\n'),
         product_uom_qty: qtyRounded,
         price_unit: priceUnitM2,
-        discount: item.descuento || 0,
+        discount: 0, // El descuento ya está incluido en precioUnitario; no enviarlo evita que Odoo lo aplique dos veces
         // Enviar custom fields si existen en odoo
         x_studio_ancho_m: anchoM,
         x_studio_alto_m: altoM,
@@ -283,7 +283,7 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
         name: desc,
         product_uom_qty: qtyRounded,
         price_unit: priceUnitM2,
-        discount: item.descuento || 0,
+        discount: 0, // El descuento ya está incluido en precioUnitario
         x_studio_ancho_m: anchoM,
         x_studio_alto_m: altoM,
       };
@@ -902,7 +902,7 @@ export async function actualizarCotizacionEnOdoo(data: {
         name: desc,
         product_uom_qty: qtyRounded,
         price_unit: priceUnitM2,
-        discount: item.descuento || 0,
+        discount: 0, // El descuento ya está incluido en precioUnitario
         x_studio_ancho_m: anchoM,
         x_studio_alto_m: altoM,
       };
