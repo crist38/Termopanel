@@ -928,11 +928,16 @@ export async function actualizarCotizacionEnOdoo(data: {
       finalNote = `${finalNote}\nFecha de Entrega: ${data.fechaEntrega}`.trim();
     }
 
+
     const orderData: any = {
       partner_id: clienteId,
       order_line: orderLinesTuples,
       note: finalNote,
+      // Desactivar lista de precios para evitar que Odoo sobreescriba
+      // el price_unit con la tarifa asignada al cliente (ej: ProWindows)
+      pricelist_id: false,
     };
+
 
     await odoo.executeKw('sale.order', 'write', [[data.orderId], orderData]);
     
