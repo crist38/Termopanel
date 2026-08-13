@@ -21,6 +21,7 @@ export interface ReportStats {
     cristalTotalM2: number;
     separadoresColor: Record<string, { neto: number; real: number }>;
     cristalesTipo: Record<string, { neto: number; real: number }>;
+    palillajeColor: Record<string, { tiras: number; cantidad: number }>;
   };
   clientesRanking: Array<{
     name: string;
@@ -337,6 +338,8 @@ export async function obtenerDatosReportes(
     let totalManoDeObra = 0;
     const separadoresColor: Record<string, { neto: number; real: number }> = {};
     const cristalesPiezas: Record<string, Array<{ width: number; height: number; qty: number }>> = {};
+    // Palillaje: acumulado por color → { tiras (consumidas), cantidad (unidades totales con palillaje) }
+    const palillajeColor: Record<string, { tiras: number; cantidad: number }> = {};
 
     lines.forEach((line) => {
       const prodId = line.product_id ? line.product_id[0] : 0;
@@ -395,6 +398,23 @@ export async function obtenerDatosReportes(
           }
           separadoresColor[key].neto += sepConsumo.netoMl;
           separadoresColor[key].real += sepConsumo.realMl;
+        }
+
+        // Palillaje por color
+        const palMatch = name.match(/Palillaje\s*\(\s*([^,)]+?)\s*,\s*(\d+)\s*horizontales?\s*,\s*(\d+)\s*verticales?/i);
+        if (palMatch) {
+          const colorPal = palMatch[1].trim();
+          const horizontales = parseInt(palMatch[2], 10) || 0;
+          const verticales = parseInt(palMatch[3], 10) || 0;
+          // Cada palillo = una tira de 3 metros; calculamos cuántas tiras se usan por unidad
+          // Un palillo horizontal cubre el ancho, un palillo vertical cubre el alto
+          // Tiras = cantidad de palillos (cada uno es una tira de largo estándar)
+          const tirasNecesarias = (horizontales + verticales) * cantidad;
+          if (!palillajeColor[colorPal]) {
+            palillajeColor[colorPal] = { tiras: 0, cantidad: 0 };
+          }
+          palillajeColor[colorPal].tiras += tirasNecesarias;
+          palillajeColor[colorPal].cantidad += cantidad;
         }
 
         // Cristales del termopanel (Cristal 1 y Cristal 2)
@@ -491,7 +511,8 @@ export async function obtenerDatosReportes(
           butilo: totalButilo,
           cristalTotalM2,
           separadoresColor,
-          cristalesTipo
+          cristalesTipo,
+          palillajeColor
         },
         clientesRanking,
         pedidosDetalle

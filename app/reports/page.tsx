@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { obtenerDatosReportes, ReportStats } from '@/app/actions/reports';
 import {
   DollarSign,
@@ -485,6 +485,61 @@ function ReportsDashboardContent() {
                 </div>
               </div>
             </div>
+
+            {/* Desglose de Palillaje por Color */}
+            {Object.keys(stats.insumos.palillajeColor).length > 0 && (
+              <div className="pt-6 border-t border-slate-100">
+                <h3 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                  Palillaje por Color
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {Object.entries(stats.insumos.palillajeColor).map(([color, palData]) => {
+                    // Generar color visual de badge según el nombre del color
+                    const colorLower = color.toLowerCase();
+                    const badgeStyle: React.CSSProperties = {};
+                    if (colorLower.includes('blanco')) { badgeStyle.backgroundColor = '#f1f5f9'; badgeStyle.color = '#475569'; badgeStyle.border = '1px solid #cbd5e1'; }
+                    else if (colorLower.includes('negro') || colorLower.includes('black')) { badgeStyle.backgroundColor = '#1e293b'; badgeStyle.color = '#f8fafc'; }
+                    else if (colorLower.includes('bronce') || colorLower.includes('bronze')) { badgeStyle.backgroundColor = '#92400e'; badgeStyle.color = '#fef3c7'; }
+                    else if (colorLower.includes('gris') || colorLower.includes('grey') || colorLower.includes('gray')) { badgeStyle.backgroundColor = '#64748b'; badgeStyle.color = '#f8fafc'; }
+                    else if (colorLower.includes('cafe') || colorLower.includes('madera') || colorLower.includes('marr')) { badgeStyle.backgroundColor = '#78350f'; badgeStyle.color = '#fef3c7'; }
+                    else if (colorLower.includes('dorado') || colorLower.includes('gold')) { badgeStyle.backgroundColor = '#b45309'; badgeStyle.color = '#fefce8'; }
+                    else { badgeStyle.backgroundColor = '#e0e7ff'; badgeStyle.color = '#4338ca'; }
+
+                    return (
+                      <div
+                        key={color}
+                        className="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:bg-amber-50/50 hover:border-amber-100 transition-colors flex flex-col gap-3"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className="text-[11px] font-bold px-2.5 py-1 rounded-full truncate max-w-[70%]"
+                            style={badgeStyle}
+                            title={color}
+                          >
+                            {color}
+                          </span>
+                          <span className="text-xs text-slate-400 font-medium whitespace-nowrap">
+                            {palData.cantidad} panel{palData.cantidad !== 1 ? 'es' : ''}
+                          </span>
+                        </div>
+                        <div className="flex items-end justify-between">
+                          <div>
+                            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Tiras consumidas</p>
+                            <p className="text-2xl font-black text-amber-600 font-mono leading-tight mt-0.5">
+                              {palData.tiras}
+                            </p>
+                          </div>
+                          <span className="text-[10px] text-slate-400 italic text-right">
+                            {palData.tiras === 1 ? '1 tira' : `${palData.tiras} tiras`}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Estadísticas de Clientes (Ranking) */}

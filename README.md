@@ -105,6 +105,9 @@ La integración se maneja desde el servidor (Next.js Server Actions), garantizan
 
 ## 📋 Changelog
 
+### v2.6 - Agosto 2026
+- ✅ **Palillaje en Reportes**: La sección "Insumos y Componentes Utilizados" del dashboard de reportes ahora incluye un desglose de **Palillaje por Color**. Muestra, para cada color de palillaje utilizado en el período, la cantidad de termopaneles que lo llevan y el total de tiras consumidas, con un badge visual que refleja el color real (blanco, negro, bronce, gris, café, dorado, etc.). La sección solo aparece si existe al menos un termopanel con palillaje en el período seleccionado.
+
 ### v2.5 - Julio 2026
 - ✅ **Distinción Visual de Botones al Editar**: Al editar una cotización existente, el botón "Actualizar Borrador / PDF" ahora se muestra en **azul** (gradiente `blue` → `cyan`), diferenciándose claramente del botón verde "Confirmar en Odoo y Enviar a Taller". Esto evita confusión visual al operar sobre cotizaciones ya existentes.
 
