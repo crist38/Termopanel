@@ -1,7 +1,9 @@
 'use client'
 
 import React, { useState, useEffect, Suspense } from 'react';
+import jsPDF from 'jspdf';
 import { obtenerDatosReportes, ReportStats } from '@/app/actions/reports';
+import { obtenerDetalleCotizacion } from '@/app/actions/odoo';
 import {
   DollarSign,
   ClipboardList,
@@ -16,8 +18,45 @@ import {
   FileSpreadsheet,
   RefreshCw,
   Printer,
-  Calendar
+  Calendar,
+  FileText,
+  HardHat,
 } from 'lucide-react';
+
+// ─── Helpers PDF (misma lógica que /cotizaciones) ─────────────────────────────
+
+function stripHtml(htmlStr: string) {
+  if (!htmlStr) return '';
+  return htmlStr.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+}
+
+function formatDatePdf(dateStr: string) {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function parseOdooLinePdf(line: any, index: number) {
+  const name = line.name || '';
+  let ref = `L${index + 1}`;
+  let cant = line.product_uom_qty?.toString() ?? '1';
+  let dim = '—';
+  let config = name;
+  const parts = name.split(' | ').map((p: string) => p.trim());
+  const refMatch = parts[0]?.match(/^\[([^\]]+)\]$/);
+  if (refMatch) ref = refMatch[1];
+  const cantPart = parts.find((p: string) => p.toLowerCase().includes('cantidad:'));
+  if (cantPart) { const m = cantPart.match(/cantidad:\s*(\d+)/i); if (m) cant = m[1]; }
+  const dimPart = parts.find((p: string) => p.toLowerCase().includes('termopanel') || p.toLowerCase().includes('cristal monolítico'));
+  if (dimPart) { const m = dimPart.match(/(\d+)\s*x\s*(\d+)/i); if (m) dim = `${m[1]} x ${m[2]}`; }
+  else if (line.x_studio_ancho_m != null && line.x_studio_alto_m != null) {
+    const w = Math.round(line.x_studio_ancho_m * 1000);
+    const h = Math.round(line.x_studio_alto_m * 1000);
+    if (w > 0 && h > 0) dim = `${w} x ${h}`;
+  }
+  const configParts = parts.filter((p: string) => !p.startsWith('[') && !p.toLowerCase().includes('cantidad:') && !p.toLowerCase().startsWith('termopanel') && !p.toLowerCase().startsWith('cristal monolítico'));
+  if (configParts.length > 0) config = configParts.join(' | ');
+  return { ref, cant, dim, config };
+}
 
 function ReportsDashboardContent() {
   const [filtro, setFiltro] = useState<'diario' | 'mes' | 'historico' | 'fecha_especifica'>('mes');
@@ -28,6 +67,8 @@ function ReportsDashboardContent() {
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<ReportStats | null>(null);
   const [userName, setUserName] = useState('cristian3877');
+  // Estado para saber qué pedido está generando PDF (presupuesto o taller)
+  const [pdfLoading, setPdfLoading] = useState<{ id: number; tipo: 'presupuesto' | 'taller' } | null>(null);
 
   // Cargar nombre del usuario desde la cookie
   useEffect(() => {
@@ -81,6 +122,275 @@ function ReportsDashboardContent() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  // ─── Generadores de PDF reutilizados de /cotizaciones ────────────────────────
+
+  const handlePdfPresupuesto = async (pedidoId: number, pedidoName: string) => {
+    setPdfLoading({ id: pedidoId, tipo: 'presupuesto' });
+    try {
+      const res = await obtenerDetalleCotizacion(pedidoId);
+      if (!res.exito || !res.order) { alert('No se pudo cargar el detalle de la venta.'); return; }
+      const detail = res.order;
+      const doc = new jsPDF();
+      try {
+        const logoRes = await fetch('/logo.png');
+        const blob = await logoRes.blob();
+        const logoBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        doc.addImage(logoBase64, 'PNG', 14, 10, 45, 22);
+      } catch { /* sin logo */ }
+
+      doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
+      doc.text('Presupuesto Termopaneles', 105, 20, { align: 'center' });
+      doc.setFontSize(11); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
+      doc.text(`N° ${detail.name}`, 105, 28, { align: 'center' });
+      doc.setFontSize(9); doc.setTextColor(100, 100, 100);
+      doc.text(`Fecha: ${formatDatePdf(detail.date_order)}`, 196, 18, { align: 'right' });
+      doc.text(`Cliente: ${detail.partner_id?.[1] ?? '—'}`, 196, 25, { align: 'right' });
+      doc.setTextColor(0, 0, 0);
+
+      let currentY = 46;
+      const productLines = detail.order_line.filter((l: any) => l.display_type !== 'line_note' && l.display_type !== 'line_section');
+      const totalM2 = productLines.reduce((acc: number, l: any) => acc + l.product_uom_qty, 0);
+      doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} m²`, 14, currentY);
+
+      let yPos = currentY + 14;
+      doc.setFillColor(240, 240, 240); doc.rect(14, yPos - 5, 182, 8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.text('Ref', 16, yPos); doc.text('Cant.', 43, yPos); doc.text('Dim. (mm)', 57, yPos);
+      doc.text('Configuración', 84, yPos); doc.text('Unitario', 152, yPos); doc.text('Total', 176, yPos);
+      doc.setFont('helvetica', 'normal');
+      yPos += 10;
+
+      productLines.forEach((line: any, index: number) => {
+        const parsed = parseOdooLinePdf(line, index);
+        const splitLabel = doc.splitTextToSize(parsed.ref, 25);
+        const splitConfig = doc.splitTextToSize(parsed.config, 66);
+        const lineCount = Math.max(splitLabel.length, splitConfig.length);
+        if (yPos + (lineCount * 5) > 275) { doc.addPage(); yPos = 20; }
+        doc.text(splitLabel, 16, yPos); doc.text(parsed.cant, 43, yPos);
+        doc.text(parsed.dim, 57, yPos); doc.text(splitConfig, 84, yPos);
+        const displayedCant = parseFloat(parsed.cant) || 1;
+        const unitario = Math.round(line.price_subtotal / displayedCant);
+        doc.text(`$${unitario.toLocaleString('es-CL')}`, 152, yPos);
+        doc.text(`$${line.price_subtotal.toLocaleString('es-CL')}`, 176, yPos);
+        yPos += (lineCount * 5) + 5;
+      });
+
+      doc.line(14, yPos, 196, yPos); yPos += 10;
+      const net = detail.amount_untaxed; const tax = detail.amount_tax; const total = detail.amount_total;
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Total Neto: $${net.toLocaleString('es-CL')}`, 140, yPos); yPos += 6;
+      doc.text(`IVA (19%): $${tax.toLocaleString('es-CL')}`, 140, yPos); yPos += 6;
+      doc.setFontSize(11); doc.text(`Total: $${total.toLocaleString('es-CL')}`, 140, yPos);
+
+      if (yPos > 200) { doc.addPage(); yPos = 20; }
+      yPos += 15;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+      doc.text('NOTAS:', 14, yPos);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(80, 80, 80);
+      const notas = [
+        'Este presupuesto tiene una validez de 10 días.',
+        'Plazo de entrega a contar de 48 horas para Termopaneles, una vez recibida Orden de Compra.',
+        'Esperando este Presupuesto sea de su agrado le saluda atentamente:',
+      ];
+      if (detail.note) { const n = stripHtml(detail.note); if (n) notas.unshift(`Observaciones: ${n}`); }
+      notas.forEach(nota => {
+        yPos += 5.5;
+        const splitNota = doc.splitTextToSize(nota, 182);
+        doc.text(splitNota, 14, yPos);
+        yPos += (splitNota.length - 1) * 4.5;
+      });
+      yPos += 20;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(0, 0, 0);
+      doc.text('Firma de aceptación del Cliente: ___________________________', 14, yPos);
+      doc.text('Modalidad de Pago: __________________', 120, yPos);
+
+      const sanitized = detail.partner_id?.[1]?.trim().replace(/[^a-zA-Z0-9_-]/g, '_') ?? 'Sin_Cliente';
+      doc.save(`Presupuesto_${detail.name}_${sanitized}.pdf`);
+    } catch (e: any) {
+      alert(`Error al generar PDF: ${e.message}`);
+    } finally {
+      setPdfLoading(null);
+    }
+  };
+
+  const handlePdfTaller = async (pedidoId: number, pedidoName: string) => {
+    setPdfLoading({ id: pedidoId, tipo: 'taller' });
+    try {
+      const res = await obtenerDetalleCotizacion(pedidoId);
+      if (!res.exito || !res.order) { alert('No se pudo cargar el detalle de la venta.'); return; }
+      const detail = res.order;
+      const doc = new jsPDF();
+
+      const productLines = detail.order_line.filter((l: any) => l.display_type !== 'line_note' && l.display_type !== 'line_section');
+      if (productLines.length === 0) { alert('No hay productos válidos para generar órdenes de trabajo.'); return; }
+
+      const parsedItems = productLines.map((line: any, index: number) => {
+        const name = line.name || '';
+        const rawSplit = name.includes(' | ') ? name.split(' | ').map((p: string) => p.trim()) : name.split(/\n/).map((p: string) => p.trim());
+        const parts: string[] = [];
+        for (const rp of rawSplit) {
+          const bracketEnd = rp.indexOf(']');
+          if (rp.startsWith('[') && bracketEnd !== -1 && bracketEnd < rp.length - 1) {
+            parts.push(rp.slice(0, bracketEnd + 1).trim());
+            const rest = rp.slice(bracketEnd + 1).trim();
+            if (rest) parts.push(rest);
+          } else { parts.push(rp); }
+        }
+        let cantidad = 1;
+        const cantPart = parts.find(p => p.toLowerCase().includes('cantidad:'));
+        if (cantPart) { const m = cantPart.match(/cantidad:\s*(\d+)/i); if (m) cantidad = parseInt(m[1], 10) || 1; }
+
+        let ancho = 0, alto = 0;
+        const dimPart = parts.find(p => /termopanel\s+\d/i.test(p) || /^dimensiones?:/i.test(p) || /cristal monol/i.test(p));
+        if (dimPart) { const m = dimPart.match(/(\d+)\s*x\s*(\d+)/i); if (m) { ancho = parseInt(m[1], 10); alto = parseInt(m[2], 10); } }
+        else if (line.x_studio_ancho_m != null) { ancho = Math.round(line.x_studio_ancho_m * 1000); alto = Math.round((line.x_studio_alto_m * 1000) / cantidad); }
+
+        const c1Part = parts.find(p => /^(cristal 1|c1|cristal):/i.test(p));
+        let cristal1_tipo = 'Incoloro', cristal1_espesor = 6;
+        if (c1Part) { const m = c1Part.match(/^(?:cristal 1|c1|cristal):\s*(.+?)\s+(\d+)\s*mm/i); if (m) { cristal1_tipo = m[1].trim(); cristal1_espesor = parseInt(m[2], 10) || 6; } }
+
+        const c2Part = parts.find(p => /^(cristal 2|c2):/i.test(p));
+        let cristal2_tipo = '', cristal2_espesor = 0, hasCristal2 = false;
+        if (c2Part) {
+          hasCristal2 = true;
+          const m = c2Part.match(/^(?:cristal 2|c2):\s*(.+?)\s+(\d+)\s*mm/i);
+          if (m) { cristal2_tipo = m[1].trim(); cristal2_espesor = parseInt(m[2], 10) || 6; }
+        }
+
+        const sepPart = parts.find(p => /^(separador|sep)(?:-|:)/i.test(p));
+        let sep_espesor = 0, sep_color = '', hasSeparador = false;
+        if (sepPart) {
+          hasSeparador = true;
+          const m1 = sepPart.match(/separador(?:-|:)\s*(\d+)\s*mm\s+color\s+(.+)/i);
+          if (m1) { sep_espesor = parseInt(m1[1]); sep_color = m1[2].trim(); }
+          else { const m2 = sepPart.match(/(?:separador|sep)[:\-]\s*(\d+)\s*mm?(?:\s+(?:color\s+)?|\s*-\s*)(.+)?/i); if (m2) { sep_espesor = parseInt(m2[1]) || 12; sep_color = (m2[2] || 'Negro').trim(); } }
+        }
+
+        let label = `V${index + 1}`;
+        const refMatch = parts[0]?.match(/^\[([^\]]+)\]/);
+        if (refMatch) label = refMatch[1];
+
+        const extrasPart = parts.find(p => p.toLowerCase().startsWith('extras:'));
+        let extrasText = '';
+        if (extrasPart) { extrasText = extrasPart.trim(); }
+        else {
+          const others = parts.filter(p => !p.startsWith('[') && !p.toLowerCase().includes('cantidad:') && !p.toLowerCase().includes('termopanel') && !p.toLowerCase().includes('monolítico') && !p.toLowerCase().includes('monolitico') && !p.toLowerCase().startsWith('cristal 1') && !p.toLowerCase().startsWith('c1:') && !p.toLowerCase().startsWith('cristal 2') && !p.toLowerCase().startsWith('c2:') && !p.toLowerCase().startsWith('separador') && !p.toLowerCase().startsWith('sep:') && !p.toLowerCase().startsWith('cristal:'));
+          if (others.length > 0) extrasText = `Extras: ${others.join(', ')}`;
+        }
+
+        const isTermopanel = name.toLowerCase().includes('termopanel') || hasCristal2 || hasSeparador || sep_espesor > 0;
+        return { label, cantidad, ancho, alto, cristal1: { tipo: cristal1_tipo, espesor: cristal1_espesor }, cristal2: hasCristal2 ? { tipo: cristal2_tipo, espesor: cristal2_espesor } : null, separador: hasSeparador ? { espesor: sep_espesor, color: sep_color } : null, extrasText, isTermopanel };
+      });
+
+      const hasTermopaneles = parsedItems.some((i: any) => i.isTermopanel);
+      const totalM2 = parsedItems.reduce((acc: number, i: any) => acc + ((i.ancho * i.alto) / 1000000) * i.cantidad, 0);
+      const clientName = detail.partner_id?.[1] ?? 'Sin Cliente';
+
+      let logoBase64: string | null = null;
+      try {
+        const logoRes = await fetch('/logo.png');
+        const blob = await logoRes.blob();
+        logoBase64 = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result as string); reader.onerror = reject; reader.readAsDataURL(blob); });
+      } catch { /* sin logo */ }
+
+      // Página 1: Taller Corte Vidrio
+      if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
+      doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
+      doc.text('ORDEN DE TRABAJO', 105, 20, { align: 'center' });
+      doc.setFontSize(13); doc.setTextColor(80, 80, 80);
+      doc.text('Taller Corte Vidrio', 105, 28, { align: 'center' });
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
+      doc.text(`Ref: ${detail.name}`, 196, 13, { align: 'right' });
+      doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 196, 20, { align: 'right' });
+      doc.text(`Cliente: ${clientName}`, 196, 27, { align: 'right' });
+      doc.setTextColor(0, 0, 0);
+      doc.setDrawColor(200, 200, 200); doc.line(14, 38, 196, 38);
+
+      let yPos = 48;
+      doc.setFillColor(51, 65, 85); doc.rect(14, yPos - 6, 182, 9, 'F');
+      doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+      doc.text('Ref', 17, yPos); doc.text('Ancho (mm)', 36, yPos); doc.text('Alto (mm)', 58, yPos);
+      doc.text('Cant.', 77, yPos); doc.text('Cristal 1', 89, yPos); doc.text('Cant.', 138, yPos); doc.text('Cristal 2', 150, yPos);
+      doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
+      yPos += 8;
+
+      parsedItems.forEach((item: any, index: number) => {
+        const splitLabel = doc.splitTextToSize(item.label, 28);
+        const rowHeight = item.extrasText ? 14 : Math.max(8, (splitLabel.length * 4) + 4);
+        if (yPos + rowHeight > 275) { doc.addPage(); yPos = 20; }
+        if (index % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(14, yPos - 5, 182, rowHeight, 'F'); }
+        doc.setFontSize(9);
+        doc.text(splitLabel, 17, yPos);
+        doc.setFont('helvetica', 'bold'); doc.text(`${item.ancho}`, 36, yPos); doc.text(`${item.alto}`, 58, yPos); doc.setFont('helvetica', 'normal');
+        doc.text(`${item.cantidad}`, 79, yPos);
+        doc.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 89, yPos);
+        if (item.cristal2) { doc.text(`${item.cantidad}`, 140, yPos); doc.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 150, yPos); }
+        else { doc.text('—', 140, yPos); doc.text('—', 150, yPos); }
+        if (item.extrasText) { doc.setFontSize(8); doc.setTextColor(100, 100, 100); doc.text(item.extrasText, 110, yPos + 4.5); doc.setTextColor(0, 0, 0); }
+        yPos += rowHeight;
+      });
+      doc.setDrawColor(200, 200, 200); doc.line(14, yPos, 196, yPos);
+      yPos += 8;
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+      doc.text(`Total a cortar: ${totalM2.toFixed(2)} m²`, 14, yPos);
+
+      // Página 2: Taller Termopaneles
+      if (hasTermopaneles) {
+        doc.addPage();
+        if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
+        doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
+        doc.text('ORDEN DE TRABAJO', 105, 20, { align: 'center' });
+        doc.setFontSize(13); doc.setTextColor(80, 80, 80);
+        doc.text('Taller Termopaneles', 105, 28, { align: 'center' });
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
+        doc.text(`Ref: ${detail.name}`, 196, 13, { align: 'right' });
+        doc.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 196, 20, { align: 'right' });
+        doc.text(`Cliente: ${clientName}`, 196, 27, { align: 'right' });
+        doc.setTextColor(0, 0, 0);
+        doc.setDrawColor(200, 200, 200); doc.line(14, 38, 196, 38);
+        yPos = 48;
+        doc.setFillColor(15, 118, 110); doc.rect(14, yPos - 6, 182, 9, 'F');
+        doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+        doc.text('Ref', 17, yPos); doc.text('Cant.', 47, yPos); doc.text('Ancho', 58, yPos); doc.text('Alto', 73, yPos);
+        doc.text('Cristal 1', 88, yPos); doc.text('Cristal 2', 121, yPos); doc.text('Sep. (mm)', 154, yPos); doc.text('Color Sep.', 175, yPos);
+        doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal');
+        yPos += 8;
+        const termoItems = parsedItems.filter((i: any) => i.isTermopanel);
+        termoItems.forEach((item: any, index: number) => {
+          const splitLabel = doc.splitTextToSize(item.label, 28);
+          const rowHeight = item.extrasText ? 14 : Math.max(8, (splitLabel.length * 4) + 4);
+          if (yPos + rowHeight > 275) { doc.addPage(); yPos = 20; }
+          if (index % 2 === 0) { doc.setFillColor(240, 253, 250); doc.rect(14, yPos - 5, 182, rowHeight, 'F'); }
+          doc.setFontSize(9);
+          doc.text(splitLabel, 17, yPos); doc.text(`${item.cantidad}`, 47, yPos);
+          doc.setFont('helvetica', 'bold'); doc.text(`${item.ancho}`, 58, yPos); doc.text(`${item.alto}`, 73, yPos); doc.setFont('helvetica', 'normal');
+          doc.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 88, yPos);
+          if (item.cristal2) { doc.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 121, yPos); } else { doc.text('—', 121, yPos); }
+          if (item.separador) { doc.setFont('helvetica', 'bold'); doc.text(`${item.separador.espesor}`, 154, yPos); doc.text(`${item.separador.color}`, 175, yPos); doc.setFont('helvetica', 'normal'); }
+          else { doc.text('—', 154, yPos); doc.text('—', 175, yPos); }
+          if (item.extrasText) { doc.setFontSize(8); doc.setTextColor(100, 100, 100); doc.text(item.extrasText, 88, yPos + 4.5); doc.setTextColor(0, 0, 0); }
+          yPos += rowHeight;
+        });
+        doc.setDrawColor(200, 200, 200); doc.line(14, yPos, 196, yPos);
+        yPos += 8; doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+        const termoM2 = termoItems.reduce((acc: number, i: any) => acc + ((i.ancho * i.alto) / 1000000) * i.cantidad, 0);
+        doc.text(`Total a armar: ${termoM2.toFixed(2)} m²`, 14, yPos);
+      }
+
+      const sanitized = clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+      doc.save(`Ordenes_Trabajo_${detail.name}_${sanitized}.pdf`);
+    } catch (e: any) {
+      alert(`Error al generar PDF: ${e.message}`);
+    } finally {
+      setPdfLoading(null);
+    }
   };
 
   return (
@@ -610,12 +920,13 @@ function ReportsDashboardContent() {
                     <th className="pb-3 text-center w-32">Fecha</th>
                     <th className="pb-3 text-center w-28">Estado</th>
                     <th className="pb-3 text-right w-40">Total</th>
+                    <th className="pb-3 text-center w-48 print:hidden">PDFs</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {stats.pedidosDetalle.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-6 text-center text-xs text-slate-400 italic">
+                      <td colSpan={6} className="py-6 text-center text-xs text-slate-400 italic">
                         No se encontraron registros en este período.
                       </td>
                     </tr>
@@ -644,6 +955,39 @@ function ReportsDashboardContent() {
                         </td>
                         <td className="py-3.5 text-right font-bold text-slate-800 font-mono">
                           ${pedido.total.toLocaleString('es-CL')}
+                        </td>
+                        {/* Columna de botones PDF */}
+                        <td className="py-3 text-center print:hidden">
+                          <div className="flex items-center justify-center gap-2">
+                            {/* Presupuesto PDF */}
+                            <button
+                              onClick={() => handlePdfPresupuesto(pedido.id, pedido.name)}
+                              disabled={pdfLoading !== null}
+                              title={`Descargar presupuesto ${pedido.name}`}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-100 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                            >
+                              {pdfLoading?.id === pedido.id && pdfLoading.tipo === 'presupuesto' ? (
+                                <Loader2 size={12} className="animate-spin" />
+                              ) : (
+                                <FileText size={12} />
+                              )}
+                              Presupuesto
+                            </button>
+                            {/* Órdenes de Trabajo PDF */}
+                            <button
+                              onClick={() => handlePdfTaller(pedido.id, pedido.name)}
+                              disabled={pdfLoading !== null}
+                              title={`Descargar órdenes de trabajo ${pedido.name}`}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-100 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                            >
+                              {pdfLoading?.id === pedido.id && pdfLoading.tipo === 'taller' ? (
+                                <Loader2 size={12} className="animate-spin" />
+                              ) : (
+                                <HardHat size={12} />
+                              )}
+                              Talleres
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
