@@ -274,7 +274,9 @@ export default function CotizacionesPage() {
     );
     const firstLineName = productLines[0]?.name || '';
     const isMonolitico = /monol[íi]tico/i.test(firstLineName);
-    const isFormas = productLines.some((l: any) => /con forma/i.test(l.name || ''));
+    const isFormas = productLines.some((l: any) =>
+      /con forma|forma especial|tri[áa]ngulo|trapecio|medio[ _]arco|arco|c[íi]rculo/i.test(l.name || '')
+    );
 
     let targetPath = '/';
     if (isMonolitico) {

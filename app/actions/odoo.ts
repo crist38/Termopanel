@@ -151,7 +151,7 @@ export async function guardarCotizacionEnOdoo(data: {
       if (item.micropersiana) extras.push('Micropersiana');
       if (item.palillaje) extras.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales, ${item.palillajeVerticales || 0} verticales)`);
       if (item.conForma) {
-        let formaDesc = `Forma especial (${item.tipoFigura})`;
+        let formaDesc = `Con Forma (${item.tipoFigura})`;
         if (item.medidasFigura) {
           const med = item.medidasFigura;
            if (item.tipoFigura === 'triangulo') {
@@ -159,7 +159,7 @@ export async function guardarCotizacionEnOdoo(data: {
            } else if (item.tipoFigura === 'trapecio') {
               formaDesc += ` Ancho:${med.a || 0}, Alt.Izq:${med.b1 || 0}, Alt.Der:${med.b2 || 0}`;
            } else if (item.tipoFigura === 'arco') {
-              formaDesc += ` Ancho:${med.a || 0}, Alt.Base:${med.b || 0}, R:${med.r || Math.round((med.a || 0) / 2)}`;
+              formaDesc += ` Ancho:${med.a || 0}, Alt.Base:${med.b || 0}, R:${med.r !== undefined ? med.r : Math.round((med.a || 0) / 2)}`;
            } else if (item.tipoFigura === 'medio_arco') {
               formaDesc += ` Ancho:${med.a || 0}, Alt.Recta:${med.b || 0}, Alt.Total:${med.b1 || 0}`;
            } else if (item.tipoFigura === 'circulo') {
@@ -501,7 +501,7 @@ function parseTermopanelLine(name: string, idx: number, line?: any): TermopanelI
     }
   }
 
-  const conForma = extrasStr.includes('con forma');
+  const conForma = /con forma|forma especial|tri[áa]ngulo|trapecio|medio[ _]arco|arco|c[íi]rculo/i.test(extrasStr);
   let tipoFigura: 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo' = 'triangulo';
   let medidasFigura: { a: number; b: number; b1?: number; b2?: number; r?: number } = { a: 0, b: 0 };
 
@@ -767,7 +767,9 @@ export async function obtenerCotizacionParaEditar(orderId: number): Promise<{
 
     const firstLineName = productOrderLines[0]?.name || '';
     const isMonolitico = /monol[íi]tico/i.test(firstLineName);
-    const isFormas = productOrderLines.some((l: any) => /con forma/i.test(l.name || ''));
+    const isFormas = productOrderLines.some((l: any) =>
+      /con forma|forma especial|tri[áa]ngulo|trapecio|medio[ _]arco|arco|c[íi]rculo/i.test(l.name || '')
+    );
 
     let tipo: 'termopanel' | 'monolitico' | 'formas' = 'termopanel';
     if (isMonolitico) {
