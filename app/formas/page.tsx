@@ -20,7 +20,7 @@ const drawShapeInPdf = (
   y: number,
   w: number,
   h: number,
-  med: { a: number; b: number; b1?: number; b2?: number }
+  med: { a: number; b: number; b1?: number; b2?: number; r?: number }
 ) => {
   doc.setLineWidth(0.3);
   doc.setDrawColor(71, 85, 105);   // Slate-600
@@ -393,7 +393,8 @@ function ShapesCADCotizadorContent() {
       a: medidaA,
       b: shape === 'trapecio' ? Math.max(medidaB1, medidaB2) : shape === 'circulo' ? medidaA : medidaB,
       b1: shape === 'trapecio' ? medidaB1 : shape === 'medio_arco' ? medidaB1 : undefined,
-      b2: shape === 'trapecio' ? medidaB2 : undefined
+      b2: shape === 'trapecio' ? medidaB2 : undefined,
+      r: shape === 'arco' ? Math.round(medidaA / 2) : shape === 'circulo' ? Math.round(medidaA / 2) : undefined
     },
     descuento,
     precioUnitario: 0
@@ -432,7 +433,8 @@ function ShapesCADCotizadorContent() {
         a: medidaA,
         b: shape === 'trapecio' ? Math.max(medidaB1, medidaB2) : shape === 'circulo' ? medidaA : medidaB,
         b1: shape === 'trapecio' ? medidaB1 : shape === 'medio_arco' ? medidaB1 : undefined,
-        b2: shape === 'trapecio' ? medidaB2 : undefined
+        b2: shape === 'trapecio' ? medidaB2 : undefined,
+        r: shape === 'arco' ? Math.round(medidaA / 2) : shape === 'circulo' ? Math.round(medidaA / 2) : undefined
       },
       descuento,
       precioUnitario: computedUnitPrice
@@ -594,10 +596,12 @@ function ShapesCADCotizadorContent() {
       
       let shapeText = '';
       const med = item.medidasFigura || { a: 0, b: 0 };
-      if (item.tipoFigura === 'triangulo') shapeText = `Triángulo: B:${med.a}, H:${med.b}`;
-      if (item.tipoFigura === 'trapecio') shapeText = `Trapecio: W:${med.a}, H.Izq:${med.b1}, H.Der:${med.b2}`;
-      if (item.tipoFigura === 'arco') shapeText = `Arco: W:${med.a}, H.Base:${med.b}`;
-      if (item.tipoFigura === 'rectangulo') shapeText = `Rectángulo: W:${med.a}, H:${med.b}`;
+      if (item.tipoFigura === 'triangulo') shapeText = `Triángulo: Base:${med.a}, Altura:${med.b}`;
+      if (item.tipoFigura === 'trapecio') shapeText = `Trapecio: Ancho:${med.a}, Alt.Izq:${med.b1}, Alt.Der:${med.b2}`;
+      if (item.tipoFigura === 'arco') shapeText = `Arco: Ancho:${med.a}, Alt.Base:${med.b}, R:${med.r || Math.round(med.a / 2)}`;
+      if (item.tipoFigura === 'medio_arco') shapeText = `Medio Arco: Ancho:${med.a}, Alt.Recta:${med.b}, Alt.Total:${med.b1}`;
+      if (item.tipoFigura === 'circulo') shapeText = `Círculo: Diámetro:${med.a}`;
+      if (item.tipoFigura === 'rectangulo') shapeText = `Rectángulo: Ancho:${med.a}, Alto:${med.b}`;
 
       let configDesc = `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm | C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm | Sep: ${item.separador.espesor}mm ${item.separador.color} | Forma: ${shapeText}`;
       const extrasList: string[] = [];
@@ -769,7 +773,9 @@ function ShapesCADCotizadorContent() {
       const med = item.medidasFigura || { a: 0, b: 0 };
       if (item.tipoFigura === 'triangulo') extrasText += `Triángulo (Base:${med.a}, Alt:${med.b})`;
       if (item.tipoFigura === 'trapecio') extrasText += `Trapecio (Ancho:${med.a}, Alt.Izq:${med.b1}, Alt.Der:${med.b2})`;
-      if (item.tipoFigura === 'arco') extrasText += `Arco (Ancho:${med.a}, Alt.Base:${med.b})`;
+      if (item.tipoFigura === 'arco') extrasText += `Arco (Ancho:${med.a}, Alt.Base:${med.b}, R:${med.r || Math.round(med.a / 2)})`;
+      if (item.tipoFigura === 'medio_arco') extrasText += `Medio Arco (Ancho:${med.a}, Alt.Recta:${med.b}, Alt.Total:${med.b1})`;
+      if (item.tipoFigura === 'circulo') extrasText += `Círculo (Diámetro:${med.a})`;
       if (item.tipoFigura === 'rectangulo') extrasText += `Rectángulo (Ancho:${med.a}, Alt:${med.b})`;
 
       const rowHeight = 24; // Aumentado de 14 a 24 para dar espacio a la figura
@@ -883,7 +889,9 @@ function ShapesCADCotizadorContent() {
       const med = item.medidasFigura || { a: 0, b: 0 };
       if (item.tipoFigura === 'triangulo') extrasText += `Triángulo (Base:${med.a}, Alt:${med.b})`;
       if (item.tipoFigura === 'trapecio') extrasText += `Trapecio (Ancho:${med.a}, Alt.Izq:${med.b1}, Alt.Der:${med.b2})`;
-      if (item.tipoFigura === 'arco') extrasText += `Arco (Ancho:${med.a}, Alt.Base:${med.b})`;
+      if (item.tipoFigura === 'arco') extrasText += `Arco (Ancho:${med.a}, Alt.Base:${med.b}, R:${med.r || Math.round(med.a / 2)})`;
+      if (item.tipoFigura === 'medio_arco') extrasText += `Medio Arco (Ancho:${med.a}, Alt.Recta:${med.b}, Alt.Total:${med.b1})`;
+      if (item.tipoFigura === 'circulo') extrasText += `Círculo (Diámetro:${med.a})`;
       if (item.tipoFigura === 'rectangulo') extrasText += `Rectángulo (Ancho:${med.a}, Alt:${med.b})`;
 
       if (item.palillaje) {
@@ -960,91 +968,130 @@ function ShapesCADCotizadorContent() {
 
   // SVG Scaled coordinates calculation
   const getSvgGeometry = () => {
-    const wMax = 300;
-    const hMax = 200;
-    const xOffset = 50;
-    const yOffset = 50;
+    const maxDrawW = 240;
+    const maxDrawH = 170;
+    const cx = 200;
+    const cy = 135;
 
     if (shape === 'triangulo') {
-      return {
-        path: `M ${xOffset},${yOffset + hMax} L ${xOffset + wMax},${yOffset + hMax} L ${xOffset},${yOffset} Z`,
-        points: [],
-        lines: [
-          { x1: xOffset, y1: yOffset + hMax + 20, x2: xOffset + wMax, y2: yOffset + hMax + 20, label: `A = ${medidaA} mm` },
-          { x1: xOffset - 20, y1: yOffset, x2: xOffset - 20, y2: yOffset + hMax, label: `B = ${medidaB} mm` }
-        ]
-      };
-    }
-    if (shape === 'trapecio') {
-      const maxH = Math.max(medidaB1, medidaB2) || 1;
-      const hLeft = (medidaB1 / maxH) * hMax;
-      const hRight = (medidaB2 / maxH) * hMax;
-      
-      const yLeft = yOffset + hMax - hLeft;
-      const yRight = yOffset + hMax - hRight;
-      
-      return {
-        path: `M ${xOffset},${yOffset + hMax} L ${xOffset + wMax},${yOffset + hMax} L ${xOffset + wMax},${yRight} L ${xOffset},${yLeft} Z`,
-        points: [],
-        lines: [
-          { x1: xOffset, y1: yOffset + hMax + 20, x2: xOffset + wMax, y2: yOffset + hMax + 20, label: `A = ${medidaA} mm` },
-          { x1: xOffset - 20, y1: yLeft, x2: xOffset - 20, y2: yOffset + hMax, label: `B1 = ${medidaB1} mm` },
-          { x1: xOffset + wMax + 20, y1: yRight, x2: xOffset + wMax + 20, y2: yOffset + hMax, label: `B2 = ${medidaB2} mm` }
-        ]
-      };
-    }
-    if (shape === 'arco') {
-      const maxH = (medidaB + medidaA / 2) || 1;
-      const hBaseScaled = (medidaB / maxH) * hMax;
-      const rScaled = ((medidaA / 2) / maxH) * wMax; // Center aspect ratio
+      const realW = medidaA || 1000;
+      const realH = medidaB || 1000;
+      const scale = Math.min(maxDrawW / realW, maxDrawH / realH);
+      const w = realW * scale;
+      const h = realH * scale;
+      const xStart = cx - w / 2;
+      const xEnd = cx + w / 2;
+      const yBottom = cy + h / 2;
+      const yTop = cy - h / 2;
 
-      const yBottom = yOffset + hMax;
-      const yBaseTop = yBottom - hBaseScaled;
-      
-      const wScaled = (medidaA / maxH) * wMax * 0.75;
-      const xStart = 200 - wScaled / 2;
-      const xEnd = 200 + wScaled / 2;
-      const r = wScaled / 2;
+      return {
+        path: `M ${xStart},${yBottom} L ${xEnd},${yBottom} L ${xStart},${yTop} Z`,
+        points: [],
+        lines: [
+          { x1: xStart, y1: yBottom + 22, x2: xEnd, y2: yBottom + 22, label: `A = ${medidaA} mm` },
+          { x1: xStart - 22, y1: yTop, x2: xStart - 22, y2: yBottom, label: `B = ${medidaB} mm` }
+        ]
+      };
+    }
+
+    if (shape === 'trapecio') {
+      const realW = medidaA || 1000;
+      const maxRealH = Math.max(medidaB1, medidaB2) || 1000;
+      const scale = Math.min(maxDrawW / realW, maxDrawH / maxRealH);
+      const w = realW * scale;
+      const hLeft = (medidaB1 || 0) * scale;
+      const hRight = (medidaB2 || 0) * scale;
+      const maxH = Math.max(hLeft, hRight);
+      const xStart = cx - w / 2;
+      const xEnd = cx + w / 2;
+      const yBottom = cy + maxH / 2;
+      const yLeft = yBottom - hLeft;
+      const yRight = yBottom - hRight;
+
+      return {
+        path: `M ${xStart},${yBottom} L ${xEnd},${yBottom} L ${xEnd},${yRight} L ${xStart},${yLeft} Z`,
+        points: [],
+        lines: [
+          { x1: xStart, y1: yBottom + 22, x2: xEnd, y2: yBottom + 22, label: `A = ${medidaA} mm` },
+          { x1: xStart - 22, y1: yLeft, x2: xStart - 22, y2: yBottom, label: `B1 = ${medidaB1} mm` },
+          { x1: xEnd + 22, y1: yRight, x2: xEnd + 22, y2: yBottom, label: `B2 = ${medidaB2} mm` }
+        ]
+      };
+    }
+
+    if (shape === 'arco') {
+      const realW = medidaA || 1000;
+      const realHBase = medidaB || 0;
+      const realR = realW / 2;
+      const realHTotal = realHBase + realR;
+
+      const scale = Math.min(maxDrawW / realW, maxDrawH / (realHTotal || 1));
+      const w = realW * scale;
+      const hBase = realHBase * scale;
+      const r = realR * scale;
+      const hTotal = hBase + r;
+
+      const xStart = cx - w / 2;
+      const xEnd = cx + w / 2;
+      const yBottom = cy + hTotal / 2;
+      const yBaseTop = yBottom - hBase;
       const yArchTop = yBaseTop - r;
+
+      const lines = [
+        { x1: xStart, y1: yBottom + 22, x2: xEnd, y2: yBottom + 22, label: `A = ${medidaA} mm` },
+        { x1: cx, y1: yArchTop, x2: cx, y2: yBaseTop, label: `R = ${Math.round(medidaA / 2)} mm` }
+      ];
+
+      if (realHBase > 0) {
+        lines.push({ x1: xStart - 22, y1: yBaseTop, x2: xStart - 22, y2: yBottom, label: `B = ${medidaB} mm` });
+        lines.push({ x1: xEnd + 22, y1: yArchTop, x2: xEnd + 22, y2: yBottom, label: `H = ${medidaB + Math.round(medidaA / 2)} mm` });
+      }
 
       return {
         path: `M ${xStart},${yBottom} L ${xEnd},${yBottom} L ${xEnd},${yBaseTop} A ${r},${r} 0 0,0 ${xStart},${yBaseTop} Z`,
         points: [],
-        lines: [
-          { x1: xStart, y1: yBottom + 20, x2: xEnd, y2: yBottom + 20, label: `A = ${medidaA} mm` },
-          { x1: xStart - 20, y1: yBaseTop, x2: xStart - 20, y2: yBottom, label: `B = ${medidaB} mm` },
-          { x1: 200, y1: yArchTop, x2: 200, y2: yBaseTop, label: `R = ${medidaA / 2} mm` }
-        ]
+        lines
       };
     }
+
     if (shape === 'medio_arco') {
-      const maxH = medidaB1 || 1;
-      const hRight = (medidaB / maxH) * hMax;
-      const yBottom = yOffset + hMax;
-      const yLeft = yOffset;
-      const yRight = yBottom - hRight;
-      const rY = hMax - hRight;
+      const realW = medidaA || 1000;
+      const realHTotal = medidaB1 || 1000;
+      const realHBase = Math.min(medidaB || 0, realHTotal);
+      const scale = Math.min(maxDrawW / realW, maxDrawH / realHTotal);
+
+      const w = realW * scale;
+      const hTotal = realHTotal * scale;
+      const hBase = realHBase * scale;
+      const rY = hTotal - hBase;
+
+      const xStart = cx - w / 2;
+      const xEnd = cx + w / 2;
+      const yBottom = cy + hTotal / 2;
+      const yRight = yBottom - hBase;
+      const yLeft = yBottom - hTotal;
 
       return {
-        path: `M ${xOffset},${yBottom} L ${xOffset + wMax},${yBottom} L ${xOffset + wMax},${yRight} A ${wMax},${rY} 0 0,0 ${xOffset},${yLeft} Z`,
+        path: `M ${xStart},${yBottom} L ${xEnd},${yBottom} L ${xEnd},${yRight} A ${w},${rY} 0 0,0 ${xStart},${yLeft} Z`,
         points: [],
         lines: [
-          { x1: xOffset, y1: yBottom + 20, x2: xOffset + wMax, y2: yBottom + 20, label: `A = ${medidaA} mm` },
-          { x1: xOffset + wMax + 20, y1: yRight, x2: xOffset + wMax + 20, y2: yBottom, label: `B = ${medidaB} mm` },
-          { x1: xOffset - 20, y1: yLeft, x2: xOffset - 20, y2: yBottom, label: `H = ${medidaB1} mm` }
+          { x1: xStart, y1: yBottom + 22, x2: xEnd, y2: yBottom + 22, label: `A = ${medidaA} mm` },
+          { x1: xEnd + 22, y1: yRight, x2: xEnd + 22, y2: yBottom, label: `B = ${medidaB} mm` },
+          { x1: xStart - 22, y1: yLeft, x2: xStart - 22, y2: yBottom, label: `H = ${medidaB1} mm` }
         ]
       };
     }
+
     if (shape === 'circulo') {
-      const rScaled = hMax / 2;
-      const cx = xOffset + wMax / 2;
-      const cy = yOffset + hMax / 2;
+      const realDiam = medidaA || 1000;
+      const scale = Math.min(maxDrawW / realDiam, maxDrawH / realDiam);
+      const r = (realDiam * scale) / 2;
 
       return {
-        path: `M ${cx},${cy - rScaled} A ${rScaled},${rScaled} 0 1,1 ${cx - 0.01},${cy - rScaled} Z`,
+        path: `M ${cx},${cy - r} A ${r},${r} 0 1,1 ${cx - 0.01},${cy - r} Z`,
         points: [],
         lines: [
-          { x1: cx - rScaled, y1: cy, x2: cx + rScaled, y2: cy, label: `Diámetro = ${medidaA} mm` }
+          { x1: cx - r, y1: cy, x2: cx + r, y2: cy, label: `Diámetro = ${medidaA} mm` }
         ]
       };
     }
@@ -1214,7 +1261,7 @@ function ShapesCADCotizadorContent() {
                   />
                 </div>
               )}
-              {(shape === 'triangulo' || shape === 'arco') && (
+              {shape === 'triangulo' && (
                 <>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">Ancho / Base (A)</label>
@@ -1226,13 +1273,54 @@ function ShapesCADCotizadorContent() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">{shape === 'arco' ? 'Altura Base (B)' : 'Altura (B)'}</label>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Altura (B)</label>
                     <input
                       type="number"
                       value={medidaB || ''}
                       onChange={(e) => setMedidaB(parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
                     />
+                  </div>
+                </>
+              )}
+              {shape === 'arco' && (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Ancho / Base (A)</label>
+                    <input
+                      type="number"
+                      value={medidaA || ''}
+                      onChange={(e) => setMedidaA(parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Altura Base (B)</label>
+                    <input
+                      type="number"
+                      value={medidaB || ''}
+                      onChange={(e) => setMedidaB(parseInt(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Radio (R)</label>
+                    <input
+                      type="number"
+                      value={medidaA ? Math.round(medidaA / 2) : ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setMedidaA(val * 2);
+                      }}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
+                      placeholder="Radio (A / 2)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Altura Total (B + R)</label>
+                    <div className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg text-sm text-slate-700 font-semibold flex items-center h-[38px]">
+                      {(medidaB || 0) + Math.round((medidaA || 0) / 2)} mm
+                    </div>
                   </div>
                 </>
               )}
@@ -1527,11 +1615,14 @@ function ShapesCADCotizadorContent() {
                   />
                   {/* Text labels */}
                   <text
-                    x={(line.x1 + line.x2) / 2}
-                    y={line.y1 === line.y2 ? line.y1 - 6 : (line.y1 + line.y2) / 2 + 4}
-                    textAnchor="middle"
+                    x={line.x1 === line.x2 ? (line.x1 < 200 ? line.x1 - 8 : line.x1 + 8) : (line.x1 + line.x2) / 2}
+                    y={line.y1 === line.y2 ? (line.y1 > 150 ? line.y1 + 14 : line.y1 - 6) : (line.y1 + line.y2) / 2 + 4}
+                    textAnchor={line.x1 === line.x2 ? (line.x1 < 200 ? "end" : "start") : "middle"}
                     fill="#f97316"
-                    className="font-mono text-[10px] font-bold"
+                    stroke="#020617"
+                    strokeWidth="3px"
+                    paintOrder="stroke"
+                    className="font-mono text-[11px] font-bold"
                   >
                     {line.label}
                   </text>
@@ -1606,7 +1697,18 @@ function ShapesCADCotizadorContent() {
                   return (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                       <td className="p-3 font-semibold text-slate-500">{item.label || `V${idx + 1}`}</td>
-                      <td className="p-3 text-center uppercase font-bold text-cyan-600">{item.tipoFigura}</td>
+                      <td className="p-3 text-center uppercase font-bold text-cyan-600">
+                        <div>{item.tipoFigura === 'medio_arco' ? 'Medio Arco' : item.tipoFigura}</div>
+                        {item.medidasFigura && (
+                          <div className="text-[10px] text-slate-500 font-normal font-mono lowercase">
+                            {item.tipoFigura === 'arco' && `a:${item.medidasFigura.a} b:${item.medidasFigura.b} r:${item.medidasFigura.r || Math.round(item.medidasFigura.a / 2)}`}
+                            {item.tipoFigura === 'triangulo' && `b:${item.medidasFigura.a} h:${item.medidasFigura.b}`}
+                            {item.tipoFigura === 'trapecio' && `a:${item.medidasFigura.a} b1:${item.medidasFigura.b1} b2:${item.medidasFigura.b2}`}
+                            {item.tipoFigura === 'medio_arco' && `a:${item.medidasFigura.a} b:${item.medidasFigura.b} h:${item.medidasFigura.b1}`}
+                            {item.tipoFigura === 'circulo' && `d:${item.medidasFigura.a}`}
+                          </div>
+                        )}
+                      </td>
                       <td className="p-3 text-center font-semibold">{item.cantidad}</td>
                       <td className="p-3 text-center font-mono">{item.ancho} x {item.alto}</td>
                       <td className="p-3">

@@ -153,13 +153,17 @@ export async function guardarCotizacionEnOdoo(data: {
       if (item.conForma) {
         let formaDesc = `Forma especial (${item.tipoFigura})`;
         if (item.medidasFigura) {
-           const med = item.medidasFigura;
-           if (item.tipoFigura === 'triangulo' || item.tipoFigura === 'arco') {
-              formaDesc += ` a:${med.a}, b:${med.b}`;
-           } else if (item.tipoFigura === 'trapecio' || item.tipoFigura === 'medio_arco') {
-              formaDesc += ` a:${med.a}, b:${med.b}, b1:${med.b1}`;
+          const med = item.medidasFigura;
+           if (item.tipoFigura === 'triangulo') {
+              formaDesc += ` Base:${med.a || 0}, Altura:${med.b || 0}`;
+           } else if (item.tipoFigura === 'trapecio') {
+              formaDesc += ` Ancho:${med.a || 0}, Alt.Izq:${med.b1 || 0}, Alt.Der:${med.b2 || 0}`;
+           } else if (item.tipoFigura === 'arco') {
+              formaDesc += ` Ancho:${med.a || 0}, Alt.Base:${med.b || 0}, R:${med.r || Math.round((med.a || 0) / 2)}`;
+           } else if (item.tipoFigura === 'medio_arco') {
+              formaDesc += ` Ancho:${med.a || 0}, Alt.Recta:${med.b || 0}, Alt.Total:${med.b1 || 0}`;
            } else if (item.tipoFigura === 'circulo') {
-              formaDesc += ` a:${med.a}`;
+              formaDesc += ` Diámetro:${med.a || 0}`;
            }
         }
         extras.push(formaDesc);
@@ -499,39 +503,39 @@ function parseTermopanelLine(name: string, idx: number, line?: any): TermopanelI
 
   const conForma = extrasStr.includes('con forma');
   let tipoFigura: 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo' = 'triangulo';
-  let medidasFigura: { a: number; b: number; b1?: number; b2?: number } = { a: 0, b: 0 };
+  let medidasFigura: { a: number; b: number; b1?: number; b2?: number; r?: number } = { a: 0, b: 0 };
 
   if (conForma) {
     if (extrasStr.includes('triángulo') || extrasStr.includes('triangulo')) {
       tipoFigura = 'triangulo';
-      const m = extrasStr.match(/base:\s*(\d+)\s*,\s*altura:\s*(\d+)/i);
+      const m = extrasStr.match(/base:\s*(\d+)\s*,\s*altura:\s*(\d+)/i) || extrasStr.match(/a:\s*(\d+)\s*,\s*b:\s*(\d+)/i);
       if (m) {
         medidasFigura = { a: parseInt(m[1]), b: parseInt(m[2]) };
       }
     } else if (extrasStr.includes('trapecio')) {
       tipoFigura = 'trapecio';
-      const m = extrasStr.match(/ancho:\s*(\d+)\s*,\s*alt.izq:\s*(\d+)\s*,\s*alt.der:\s*(\d+)/i);
+      const m = extrasStr.match(/ancho:\s*(\d+)\s*,\s*alt\.?izq:\s*(\d+)\s*,\s*alt\.?der:\s*(\d+)/i) || extrasStr.match(/a:\s*(\d+)\s*,\s*b:\s*(\d+)\s*,\s*b1:\s*(\d+)/i);
       if (m) {
         medidasFigura = { a: parseInt(m[1]), b1: parseInt(m[2]), b2: parseInt(m[3]), b: Math.max(parseInt(m[2]), parseInt(m[3])) };
       }
     } else if (extrasStr.includes('medio arco') || extrasStr.includes('medio_arco')) {
       tipoFigura = 'medio_arco';
-      const m = extrasStr.match(/ancho:\s*(\d+)\s*,\s*alt.recta:\s*(\d+)\s*,\s*alt.total:\s*(\d+)/i);
+      const m = extrasStr.match(/ancho:\s*(\d+)\s*,\s*alt\.?recta:\s*(\d+)\s*,\s*alt\.?total:\s*(\d+)/i) || extrasStr.match(/a:\s*(\d+)\s*,\s*b:\s*(\d+)\s*,\s*b1:\s*(\d+)/i);
       if (m) {
         medidasFigura = { a: parseInt(m[1]), b: parseInt(m[2]), b1: parseInt(m[3]) };
       }
     } else if (extrasStr.includes('arco')) {
       tipoFigura = 'arco';
-      const m = extrasStr.match(/ancho:\s*(\d+)\s*,\s*alt.base:\s*(\d+)/i);
+      const m = extrasStr.match(/ancho:\s*(\d+)\s*,\s*alt\.?base:\s*(\d+)(?:\s*,\s*r:\s*(\d+))?/i) || extrasStr.match(/a:\s*(\d+)\s*,\s*b:\s*(\d+)/i);
       if (m) {
-        medidasFigura = { a: parseInt(m[1]), b: parseInt(m[2]) };
+        medidasFigura = { a: parseInt(m[1]), b: parseInt(m[2]), r: m[3] ? parseInt(m[3]) : Math.round(parseInt(m[1]) / 2) };
       }
     } else if (extrasStr.includes('círculo') || extrasStr.includes('circulo')) {
       tipoFigura = 'circulo';
-      const m = extrasStr.match(/diámetro:\s*(\d+)|diametro:\s*(\d+)/i);
+      const m = extrasStr.match(/diámetro:\s*(\d+)|diametro:\s*(\d+)/i) || extrasStr.match(/a:\s*(\d+)/i);
       const val = m ? (m[1] || m[2]) : null;
       if (val) {
-        medidasFigura = { a: parseInt(val), b: parseInt(val) };
+        medidasFigura = { a: parseInt(val), b: parseInt(val), r: Math.round(parseInt(val) / 2) };
       }
     }
   }
@@ -870,7 +874,7 @@ export async function actualizarCotizacionEnOdoo(data: {
             let shapeDesc = '';
             if (item.tipoFigura === 'triangulo') shapeDesc = `Triángulo: Base:${med.a || 0}, Altura:${med.b || 0}`;
             else if (item.tipoFigura === 'trapecio') shapeDesc = `Trapecio: Ancho:${med.a || 0}, Alt.Izq:${med.b1 || 0}, Alt.Der:${med.b2 || 0}`;
-            else if (item.tipoFigura === 'arco') shapeDesc = `Arco: Ancho:${med.a || 0}, Alt.Base:${med.b || 0}`;
+            else if (item.tipoFigura === 'arco') shapeDesc = `Arco: Ancho:${med.a || 0}, Alt.Base:${med.b || 0}, R:${med.r || Math.round((med.a || 0) / 2)}`;
             else if (item.tipoFigura === 'medio_arco') shapeDesc = `Medio Arco: Ancho:${med.a || 0}, Alt.Recta:${med.b || 0}, Alt.Total:${med.b1 || 0}`;
             else if (item.tipoFigura === 'circulo') shapeDesc = `Círculo: Diámetro:${med.a || 0}`;
             extras.push(`Con Forma (${shapeDesc})`);
