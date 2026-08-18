@@ -549,7 +549,7 @@ export default function ConfigPage() {
                       value={config.parametrosCalculo?.recargoPorcentajeForma !== undefined ? config.parametrosCalculo.recargoPorcentajeForma : ''}
                       onChange={e => updateParamCalculo('recargoPorcentajeForma', e.target.value)}
                       className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium text-sm"
-                      placeholder="Ej: 50"
+                      placeholder="Ej: 100"
                     />
                   </div>
                   <p className="text-[11px] text-slate-400">Recargo porcentual para termopaneles con formas especiales.</p>

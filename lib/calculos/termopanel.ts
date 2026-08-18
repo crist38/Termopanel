@@ -55,7 +55,7 @@ export const PARAMETROS_DEFAULT: ParametrosCalculo = {
   costoTiraPalillaje: 30000,
   largoTiraPalillaje: 5000,
   costoManoObraPalillaje: 10000,
-  recargoPorcentajeForma: 50,
+  recargoPorcentajeForma: 100,
 }
 
 export function calcularItem(item: TermopanelItem): {
@@ -177,7 +177,7 @@ export function calcularPrecioUnitario(
 
   // Recargo Con Forma
   if (item.conForma) {
-    const recargoFactor = 1 + (params.recargoPorcentajeForma !== undefined ? params.recargoPorcentajeForma : 50) / 100
+    const recargoFactor = 1 + (params.recargoPorcentajeForma !== undefined ? params.recargoPorcentajeForma : 100) / 100
     base = base * recargoFactor
   }
 

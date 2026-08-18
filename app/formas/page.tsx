@@ -1675,7 +1675,7 @@ function ShapesCADCotizadorContent() {
               </div>
               <div className="bg-slate-50 p-3 rounded-lg">
                 <span className="text-slate-400 block mb-0.5">Recargo Forma</span>
-                <strong className="text-amber-600 text-sm font-bold">+{params.recargoPorcentajeForma || 50}%</strong>
+                <strong className="text-amber-600 text-sm font-bold">+{params.recargoPorcentajeForma !== undefined ? params.recargoPorcentajeForma : 100}%</strong>
               </div>
               <div className="bg-slate-50 p-3 rounded-lg col-span-2 md:col-span-1">
                 <span className="text-slate-400 block mb-0.5">Precio Unitario Sugerido</span>
