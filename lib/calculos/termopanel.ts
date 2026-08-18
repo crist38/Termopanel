@@ -15,7 +15,7 @@ export interface TermopanelItem {
   palillajeVerticales?: number
   conForma?: boolean
   tipoFigura?: 'rectangulo' | 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo'
-  medidasFigura?: { a: number; b: number; b1?: number; b2?: number }
+  medidasFigura?: { a: number; b: number; b1?: number; b2?: number; r?: number }
   descuento?: number // Porcentaje de descuento (0-100)
   precioUnitario: number
   esPrecioManual?: boolean
