@@ -47,40 +47,46 @@ const drawShapeInPdf = (
   } else if (shape === 'arco') {
     const a = med.a || 1;
     const b = med.b || 0;
-    const maxVal = (b + a / 2) || 1;
+    const rVal = med.r !== undefined && med.r > 0 ? med.r : a / 2;
+    const maxVal = (b + rVal) || 1;
     
     const hBaseScaled = (b / maxVal) * h;
-    const rScaled = ((a / 2) / maxVal) * h;
+    const rScaled = (rVal / maxVal) * h;
     
     const yBottom = y + h;
     const yBaseTop = yBottom - hBaseScaled;
     const cx = x + w / 2;
-    const r = w / 2;
+    const rX = w / 2;
+    const rY = rScaled;
 
-    doc.rect(x, yBaseTop, w, hBaseScaled, 'FD');
+    if (hBaseScaled > 0) {
+      doc.rect(x, yBaseTop, w, hBaseScaled, 'FD');
+    }
 
     const steps = 16;
     for (let i = 0; i < steps; i++) {
       const a1 = i * Math.PI / steps;
       const a2 = (i + 1) * Math.PI / steps;
-      const x1 = cx + r * Math.cos(Math.PI + a1);
-      const y1 = yBaseTop - r * Math.sin(Math.PI + a1);
-      const x2 = cx + r * Math.cos(Math.PI + a2);
-      const y2 = yBaseTop - r * Math.sin(Math.PI + a2);
+      const x1 = cx + rX * Math.cos(Math.PI + a1);
+      const y1 = yBaseTop - rY * Math.sin(Math.PI + a1);
+      const x2 = cx + rX * Math.cos(Math.PI + a2);
+      const y2 = yBaseTop - rY * Math.sin(Math.PI + a2);
       doc.triangle(cx, yBaseTop, x1, y1, x2, y2, 'FD');
     }
     
     doc.line(x, yBottom, x + w, yBottom);
-    doc.line(x, yBottom, x, yBaseTop);
-    doc.line(x + w, yBottom, x + w, yBaseTop);
+    if (hBaseScaled > 0) {
+      doc.line(x, yBottom, x, yBaseTop);
+      doc.line(x + w, yBottom, x + w, yBaseTop);
+    }
     
     for (let i = 0; i < steps; i++) {
       const a1 = i * Math.PI / steps;
       const a2 = (i + 1) * Math.PI / steps;
-      const x1 = cx + r * Math.cos(Math.PI + a1);
-      const y1 = yBaseTop - r * Math.sin(Math.PI + a1);
-      const x2 = cx + r * Math.cos(Math.PI + a2);
-      const y2 = yBaseTop - r * Math.sin(Math.PI + a2);
+      const x1 = cx + rX * Math.cos(Math.PI + a1);
+      const y1 = yBaseTop - rY * Math.sin(Math.PI + a1);
+      const x2 = cx + rX * Math.cos(Math.PI + a2);
+      const y2 = yBaseTop - rY * Math.sin(Math.PI + a2);
       doc.line(x1, y1, x2, y2);
     }
   } else if (shape === 'medio_arco') {
@@ -138,6 +144,7 @@ function ShapesCADCotizadorContent() {
   const [medidaB, setMedidaB] = useState<number>(1000);   // mm (height or Left height or base height)
   const [medidaB1, setMedidaB1] = useState<number>(1500); // mm (Left height for trapezoid)
   const [medidaB2, setMedidaB2] = useState<number>(1000); // mm (Right height for trapezoid)
+  const [medidaR, setMedidaR] = useState<number>(500);    // mm (Radio / Flecha del arco)
   const [cantidad, setCantidad] = useState<number>(1);
   
   const [cristal1Tipo, setCristal1Tipo] = useState<string>('Incoloro');
@@ -341,7 +348,7 @@ function ShapesCADCotizadorContent() {
   const getBoundingBox = () => {
     if (shape === 'triangulo') return { w: medidaA, h: medidaB };
     if (shape === 'trapecio') return { w: medidaA, h: Math.max(medidaB1, medidaB2) };
-    if (shape === 'arco') return { w: medidaA, h: medidaB + medidaA / 2 };
+    if (shape === 'arco') return { w: medidaA, h: medidaB + (medidaR !== undefined && medidaR > 0 ? medidaR : Math.round(medidaA / 2)) };
     if (shape === 'medio_arco') return { w: medidaA, h: medidaB1 };
     if (shape === 'circulo') return { w: medidaA, h: medidaA };
     return { w: 1000, h: 1000 };
@@ -350,7 +357,10 @@ function ShapesCADCotizadorContent() {
   const getCalculatedArea = () => {
     if (shape === 'triangulo') return (medidaA * medidaB) / 2_000_000;
     if (shape === 'trapecio') return medidaA * ((medidaB1 + medidaB2) / 2) / 1_000_000;
-    if (shape === 'arco') return (medidaA * medidaB + (Math.PI * Math.pow(medidaA / 2, 2)) / 2) / 1_000_000;
+    if (shape === 'arco') {
+      const rVal = medidaR !== undefined && medidaR > 0 ? medidaR : Math.round(medidaA / 2);
+      return (medidaA * medidaB + (Math.PI * medidaA * rVal) / 4) / 1_000_000;
+    }
     if (shape === 'medio_arco') {
       const hArch = Math.max(0, medidaB1 - medidaB);
       return (medidaA * medidaB + (Math.PI * medidaA * hArch) / 4) / 1_000_000;
@@ -362,7 +372,11 @@ function ShapesCADCotizadorContent() {
   const getCalculatedPerimeter = () => {
     if (shape === 'triangulo') return (medidaA + medidaB + Math.sqrt(medidaA * medidaA + medidaB * medidaB)) / 1000;
     if (shape === 'trapecio') return (medidaA + medidaB1 + medidaB2 + Math.sqrt(medidaA * medidaA + Math.pow(Math.abs(medidaB1 - medidaB2), 2))) / 1000;
-    if (shape === 'arco') return (medidaA + 2 * medidaB + (Math.PI * medidaA) / 2) / 1000;
+    if (shape === 'arco') {
+      const rVal = medidaR !== undefined && medidaR > 0 ? medidaR : Math.round(medidaA / 2);
+      const arcLength = (Math.PI * Math.sqrt(2 * (Math.pow(medidaA / 2, 2) + rVal * rVal))) / 2;
+      return (medidaA + 2 * medidaB + arcLength) / 1000;
+    }
     if (shape === 'medio_arco') {
       const hArch = Math.max(0, medidaB1 - medidaB);
       const arcLength = (Math.PI * Math.sqrt(2 * (medidaA * medidaA + hArch * hArch))) / 4;
@@ -394,7 +408,7 @@ function ShapesCADCotizadorContent() {
       b: shape === 'trapecio' ? Math.max(medidaB1, medidaB2) : shape === 'circulo' ? medidaA : medidaB,
       b1: shape === 'trapecio' ? medidaB1 : shape === 'medio_arco' ? medidaB1 : undefined,
       b2: shape === 'trapecio' ? medidaB2 : undefined,
-      r: shape === 'arco' ? Math.round(medidaA / 2) : shape === 'circulo' ? Math.round(medidaA / 2) : undefined
+      r: shape === 'arco' ? (medidaR !== undefined && medidaR > 0 ? medidaR : Math.round(medidaA / 2)) : shape === 'circulo' ? Math.round(medidaA / 2) : undefined
     },
     descuento,
     precioUnitario: 0
@@ -434,7 +448,7 @@ function ShapesCADCotizadorContent() {
         b: shape === 'trapecio' ? Math.max(medidaB1, medidaB2) : shape === 'circulo' ? medidaA : medidaB,
         b1: shape === 'trapecio' ? medidaB1 : shape === 'medio_arco' ? medidaB1 : undefined,
         b2: shape === 'trapecio' ? medidaB2 : undefined,
-        r: shape === 'arco' ? Math.round(medidaA / 2) : shape === 'circulo' ? Math.round(medidaA / 2) : undefined
+        r: shape === 'arco' ? (medidaR !== undefined && medidaR > 0 ? medidaR : Math.round(medidaA / 2)) : shape === 'circulo' ? Math.round(medidaA / 2) : undefined
       },
       descuento,
       precioUnitario: computedUnitPrice
@@ -1022,33 +1036,35 @@ function ShapesCADCotizadorContent() {
     if (shape === 'arco') {
       const realW = medidaA || 1000;
       const realHBase = medidaB || 0;
-      const realR = realW / 2;
+      const realR = medidaR !== undefined && medidaR > 0 ? medidaR : Math.round(realW / 2);
       const realHTotal = realHBase + realR;
 
       const scale = Math.min(maxDrawW / realW, maxDrawH / (realHTotal || 1));
       const w = realW * scale;
       const hBase = realHBase * scale;
       const r = realR * scale;
+      const rX = w / 2;
+      const rY = r;
       const hTotal = hBase + r;
 
       const xStart = cx - w / 2;
       const xEnd = cx + w / 2;
       const yBottom = cy + hTotal / 2;
       const yBaseTop = yBottom - hBase;
-      const yArchTop = yBaseTop - r;
+      const yArchTop = yBaseTop - rY;
 
       const lines = [
         { x1: xStart, y1: yBottom + 22, x2: xEnd, y2: yBottom + 22, label: `A = ${medidaA} mm` },
-        { x1: cx, y1: yArchTop, x2: cx, y2: yBaseTop, label: `R = ${Math.round(medidaA / 2)} mm` }
+        { x1: cx, y1: yArchTop, x2: cx, y2: yBaseTop, label: `R = ${realR} mm` }
       ];
 
       if (realHBase > 0) {
         lines.push({ x1: xStart - 22, y1: yBaseTop, x2: xStart - 22, y2: yBottom, label: `B = ${medidaB} mm` });
-        lines.push({ x1: xEnd + 22, y1: yArchTop, x2: xEnd + 22, y2: yBottom, label: `H = ${medidaB + Math.round(medidaA / 2)} mm` });
+        lines.push({ x1: xEnd + 22, y1: yArchTop, x2: xEnd + 22, y2: yBottom, label: `H = ${medidaB + realR} mm` });
       }
 
       return {
-        path: `M ${xStart},${yBottom} L ${xEnd},${yBottom} L ${xEnd},${yBaseTop} A ${r},${r} 0 0,0 ${xStart},${yBaseTop} Z`,
+        path: `M ${xStart},${yBottom} L ${xEnd},${yBottom} L ${xEnd},${yBaseTop} A ${rX},${rY} 0 0,0 ${xStart},${yBaseTop} Z`,
         points: [],
         lines
       };
@@ -1298,28 +1314,35 @@ function ShapesCADCotizadorContent() {
                     <label className="block text-xs font-bold text-slate-500 mb-1">Altura Base (B)</label>
                     <input
                       type="number"
-                      value={medidaB || ''}
+                      value={medidaB === 0 ? '0' : (medidaB || '')}
                       onChange={(e) => setMedidaB(parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Radio (R)</label>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-xs font-bold text-slate-500">Radio / Flecha (R)</label>
+                      <button
+                        type="button"
+                        onClick={() => setMedidaR(Math.round(medidaA / 2))}
+                        className="text-[10px] text-cyan-600 hover:text-cyan-800 font-semibold underline"
+                        title="Calcular medio punto (A / 2)"
+                      >
+                        Medio Punto (A/2)
+                      </button>
+                    </div>
                     <input
                       type="number"
-                      value={medidaA ? Math.round(medidaA / 2) : ''}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value) || 0;
-                        setMedidaA(val * 2);
-                      }}
+                      value={medidaR || ''}
+                      onChange={(e) => setMedidaR(parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
-                      placeholder="Radio (A / 2)"
+                      placeholder="Ej: 260"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">Altura Total (B + R)</label>
                     <div className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg text-sm text-slate-700 font-semibold flex items-center h-[38px]">
-                      {(medidaB || 0) + Math.round((medidaA || 0) / 2)} mm
+                      {(medidaB || 0) + (medidaR || 0)} mm
                     </div>
                   </div>
                 </>

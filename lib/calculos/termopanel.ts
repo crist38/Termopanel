@@ -77,7 +77,8 @@ export function calcularItem(item: TermopanelItem): {
     } else if (item.tipoFigura === 'arco') {
       const a = med.a || 0
       const b = med.b || 0
-      metrosCuadrados = (a * b + (Math.PI * Math.pow(a / 2, 2)) / 2) / 1_000_000
+      const r = med.r !== undefined && med.r > 0 ? med.r : a / 2
+      metrosCuadrados = (a * b + (Math.PI * a * r) / 4) / 1_000_000
     } else if (item.tipoFigura === 'medio_arco') {
       const a = med.a || 0
       const b = med.b || 0
@@ -121,8 +122,10 @@ export function calcularPrecioUnitario(
     } else if (item.tipoFigura === 'arco') {
       const a = med.a || 0
       const b = med.b || 0
-      m2 = (a * b + (Math.PI * Math.pow(a / 2, 2)) / 2) / 1_000_000
-      ml = (a + 2 * b + (Math.PI * a) / 2) / 1000
+      const r = med.r !== undefined && med.r > 0 ? med.r : a / 2
+      m2 = (a * b + (Math.PI * a * r) / 4) / 1_000_000
+      const arcLength = (Math.PI * Math.sqrt(2 * (Math.pow(a / 2, 2) + r * r))) / 2
+      ml = (a + 2 * b + arcLength) / 1000
     } else if (item.tipoFigura === 'medio_arco') {
       const a = med.a || 0
       const b = med.b || 0
