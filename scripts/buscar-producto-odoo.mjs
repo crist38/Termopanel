@@ -1,10 +1,19 @@
 // Script para buscar productos disponibles en Odoo
 // Ejecutar con: node scripts/buscar-producto-odoo.mjs
 
-const ODOO_URL = "https://prowindows-ltda.odoo.com";
-const ODOO_DB = "prowindows-ltda";
-const ODOO_USERNAME = "cristian3877@gmail.com";
-const ODOO_API_KEY = "Up2QaI7FhSmbIq1";
+import fs from 'fs';
+
+const envContent = fs.readFileSync('.env', 'utf8');
+const envVars = {};
+envContent.split('\n').forEach(line => {
+  const match = line.match(/^([^#=]+)=(.*)$/);
+  if (match) envVars[match[1].trim()] = match[2].trim().replace(/^["']|["']$/g, '');
+});
+
+const ODOO_URL = envVars.ODOO_URL;
+const ODOO_DB = envVars.ODOO_DB;
+const ODOO_USERNAME = envVars.ODOO_USERNAME;
+const ODOO_API_KEY = envVars.ODOO_PASSWORD || envVars.ODOO_API_KEY;
 
 async function rpc(service, method, args) {
   const res = await fetch(`${ODOO_URL}/jsonrpc`, {
@@ -25,21 +34,13 @@ async function main() {
   const uid = await rpc('common', 'authenticate', [ODOO_DB, ODOO_USERNAME, ODOO_API_KEY, {}]);
   console.log('✅ Autenticado. UID:', uid);
 
-  // 2. Buscar productos de tipo servicio o con "termopanel" en el nombre
-  const productos = await rpc('object', 'execute_kw', [
+  const monoliticos = await rpc('object', 'execute_kw', [
     ODOO_DB, uid, ODOO_API_KEY,
     'product.product', 'search_read',
-    [[['sale_ok', '=', true]]],
-    { fields: ['id', 'name', 'type', 'list_price'], limit: 20, order: 'id asc' }
+    [[['name', 'ilike', 'monol']]],
+    { fields: ['id', 'name', 'default_code'] }
   ]);
-
-  console.log('\n📦 Primeros 20 productos disponibles para venta en Odoo:\n');
-  productos.forEach(p => {
-    console.log(`  ID: ${p.id} | Nombre: "${p.name}" | Tipo: ${p.type} | Precio: ${p.list_price}`);
-  });
-
-  console.log('\n💡 Copia el ID del producto que quieras usar como genérico y pégalo en .env.local como:');
-  console.log('   ODOO_DEFAULT_PRODUCT_ID=<el_id_que_elegiste>');
+  console.log('\n📦 Productos Monolíticos:', monoliticos);
 }
 
 main().catch(console.error);

@@ -9,7 +9,7 @@ export class OdooClient {
     this.url = process.env.ODOO_URL || '';
     this.db = process.env.ODOO_DB || '';
     this.username = process.env.ODOO_USERNAME || '';
-    this.apiKey = process.env.ODOO_API_KEY || '';
+    this.apiKey = process.env.ODOO_API_KEY || process.env.ODOO_PASSWORD || '';
 
     if (!this.url || !this.db || !this.username || !this.apiKey) {
       console.warn('OdooClient: Faltan variables de entorno para conectar con Odoo.');

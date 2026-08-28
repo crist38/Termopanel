@@ -43,6 +43,7 @@ function CotizadorTermopanelContent() {
 
   // Estado para Información del Cliente y Presupuesto
   const [clientName, setClientName] = useState('');
+  const [clientRut, setClientRut] = useState('');
   const [obra, setObra] = useState('');
   const [fechaEntrega, setFechaEntrega] = useState('');
   const [clientId, setClientId] = useState<number | undefined>(undefined);
@@ -118,6 +119,7 @@ function CotizadorTermopanelContent() {
           const res = await obtenerCotizacionParaEditar(parseInt(editId));
           if (res.exito) {
             setClientName(res.clientName || '');
+            setClientRut(res.clientRut || '');
             setClientId(res.clientId);
             setObra(res.obra || '');
             setFechaEntrega(res.fechaEntrega || '');
@@ -133,30 +135,33 @@ function CotizadorTermopanelContent() {
           }
         } else {
           // Fallback legacy a Firestore
-          const docRef = doc(db, 'presupuestos_termopaneles', editId);
-          const docSnap = await getDoc(docRef);
+          const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+          if (apiKey && !apiKey.startsWith('AIzaSyDummyKey')) {
+            const docRef = doc(db, 'presupuestos_termopaneles', editId);
+            const docSnap = await getDoc(docRef);
 
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            setClientName(data.clientName || '');
-            setObra(data.obra || '');
-            setFechaEntrega(data.fechaEntrega || '');
-            setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
-            const loadedItems = (data.items || []).map((item: any) => ({
-              ...item,
-              pulido: item.pulido !== undefined ? item.pulido : (item.gas || false),
-              palillajeColor: item.palillajeColor || "Blanco",
-              palillajeHorizontales: item.palillajeHorizontales || 0,
-              palillajeVerticales: item.palillajeVerticales || 0,
-              conForma: item.conForma || false,
-              esPrecioManual: item.precioUnitario > 0
-            }));
-            setItems(loadedItems);
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              setClientName(data.clientName || '');
+              setClientRut(data.clientRut || '');
+              setObra(data.obra || '');
+              setFechaEntrega(data.fechaEntrega || '');
+              setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
+              const loadedItems = (data.items || []).map((item: any) => ({
+                ...item,
+                pulido: item.pulido !== undefined ? item.pulido : (item.gas || false),
+                palillajeColor: item.palillajeColor || "Blanco",
+                palillajeHorizontales: item.palillajeHorizontales || 0,
+                palillajeVerticales: item.palillajeVerticales || 0,
+                conForma: item.conForma || false,
+                esPrecioManual: item.precioUnitario > 0
+              }));
+              setItems(loadedItems);
+            }
           }
         }
       } catch (e) {
         console.error("Error loading budget:", e);
-        alert("Error cargando presupuesto para editar.");
       }
     };
     loadBudget();
@@ -191,7 +196,7 @@ function CotizadorTermopanelContent() {
     if (savedDraft) {
       try {
         const parsed = JSON.parse(savedDraft);
-        const hasData = parsed.clientName || parsed.obra || parsed.fechaEntrega || parsed.items?.some((i: any) => i.ancho > 0 || i.alto > 0 || i.cantidad > 1);
+        const hasData = parsed.clientName || parsed.clientRut || parsed.obra || parsed.fechaEntrega || parsed.items?.some((i: any) => i.ancho > 0 || i.alto > 0 || i.cantidad > 1);
         if (hasData) {
           setDraftData(parsed);
           setDraftTime(new Date(parsed.timestamp).toLocaleString('es-CL'));
@@ -208,7 +213,7 @@ function CotizadorTermopanelContent() {
     if (editId) return;
 
     // Si los campos están vacíos/iniciales, no creamos/mantenemos borrador sucio
-    const hasAnyContent = clientName.trim() !== '' || obra.trim() !== '' || fechaEntrega.trim() !== '' || items.some(i => i.ancho > 0 || i.alto > 0 || i.cantidad > 1);
+    const hasAnyContent = clientName.trim() !== '' || clientRut.trim() !== '' || obra.trim() !== '' || fechaEntrega.trim() !== '' || items.some(i => i.ancho > 0 || i.alto > 0 || i.cantidad > 1);
     if (!hasAnyContent) {
       localStorage.removeItem('termopanel_cotizacion_draft');
       return;
@@ -217,6 +222,7 @@ function CotizadorTermopanelContent() {
     const timer = setTimeout(() => {
       const draft = {
         clientName,
+        clientRut,
         obra,
         clientId,
         items,
@@ -227,11 +233,12 @@ function CotizadorTermopanelContent() {
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [clientName, obra, clientId, items, editId, fechaEntrega]);
+  }, [clientName, clientRut, obra, clientId, items, editId, fechaEntrega]);
 
   const handleRestoreDraft = () => {
     if (!draftData) return;
     setClientName(draftData.clientName || '');
+    setClientRut(draftData.clientRut || '');
     setObra(draftData.obra || '');
     setFechaEntrega(draftData.fechaEntrega || '');
     setClientId(draftData.clientId);
@@ -433,6 +440,7 @@ function CotizadorTermopanelContent() {
           orderId: parseInt(editId),
           clientId,
           clientName,
+          clientRut,
           obra,
           fechaEntrega,
           items,
@@ -444,6 +452,7 @@ function CotizadorTermopanelContent() {
         odooRes = await guardarCotizacionEnOdoo({
           clientId,
           clientName,
+          clientRut,
           obra,
           fechaEntrega,
           budgetNumber: 0,
@@ -482,6 +491,7 @@ function CotizadorTermopanelContent() {
         // Limpiar formulario para la siguiente cotización
         localStorage.removeItem('termopanel_cotizacion_draft');
         setClientName('');
+        setClientRut('');
         setObra('');
         setFechaEntrega('');
         setBudgetName('Borrador');
@@ -556,6 +566,10 @@ function CotizadorTermopanelContent() {
     doc.setFontSize(10);
     let currentY = 35;
     doc.text(`Cliente: ${clientName}`, 14, currentY);
+    if (clientRut.trim()) {
+      currentY += 7;
+      doc.text(`RUT: ${clientRut.trim()}`, 14, currentY);
+    }
     if (obra.trim()) {
       currentY += 7;
       doc.text(`Obra: ${obra.trim()}`, 14, currentY);
@@ -731,10 +745,15 @@ function CotizadorTermopanelContent() {
     pdf.text(`Cliente: ${clientName}`, 196, 27, { align: "right" });
     let topHeaderOffset = 38;
     let rightY = 27;
-    if (obra.trim()) {
-      pdf.text(`Obra: ${obra.trim()}`, 196, 34, { align: "right" });
+    if (clientRut.trim()) {
+      pdf.text(`RUT: ${clientRut.trim()}`, 196, 34, { align: "right" });
       rightY = 34;
       topHeaderOffset = 44;
+    }
+    if (obra.trim()) {
+      pdf.text(`Obra: ${obra.trim()}`, 196, rightY + 7, { align: "right" });
+      rightY += 7;
+      topHeaderOffset = rightY + 10;
     }
     if (fechaEntrega.trim()) {
       let formattedFechaEntrega = fechaEntrega;
@@ -875,10 +894,15 @@ function CotizadorTermopanelContent() {
     pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 196, 20, { align: "right" });
     pdf.text(`Cliente: ${clientName}`, 196, 27, { align: "right" });
     let rightYArmado = 27;
-    if (obra.trim()) {
-      pdf.text(`Obra: ${obra.trim()}`, 196, 34, { align: "right" });
+    if (clientRut.trim()) {
+      pdf.text(`RUT: ${clientRut.trim()}`, 196, 34, { align: "right" });
       rightYArmado = 34;
       topHeaderOffset = 44;
+    }
+    if (obra.trim()) {
+      pdf.text(`Obra: ${obra.trim()}`, 196, rightYArmado + 7, { align: "right" });
+      rightYArmado += 7;
+      topHeaderOffset = rightYArmado + 10;
     }
     if (fechaEntrega.trim()) {
       let formattedFechaEntrega = fechaEntrega;
@@ -1090,16 +1114,28 @@ function CotizadorTermopanelContent() {
 
       {/* Sección de Información del Cliente */}
       <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-600 mb-1">Nombre Cliente</label>
             <ClientSelector
               value={clientName}
               clientId={clientId}
-              onChange={(name, id) => {
+              clientVat={clientRut}
+              onChange={(name, id, vat) => {
                 setClientName(name);
                 setClientId(id);
+                if (vat !== undefined) setClientRut(vat);
               }}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">RUT Cliente</label>
+            <input
+              type="text"
+              value={clientRut}
+              onChange={(e) => setClientRut(e.target.value)}
+              placeholder="Ej: 12.345.678-9"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
             />
           </div>
           <div>

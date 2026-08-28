@@ -111,6 +111,7 @@ export async function crearClienteOdoo(data: CustomerInput): Promise<{ exito: bo
 export async function guardarCotizacionEnOdoo(data: {
   clientId?: number;
   clientName: string;
+  clientRut?: string;
   obra?: string;
   fechaEntrega?: string;
   budgetNumber: number;
@@ -128,13 +129,14 @@ export async function guardarCotizacionEnOdoo(data: {
     if (!clienteId) {
       clienteId = await odooCustomers.getOrCreateCustomer({
         name: data.clientName || 'Cliente sin nombre',
+        vat: data.clientRut || undefined,
       });
     }
     
-    if (!process.env.ODOO_DEFAULT_PRODUCT_ID) {
+    const genericProductId = parseInt(process.env.ODOO_DEFAULT_PRODUCT_ID || '17983');
+    if (!genericProductId) {
       return { exito: false, error: 'Variable de entorno ODOO_DEFAULT_PRODUCT_ID no configurada en el servidor.' };
     }
-    const genericProductId = parseInt(process.env.ODOO_DEFAULT_PRODUCT_ID);
 
     const lineas: SaleOrderLineInput[] = data.items.map((item, index) => {
       // 3. Crear una descripción detallada para la orden
@@ -247,6 +249,7 @@ export async function guardarCotizacionEnOdoo(data: {
 export async function guardarCotizacionMonoliticoEnOdoo(data: {
   clientId?: number;
   clientName: string;
+  clientRut?: string;
   obra?: string;
   fechaEntrega?: string;
   budgetNumber: number;
@@ -260,14 +263,17 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
 
     let clienteId = data.clientId;
     if (!clienteId) {
-      clienteId = await odooCustomers.getOrCreateCustomer({ name: data.clientName || 'Cliente sin nombre' });
+      clienteId = await odooCustomers.getOrCreateCustomer({
+        name: data.clientName || 'Cliente sin nombre',
+        vat: data.clientRut || undefined,
+      });
     }
 
-    const monoliticoProductIdStr = process.env.ODOO_MONOLITIC_PRODUCT_ID || process.env.ODOO_DEFAULT_PRODUCT_ID;
-    if (!monoliticoProductIdStr) {
+    const monoliticoProductIdStr = process.env.ODOO_MONOLITIC_PRODUCT_ID || process.env.ODOO_DEFAULT_PRODUCT_ID || '17983';
+    const monoliticoProductId = parseInt(monoliticoProductIdStr);
+    if (!monoliticoProductId) {
       return { exito: false, error: 'Variable de entorno ODOO_MONOLITIC_PRODUCT_ID o ODOO_DEFAULT_PRODUCT_ID no configurada en el servidor.' };
     }
-    const monoliticoProductId = parseInt(monoliticoProductIdStr);
 
     const lineas: SaleOrderLineInput[] = data.items.map((item, index) => {
       const itemLabel = item.label || `V${index + 1}`;
@@ -717,6 +723,7 @@ export async function obtenerCotizacionParaEditar(orderId: number): Promise<{
   exito: boolean;
   tipo?: 'termopanel' | 'monolitico' | 'formas';
   clientName?: string;
+  clientRut?: string;
   clientId?: number;
   obra?: string;
   fechaEntrega?: string;
@@ -741,6 +748,15 @@ export async function obtenerCotizacionParaEditar(orderId: number): Promise<{
 
     const clientName = Array.isArray(order.partner_id) ? order.partner_id[1] : '';
     const clientId = Array.isArray(order.partner_id) ? order.partner_id[0] : undefined;
+    let clientRut = '';
+    if (clientId) {
+      try {
+        const partners = await odoo.executeKw('res.partner', 'read', [[clientId]], { fields: ['vat'] });
+        if (partners && partners.length > 0 && partners[0].vat) {
+          clientRut = String(partners[0].vat);
+        }
+      } catch {}
+    }
     
     const fullNote = order.note ? stripHtml(order.note) : '';
     let obra = fullNote;
@@ -757,6 +773,7 @@ export async function obtenerCotizacionParaEditar(orderId: number): Promise<{
         exito: true,
         tipo: 'termopanel',
         clientName,
+        clientRut,
         clientId,
         obra,
         fechaEntrega,
@@ -810,6 +827,7 @@ export async function obtenerCotizacionParaEditar(orderId: number): Promise<{
       exito: true,
       tipo,
       clientName,
+      clientRut,
       clientId,
       obra,
       fechaEntrega,
@@ -826,6 +844,7 @@ export async function actualizarCotizacionEnOdoo(data: {
   orderId: number;
   clientId?: number;
   clientName: string;
+  clientRut?: string;
   obra?: string;
   fechaEntrega?: string;
   items: any[];
@@ -842,12 +861,13 @@ export async function actualizarCotizacionEnOdoo(data: {
     if (!clienteId) {
       clienteId = await odooCustomers.getOrCreateCustomer({
         name: data.clientName || 'Cliente sin nombre',
+        vat: data.clientRut || undefined,
       });
     }
 
     // 2. Preparar las nuevas líneas de cotización
-    const defaultProductId = parseInt(process.env.ODOO_DEFAULT_PRODUCT_ID || '0');
-    const monoliticoProductId = parseInt(process.env.ODOO_MONOLITIC_PRODUCT_ID || process.env.ODOO_DEFAULT_PRODUCT_ID || '0');
+    const defaultProductId = parseInt(process.env.ODOO_DEFAULT_PRODUCT_ID || '17983');
+    const monoliticoProductId = parseInt(process.env.ODOO_MONOLITIC_PRODUCT_ID || process.env.ODOO_DEFAULT_PRODUCT_ID || '17983');
     const productId = data.isMonolitico ? monoliticoProductId : defaultProductId;
 
     if (!productId) {
