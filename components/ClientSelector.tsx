@@ -8,10 +8,11 @@ import { OdooCustomer } from '@/lib/odoo-customers';
 interface ClientSelectorProps {
   value: string;
   clientId?: number;
-  onChange: (name: string, id?: number) => void;
+  clientVat?: string;
+  onChange: (name: string, id?: number, vat?: string) => void;
 }
 
-export function ClientSelector({ value, clientId, onChange }: ClientSelectorProps) {
+export function ClientSelector({ value, clientId, clientVat, onChange }: ClientSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState(value);
   const [results, setResults] = useState<OdooCustomer[]>([]);
@@ -65,7 +66,7 @@ export function ClientSelector({ value, clientId, onChange }: ClientSelectorProp
 
   const handleSelect = (customer: OdooCustomer) => {
     setQuery(customer.name);
-    onChange(customer.name, customer.id);
+    onChange(customer.name, customer.id, customer.vat ? String(customer.vat) : '');
     setIsOpen(false);
   };
 
@@ -84,7 +85,7 @@ export function ClientSelector({ value, clientId, onChange }: ClientSelectorProp
 
     if (res.exito && res.id) {
       setQuery(newName);
-      onChange(newName, res.id);
+      onChange(newName, res.id, newVat);
       setShowForm(false);
       setIsOpen(false);
       // Reset form
@@ -102,12 +103,12 @@ export function ClientSelector({ value, clientId, onChange }: ClientSelectorProp
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
-            onChange(e.target.value, undefined); // Resetea ID si escribe
+            onChange(e.target.value, undefined, undefined); // Resetea ID si escribe
             setIsOpen(true);
           }}
           onFocus={() => setIsOpen(true)}
           className="w-full p-2 pl-9 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-slate-800"
-          placeholder="Buscar o ingresar Nombre..."
+          placeholder="Buscar o ingresar Nombre / RUT..."
         />
         <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
         {isLoading && <Loader2 className="absolute right-3 top-2.5 text-slate-400 animate-spin" size={16} />}

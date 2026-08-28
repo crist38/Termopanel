@@ -55,6 +55,27 @@ const DEFAULT_CONFIG: TermopanelConfig = {
 };
 
 export async function getTermopanelConfig(): Promise<TermopanelConfig> {
+  // 1. Intentar cargar desde localStorage si existe
+  if (typeof window !== 'undefined') {
+    const local = localStorage.getItem('termopanel_config_local');
+    if (local) {
+      try {
+        const parsed = JSON.parse(local);
+        return {
+          ...DEFAULT_CONFIG,
+          ...parsed,
+          preciosSeparadores: parsed.preciosSeparadores?.length ? parsed.preciosSeparadores : PRECIOS_SEPARADORES_DEFAULT,
+        };
+      } catch {}
+    }
+  }
+
+  // 2. Si no hay Firebase API Key real configurada, devolver la configuración por defecto
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  if (!apiKey || apiKey.startsWith('AIzaSyDummyKey')) {
+    return DEFAULT_CONFIG;
+  }
+
   try {
     const docRef = doc(db, 'configuracion', 'termopaneles');
     const docSnap = await getDoc(docRef);
@@ -84,14 +105,28 @@ export async function getTermopanelConfig(): Promise<TermopanelConfig> {
     }
     return DEFAULT_CONFIG;
   } catch (error) {
-    console.error('Error fetching config:', error);
+    console.warn('No se pudo conectar a Firebase Firestore. Usando configuración por defecto.');
     return DEFAULT_CONFIG;
   }
 }
 
 export async function saveTermopanelConfig(config: TermopanelConfig): Promise<void> {
-  const docRef = doc(db, 'configuracion', 'termopaneles');
-  await setDoc(docRef, config);
+  // Guardar siempre en localStorage localmente
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('termopanel_config_local', JSON.stringify(config));
+  }
+
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  if (!apiKey || apiKey.startsWith('AIzaSyDummyKey')) {
+    return;
+  }
+
+  try {
+    const docRef = doc(db, 'configuracion', 'termopaneles');
+    await setDoc(docRef, config);
+  } catch (error) {
+    console.warn('No se pudo guardar la configuración en Firebase Firestore.', error);
+  }
 }
 
 /**

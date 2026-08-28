@@ -2,8 +2,6 @@
 
 import { useState, useEffect, Suspense } from "react"
 import { TermopanelItem, calcularItem, calcularTotal, calcularPrecioUnitario, PARAMETROS_DEFAULT } from "@/lib/calculos/termopanel"
-import { collection, doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
@@ -167,6 +165,7 @@ function ShapesCADCotizadorContent() {
 
   // Client info
   const [clientName, setClientName] = useState('');
+  const [clientRut, setClientRut] = useState('');
   const [obra, setObra] = useState('');
   const [clientId, setClientId] = useState<number | undefined>(undefined);
   const [budgetName, setBudgetName] = useState('Borrador');
@@ -234,6 +233,7 @@ function ShapesCADCotizadorContent() {
           const res = await obtenerCotizacionParaEditar(parseInt(editId));
           if (res.exito) {
             setClientName(res.clientName || '');
+            setClientRut(res.clientRut || '');
             setClientId(res.clientId);
             setObra(res.obra || '');
             setBudgetName(res.budgetName || 'Borrador');
@@ -257,7 +257,7 @@ function ShapesCADCotizadorContent() {
     if (savedDraft) {
       try {
         const parsed = JSON.parse(savedDraft);
-        const hasData = parsed.clientName || parsed.obra || (parsed.items && parsed.items.length > 0);
+        const hasData = parsed.clientName || parsed.clientRut || parsed.obra || (parsed.items && parsed.items.length > 0);
         if (hasData) {
           setDraftData(parsed);
           setDraftTime(new Date(parsed.timestamp).toLocaleString('es-CL'));
@@ -274,7 +274,7 @@ function ShapesCADCotizadorContent() {
     if (editId) return;
 
     // Si los campos están vacíos/iniciales, no creamos/mantenemos borrador sucio
-    const hasAnyContent = clientName.trim() !== '' || obra.trim() !== '' || (items && items.length > 0);
+    const hasAnyContent = clientName.trim() !== '' || clientRut.trim() !== '' || obra.trim() !== '' || (items && items.length > 0);
     if (!hasAnyContent) {
       localStorage.removeItem('formas_cotizacion_draft');
       return;
@@ -283,6 +283,7 @@ function ShapesCADCotizadorContent() {
     const timer = setTimeout(() => {
       const draft = {
         clientName,
+        clientRut,
         obra,
         clientId,
         items,
@@ -292,11 +293,12 @@ function ShapesCADCotizadorContent() {
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [clientName, obra, clientId, items, editId]);
+  }, [clientName, clientRut, obra, clientId, items, editId]);
 
   const handleRestoreDraft = () => {
     if (!draftData) return;
     setClientName(draftData.clientName || '');
+    setClientRut(draftData.clientRut || '');
     setObra(draftData.obra || '');
     setClientId(draftData.clientId);
     if (draftData.items && draftData.items.length > 0) {
@@ -481,6 +483,7 @@ function ShapesCADCotizadorContent() {
           orderId: parseInt(editId),
           clientId,
           clientName,
+          clientRut,
           obra,
           items,
           totalNeto,
@@ -491,6 +494,7 @@ function ShapesCADCotizadorContent() {
         odooRes = await guardarCotizacionEnOdoo({
           clientId,
           clientName,
+          clientRut,
           obra,
           budgetNumber: 0,
           items,
@@ -527,6 +531,7 @@ function ShapesCADCotizadorContent() {
         // Reset
         localStorage.removeItem('formas_cotizacion_draft');
         setClientName('');
+        setClientRut('');
         setObra('');
         setBudgetName('Borrador');
         setItems([]);
@@ -578,6 +583,10 @@ function ShapesCADCotizadorContent() {
     doc.setFontSize(10);
     let currentY = 35;
     doc.text(`Cliente: ${clientName}`, 14, currentY);
+    if (clientRut.trim()) {
+      currentY += 7;
+      doc.text(`RUT: ${clientRut.trim()}`, 14, currentY);
+    }
     if (obra.trim()) {
       currentY += 7;
       doc.text(`Obra: ${obra.trim()}`, 14, currentY);
@@ -752,9 +761,16 @@ function ShapesCADCotizadorContent() {
     pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 196, 20, { align: "right" });
     pdf.text(`Cliente: ${clientName}`, 196, 27, { align: "right" });
     let topHeaderOffset = 38;
-    if (obra.trim()) {
-      pdf.text(`Obra: ${obra.trim()}`, 196, 34, { align: "right" });
+    let rightY = 27;
+    if (clientRut.trim()) {
+      pdf.text(`RUT: ${clientRut.trim()}`, 196, 34, { align: "right" });
+      rightY = 34;
       topHeaderOffset = 44;
+    }
+    if (obra.trim()) {
+      pdf.text(`Obra: ${obra.trim()}`, 196, rightY + 7, { align: "right" });
+      rightY += 7;
+      topHeaderOffset = rightY + 10;
     }
     pdf.setTextColor(0, 0, 0);
 
@@ -870,9 +886,16 @@ function ShapesCADCotizadorContent() {
     pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 196, 20, { align: "right" });
     pdf.text(`Cliente: ${clientName}`, 196, 27, { align: "right" });
     topHeaderOffset = 38;
-    if (obra.trim()) {
-      pdf.text(`Obra: ${obra.trim()}`, 196, 34, { align: "right" });
+    let rightYArmado = 27;
+    if (clientRut.trim()) {
+      pdf.text(`RUT: ${clientRut.trim()}`, 196, 34, { align: "right" });
+      rightYArmado = 34;
       topHeaderOffset = 44;
+    }
+    if (obra.trim()) {
+      pdf.text(`Obra: ${obra.trim()}`, 196, rightYArmado + 7, { align: "right" });
+      rightYArmado += 7;
+      topHeaderOffset = rightYArmado + 10;
     }
     pdf.setTextColor(0, 0, 0);
 
@@ -1205,16 +1228,28 @@ function ShapesCADCotizadorContent() {
 
       {/* Cliente y Obra */}
       <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-600 mb-1">Nombre Cliente</label>
             <ClientSelector
               value={clientName}
               clientId={clientId}
-              onChange={(name, id) => {
+              clientVat={clientRut}
+              onChange={(name, id, vat) => {
                 setClientName(name);
                 setClientId(id);
+                if (vat !== undefined) setClientRut(vat);
               }}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">RUT Cliente</label>
+            <input
+              type="text"
+              value={clientRut}
+              onChange={(e) => setClientRut(e.target.value)}
+              placeholder="Ej: 12.345.678-9"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
             />
           </div>
           <div>

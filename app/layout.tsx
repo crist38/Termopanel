@@ -3,6 +3,7 @@ export const metadata = {
   description: 'Cotizador de termopaneles',
 }
 
+import Script from 'next/script'
 import { Navbar } from './components/Navbar'
 
 export default function RootLayout({
@@ -13,8 +14,7 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
-        {/* Agregamos Tailwind via CDN temporalmente para que los estilos funcionen hasta que lo configures */}
-        <script src="https://cdn.tailwindcss.com"></script>
+        <Script src="https://cdn.tailwindcss.com" strategy="beforeInteractive" />
       </head>
       <body suppressHydrationWarning className="bg-slate-50 min-h-screen">
         <Navbar />

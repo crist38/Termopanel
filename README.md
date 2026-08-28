@@ -105,6 +105,13 @@ La integración se maneja desde el servidor (Next.js Server Actions), garantizan
 
 ## 📋 Changelog
 
+### v2.7 - Agosto 2026
+- ✅ **Gestión de RUT de Clientes**: Se incorporó el campo de **RUT del Cliente** en todos los cotizadores (Termopaneles `/`, Monolíticos `/monolitico` y Formas CAD `/formas`).
+- ✅ **Búsqueda y Autocompletado en ClientSelector**: La búsqueda de clientes ahora permite encontrar por Nombre o por RUT, autocompletando los datos del contacto registrado en Odoo (`res.partner.vat`).
+- ✅ **Creación Automática con RUT en Odoo**: Al crear cotizaciones con clientes nuevos o al usar la modal de nuevo contacto, se registra el RUT en Odoo.
+- ✅ **Inclusión de RUT en Documentos PDF**: Tanto los presupuestos para clientes como las órdenes de trabajo para taller (corte y ensamblaje) ahora muestran el RUT del cliente.
+- ✅ **Persistencia y Resiliencia**: El RUT se guarda en el borrador automático de `localStorage` y se configuró fallback predeterminado para el ID de producto genérico (`17983`).
+
 ### v2.6 - Agosto 2026
 - ✅ **Palillaje en Reportes**: La sección "Insumos y Componentes Utilizados" del dashboard de reportes ahora incluye un desglose de **Palillaje por Color**. Muestra, para cada color de palillaje utilizado en el período, la cantidad de termopaneles que lo llevan y el total de tiras consumidas, con un badge visual que refleja el color real (blanco, negro, bronce, gris, café, dorado, etc.). La sección solo aparece si existe al menos un termopanel con palillaje en el período seleccionado.
 

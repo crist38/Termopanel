@@ -29,6 +29,7 @@ function CotizadorMonoliticoContent() {
   ])
 
   const [clientName, setClientName] = useState('');
+  const [clientRut, setClientRut] = useState('');
   const [obra, setObra] = useState('');
   const [clientId, setClientId] = useState<number | undefined>(undefined);
   const [budgetName, setBudgetName] = useState('Borrador');
@@ -77,6 +78,7 @@ function CotizadorMonoliticoContent() {
           const res = await obtenerCotizacionParaEditar(parseInt(editId));
           if (res.exito) {
             setClientName(res.clientName || '');
+            setClientRut(res.clientRut || '');
             setClientId(res.clientId);
             setObra(res.obra || '');
             setBudgetName(res.budgetName || 'Borrador');
@@ -86,14 +88,18 @@ function CotizadorMonoliticoContent() {
           }
         } else {
           // Fallback legacy a Firestore
-          const docRef = doc(db, 'presupuestos_monoliticos', editId);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            setClientName(data.clientName || '');
-            setObra(data.obra || '');
-            setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
-            setItems(data.items || []);
+          const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+          if (apiKey && !apiKey.startsWith('AIzaSyDummyKey')) {
+            const docRef = doc(db, 'presupuestos_monoliticos', editId);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              setClientName(data.clientName || '');
+              setClientRut(data.clientRut || '');
+              setObra(data.obra || '');
+              setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
+              setItems(data.items || []);
+            }
           }
         }
       } catch (e) {
@@ -125,7 +131,7 @@ function CotizadorMonoliticoContent() {
     if (savedDraft) {
       try {
         const parsed = JSON.parse(savedDraft);
-        const hasData = parsed.clientName || parsed.obra || parsed.items?.some((i: any) => i.ancho > 0 || i.alto > 0 || i.cantidad > 1);
+        const hasData = parsed.clientName || parsed.clientRut || parsed.obra || parsed.items?.some((i: any) => i.ancho > 0 || i.alto > 0 || i.cantidad > 1);
         if (hasData) {
           setDraftData(parsed);
           setDraftTime(new Date(parsed.timestamp).toLocaleString('es-CL'));
@@ -142,7 +148,7 @@ function CotizadorMonoliticoContent() {
     if (editId) return;
 
     // Si los campos están vacíos/iniciales, no creamos/mantenemos borrador sucio
-    const hasAnyContent = clientName.trim() !== '' || obra.trim() !== '' || items.some(i => i.ancho > 0 || i.alto > 0 || i.cantidad > 1);
+    const hasAnyContent = clientName.trim() !== '' || clientRut.trim() !== '' || obra.trim() !== '' || items.some(i => i.ancho > 0 || i.alto > 0 || i.cantidad > 1);
     if (!hasAnyContent) {
       localStorage.removeItem('monolitico_cotizacion_draft');
       return;
@@ -151,6 +157,7 @@ function CotizadorMonoliticoContent() {
     const timer = setTimeout(() => {
       const draft = {
         clientName,
+        clientRut,
         obra,
         clientId,
         items,
@@ -160,11 +167,12 @@ function CotizadorMonoliticoContent() {
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [clientName, obra, clientId, items, editId]);
+  }, [clientName, clientRut, obra, clientId, items, editId]);
 
   const handleRestoreDraft = () => {
     if (!draftData) return;
     setClientName(draftData.clientName || '');
+    setClientRut(draftData.clientRut || '');
     setObra(draftData.obra || '');
     setClientId(draftData.clientId);
     if (draftData.items && draftData.items.length > 0) {
@@ -284,6 +292,10 @@ function CotizadorMonoliticoContent() {
     doc.setFontSize(10);
     yPos = 34;
     doc.text(`Cliente: ${clientName || 'Sin Cliente'}`, 14, yPos);
+    if (clientRut.trim()) {
+      yPos += 7;
+      doc.text(`RUT: ${clientRut.trim()}`, 14, yPos);
+    }
     if (obra.trim()) {
       yPos += 7;
       doc.text(`Obra: ${obra.trim()}`, 14, yPos);
@@ -427,9 +439,16 @@ function CotizadorMonoliticoContent() {
     pdf.text(`Fecha: ${new Date().toLocaleDateString('es-CL')}`, 196, 20, { align: "right" });
     pdf.text(`Cliente: ${clientName || 'Sin Cliente'}`, 196, 27, { align: "right" });
     let topHeaderOffset = 38;
-    if (obra.trim()) {
-      pdf.text(`Obra: ${obra.trim()}`, 196, 34, { align: "right" });
+    let rightY = 27;
+    if (clientRut.trim()) {
+      pdf.text(`RUT: ${clientRut.trim()}`, 196, 34, { align: "right" });
+      rightY = 34;
       topHeaderOffset = 44;
+    }
+    if (obra.trim()) {
+      pdf.text(`Obra: ${obra.trim()}`, 196, rightY + 7, { align: "right" });
+      rightY += 7;
+      topHeaderOffset = rightY + 10;
     }
     pdf.setTextColor(0, 0, 0);
 
@@ -532,6 +551,7 @@ function CotizadorMonoliticoContent() {
           orderId: parseInt(editId),
           clientId,
           clientName,
+          clientRut,
           obra,
           items,
           totalNeto,
@@ -542,6 +562,7 @@ function CotizadorMonoliticoContent() {
         response = await guardarCotizacionMonoliticoEnOdoo({
           clientId,
           clientName,
+          clientRut,
           obra,
           budgetNumber: 0,
           items,
@@ -575,6 +596,7 @@ function CotizadorMonoliticoContent() {
 
         localStorage.removeItem('monolitico_cotizacion_draft');
         setClientName('');
+        setClientRut('');
         setObra('');
         setBudgetName('Borrador');
         setItems([{ id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15), label: "V1", cantidad: 1, ancho: 1000, alto: 1000, cristal: { tipo: "Incoloro", espesor: 4 }, precioUnitario: 0 }]);
@@ -675,19 +697,31 @@ function CotizadorMonoliticoContent() {
       )}
 
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6">
-        <div className="flex flex-col sm:flex-row gap-4 items-end">
-          <div className="w-full sm:w-1/3">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+          <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Nombre del Cliente</label>
             <ClientSelector
               value={clientName}
               clientId={clientId}
-              onChange={(name, id) => {
+              clientVat={clientRut}
+              onChange={(name, id, vat) => {
                 setClientName(name);
                 setClientId(id);
+                if (vat !== undefined) setClientRut(vat);
               }}
             />
           </div>
-          <div className="w-full sm:w-1/3">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">RUT Cliente</label>
+            <input
+              type="text"
+              value={clientRut}
+              onChange={(e) => setClientRut(e.target.value)}
+              placeholder="Ej: 12.345.678-9"
+              className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 text-slate-800"
+            />
+          </div>
+          <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Obra (Opcional)</label>
             <input
               type="text"
@@ -697,7 +731,7 @@ function CotizadorMonoliticoContent() {
               className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 text-slate-800"
             />
           </div>
-          <div className="w-full sm:w-1/4">
+          <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Fecha Presupuesto</label>
             <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-700 font-medium">
               {budgetDate}
