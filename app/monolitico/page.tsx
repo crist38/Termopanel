@@ -784,7 +784,7 @@ function CotizadorMonoliticoContent() {
                         type="number" inputMode="numeric"
                         value={item.ancho === 0 ? "" : item.ancho}
                         onChange={e => updateItem(item.id, 'ancho', parseInt(e.target.value) || 0)}
-                        className="w-full text-center bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1 outline-none text-slate-600"
+                        className="w-full min-w-[60px] appearance-none text-center bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1 outline-none text-slate-600"
                       />
                     </td>
                     <td className="p-1 border-r border-slate-100">
@@ -792,7 +792,7 @@ function CotizadorMonoliticoContent() {
                         type="number" inputMode="numeric"
                         value={item.alto === 0 ? "" : item.alto}
                         onChange={e => updateItem(item.id, 'alto', parseInt(e.target.value) || 0)}
-                        className="w-full text-center bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1 outline-none text-slate-600"
+                        className="w-full min-w-[60px] appearance-none text-center bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1 outline-none text-slate-600"
                       />
                     </td>
                     <td className="p-1 border-r border-slate-100">
