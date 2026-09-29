@@ -1305,7 +1305,7 @@ function ShapesCADCotizadorContent() {
                 <div className="col-span-2">
                   <label className="block text-xs font-bold text-slate-500 mb-1">Diámetro (A)</label>
                   <input
-                    type="number"
+                    type="number" inputMode="numeric"
                     value={medidaA || ''}
                     onChange={(e) => setMedidaA(parseInt(e.target.value) || 0)}
                     className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
@@ -1317,7 +1317,7 @@ function ShapesCADCotizadorContent() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">Ancho / Base (A)</label>
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={medidaA || ''}
                       onChange={(e) => setMedidaA(parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
@@ -1326,7 +1326,7 @@ function ShapesCADCotizadorContent() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">Altura (B)</label>
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={medidaB || ''}
                       onChange={(e) => setMedidaB(parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
@@ -1339,7 +1339,7 @@ function ShapesCADCotizadorContent() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">Ancho / Base (A)</label>
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={medidaA || ''}
                       onChange={(e) => setMedidaA(parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
@@ -1348,7 +1348,7 @@ function ShapesCADCotizadorContent() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">Altura Base (B)</label>
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={medidaB === 0 ? '0' : (medidaB || '')}
                       onChange={(e) => setMedidaB(parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
@@ -1367,7 +1367,7 @@ function ShapesCADCotizadorContent() {
                       </button>
                     </div>
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={medidaR || ''}
                       onChange={(e) => setMedidaR(parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
@@ -1387,7 +1387,7 @@ function ShapesCADCotizadorContent() {
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-slate-500 mb-1">Ancho Base (A)</label>
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={medidaA || ''}
                       onChange={(e) => setMedidaA(parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
@@ -1396,7 +1396,7 @@ function ShapesCADCotizadorContent() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">Altura Recta (B)</label>
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={medidaB || ''}
                       onChange={(e) => setMedidaB(parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
@@ -1405,7 +1405,7 @@ function ShapesCADCotizadorContent() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">Altura Total (H)</label>
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={medidaB1 || ''}
                       onChange={(e) => setMedidaB1(parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
@@ -1418,7 +1418,7 @@ function ShapesCADCotizadorContent() {
                   <div className="col-span-2">
                     <label className="block text-xs font-bold text-slate-500 mb-1">Ancho Base (A)</label>
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={medidaA || ''}
                       onChange={(e) => setMedidaA(parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
@@ -1427,7 +1427,7 @@ function ShapesCADCotizadorContent() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">Altura Izquierda (B1)</label>
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={medidaB1 || ''}
                       onChange={(e) => setMedidaB1(parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
@@ -1436,7 +1436,7 @@ function ShapesCADCotizadorContent() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">Altura Derecha (B2)</label>
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={medidaB2 || ''}
                       onChange={(e) => setMedidaB2(parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
@@ -1559,7 +1559,7 @@ function ShapesCADCotizadorContent() {
                     <div className="flex items-center flex-1 justify-between">
                       <span className="font-semibold text-slate-500 mr-2">Horizontales:</span>
                       <input
-                        type="number"
+                        type="number" inputMode="numeric"
                         min="0"
                         value={palillajeHorizontales}
                         onChange={(e) => setPalillajeHorizontales(parseInt(e.target.value) || 0)}
@@ -1569,7 +1569,7 @@ function ShapesCADCotizadorContent() {
                     <div className="flex items-center flex-1 justify-between">
                       <span className="font-semibold text-slate-500 mr-2">Verticales:</span>
                       <input
-                        type="number"
+                        type="number" inputMode="numeric"
                         min="0"
                         value={palillajeVerticales}
                         onChange={(e) => setPalillajeVerticales(parseInt(e.target.value) || 0)}
@@ -1587,7 +1587,7 @@ function ShapesCADCotizadorContent() {
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1">Descuento (%)</label>
               <input
-                type="number"
+                type="number" inputMode="numeric"
                 min="0"
                 max="100"
                 value={descuento || ''}
@@ -1599,7 +1599,7 @@ function ShapesCADCotizadorContent() {
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1">Cantidad</label>
               <input
-                type="number"
+                type="number" inputMode="numeric"
                 min="1"
                 value={cantidad}
                 onChange={(e) => setCantidad(parseInt(e.target.value) || 1)}

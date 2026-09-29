@@ -1225,7 +1225,7 @@ function CotizadorTermopanelContent() {
                   {/* Cantidad */}
                   <td className="p-1 border-r border-slate-100">
                     <input
-                      type="number" min="1"
+                      type="number" inputMode="numeric" min="1"
                       value={item.cantidad}
                       onChange={e => updateItem(item.id, 'cantidad', parseInt(e.target.value) || 0)}
                       className="w-full text-center bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1 outline-none font-medium text-slate-700"
@@ -1235,7 +1235,7 @@ function CotizadorTermopanelContent() {
                   {/* Ancho */}
                   <td className="p-1 border-r border-slate-100">
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={item.ancho === 0 ? "" : item.ancho}
                       onChange={e => updateItem(item.id, 'ancho', parseInt(e.target.value) || 0)}
                       className="w-full text-center bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1 outline-none text-slate-600"
@@ -1244,7 +1244,7 @@ function CotizadorTermopanelContent() {
                   {/* Alto */}
                   <td className="p-1 border-r border-slate-100">
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={item.alto === 0 ? "" : item.alto}
                       onChange={e => updateItem(item.id, 'alto', parseInt(e.target.value) || 0)}
                       className="w-full text-center bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1 outline-none text-slate-600"
@@ -1337,7 +1337,7 @@ function CotizadorTermopanelContent() {
                           <div className="flex items-center">
                             <span className="font-semibold text-slate-500 mr-0.5">H:</span>
                             <input
-                              type="number"
+                              type="number" inputMode="numeric"
                               min="0"
                               value={item.palillajeHorizontales ?? 0}
                               onChange={e => updateItem(item.id, 'palillajeHorizontales', parseInt(e.target.value) || 0)}
@@ -1347,7 +1347,7 @@ function CotizadorTermopanelContent() {
                           <div className="flex items-center">
                             <span className="font-semibold text-slate-500 mr-0.5">V:</span>
                             <input
-                              type="number"
+                              type="number" inputMode="numeric"
                               min="0"
                               value={item.palillajeVerticales ?? 0}
                               onChange={e => updateItem(item.id, 'palillajeVerticales', parseInt(e.target.value) || 0)}
@@ -1362,7 +1362,7 @@ function CotizadorTermopanelContent() {
                   {/* Descuento */}
                   <td className="p-1 border-r border-slate-100">
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={item.descuento || ""}
                       onChange={e => updateItem(item.id, 'descuento', parseInt(e.target.value) || 0)}
                       className="w-full text-center bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1 outline-none text-sm text-slate-700"
@@ -1373,7 +1373,7 @@ function CotizadorTermopanelContent() {
                   {/* Precio Unitario */}
                   <td className="p-1 border-r border-slate-100">
                     <input
-                      type="number"
+                      type="number" inputMode="numeric"
                       value={item.precioUnitario}
                       onChange={e => updateItem(item.id, 'precioUnitario', parseInt(e.target.value) || 0)}
                       className="w-full text-right bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1 outline-none font-mono text-sm text-slate-700"
