@@ -806,7 +806,7 @@ function CotizadorMonoliticoContent() {
                       <select
                         value={item.cristal.espesor}
                         onChange={e => updateItem(item.id, 'cristal.espesor', parseInt(e.target.value))}
-                        className="w-full bg-transparent text-[11px] p-1 outline-none text-center text-slate-700"
+                        className="w-full min-w-[56px] bg-transparent text-sm font-bold p-1 outline-none text-center text-slate-800"
                       >
                         {getEspesores(item.cristal.tipo).map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
