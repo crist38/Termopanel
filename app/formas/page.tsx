@@ -1,15 +1,15 @@
 "use client"
 
 import { useState, useEffect, Suspense } from "react"
-import { TermopanelItem, calcularItem, calcularTotal, calcularPrecioUnitario, PARAMETROS_DEFAULT } from "@/lib/calculos/termopanel"
+import { TermopanelItem, PuntoFigura, calcularItem, calcularTotal, calcularPrecioUnitario, PARAMETROS_DEFAULT, areaPoligono, perimetroPoligono, ladosPoligono, describirFormaLibre } from "@/lib/calculos/termopanel"
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Plus, Trash2, Cloud, ArrowLeft, BarChart2, Triangle, RotateCcw, Printer, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, Cloud, ArrowLeft, BarChart2, Triangle, RotateCcw, Printer, CheckCircle, Pencil } from 'lucide-react';
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { ClientSelector } from '@/components/ClientSelector';
 
-type ShapeType = 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo';
+type ShapeType = 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo' | 'personalizada';
 
 const drawShapeInPdf = (
   doc: jsPDF,
@@ -18,7 +18,7 @@ const drawShapeInPdf = (
   y: number,
   w: number,
   h: number,
-  med: { a: number; b: number; b1?: number; b2?: number; r?: number }
+  med: { a: number; b: number; b1?: number; b2?: number; r?: number; puntos?: PuntoFigura[] }
 ) => {
   doc.setLineWidth(0.3);
   doc.setDrawColor(71, 85, 105);   // Slate-600
@@ -124,6 +124,18 @@ const drawShapeInPdf = (
       const y2 = yRight - rY * Math.sin(a2);
       doc.line(x1, y1, x2, y2);
     }
+  } else if (shape === 'personalizada' && med.puntos && med.puntos.length >= 3) {
+    const pts = med.puntos;
+    const minX = Math.min(...pts.map(p => p.x));
+    const maxX = Math.max(...pts.map(p => p.x));
+    const minY = Math.min(...pts.map(p => p.y));
+    const maxY = Math.max(...pts.map(p => p.y));
+    const scale = Math.min(w / ((maxX - minX) || 1), h / ((maxY - minY) || 1));
+    const offX = x + (w - (maxX - minX) * scale) / 2;
+    const offY = y + h - (h - (maxY - minY) * scale) / 2;
+    const scaled = pts.map(p => [offX + (p.x - minX) * scale, offY - (p.y - minY) * scale]);
+    const deltas = scaled.slice(1).map((p, i) => [p[0] - scaled[i][0], p[1] - scaled[i][1]]);
+    doc.lines(deltas, scaled[0][0], scaled[0][1], [1, 1], 'FD', true);
   }
 
   doc.setLineWidth(0.2);
@@ -137,12 +149,17 @@ function ShapesCADCotizadorContent() {
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
 
   // Active form state (new item)
-  const [shape, setShape] = useState<ShapeType>('triangulo');
+  const [shape, setShape] = useState<ShapeType>('arco');
   const [medidaA, setMedidaA] = useState<number>(1000);   // mm (base or width)
   const [medidaB, setMedidaB] = useState<number>(1000);   // mm (height or Left height or base height)
   const [medidaB1, setMedidaB1] = useState<number>(1500); // mm (Left height for trapezoid)
   const [medidaB2, setMedidaB2] = useState<number>(1000); // mm (Right height for trapezoid)
   const [medidaR, setMedidaR] = useState<number>(500);    // mm (Radio / Flecha del arco)
+  // Forma libre: vértices en mm (origen abajo-izquierda, Y hacia arriba)
+  const [puntos, setPuntos] = useState<PuntoFigura[]>([]);
+  const [puntoActivo, setPuntoActivo] = useState<number | null>(null);
+  // Mientras se arrastra un vértice se congela la escala del lienzo para que la figura no salte
+  const [dragView, setDragView] = useState<{ idx: number; scale: number; offX: number; offY: number } | null>(null);
   const [cantidad, setCantidad] = useState<number>(1);
   
   const [cristal1Tipo, setCristal1Tipo] = useState<string>('Incoloro');
@@ -348,6 +365,12 @@ function ShapesCADCotizadorContent() {
 
   // Geometry calculations for preview
   const getBoundingBox = () => {
+    if (shape === 'personalizada') {
+      if (puntos.length < 3) return { w: 0, h: 0 };
+      const xs = puntos.map(p => p.x);
+      const ys = puntos.map(p => p.y);
+      return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+    }
     if (shape === 'triangulo') return { w: medidaA, h: medidaB };
     if (shape === 'trapecio') return { w: medidaA, h: Math.max(medidaB1, medidaB2) };
     if (shape === 'arco') return { w: medidaA, h: medidaB + (medidaR !== undefined && medidaR > 0 ? medidaR : Math.round(medidaA / 2)) };
@@ -357,6 +380,7 @@ function ShapesCADCotizadorContent() {
   };
 
   const getCalculatedArea = () => {
+    if (shape === 'personalizada') return areaPoligono(puntos) / 1_000_000;
     if (shape === 'triangulo') return (medidaA * medidaB) / 2_000_000;
     if (shape === 'trapecio') return medidaA * ((medidaB1 + medidaB2) / 2) / 1_000_000;
     if (shape === 'arco') {
@@ -372,6 +396,7 @@ function ShapesCADCotizadorContent() {
   };
 
   const getCalculatedPerimeter = () => {
+    if (shape === 'personalizada') return perimetroPoligono(puntos) / 1000;
     if (shape === 'triangulo') return (medidaA + medidaB + Math.sqrt(medidaA * medidaA + medidaB * medidaB)) / 1000;
     if (shape === 'trapecio') return (medidaA + medidaB1 + medidaB2 + Math.sqrt(medidaA * medidaA + Math.pow(Math.abs(medidaB1 - medidaB2), 2))) / 1000;
     if (shape === 'arco') {
@@ -386,6 +411,101 @@ function ShapesCADCotizadorContent() {
     }
     if (shape === 'circulo') return (Math.PI * medidaA) / 1000;
     return 4;
+  };
+
+  // Lleva la figura al origen (mínimo X e Y en 0) para que las coordenadas sean siempre positivas
+  const normalizarPuntos = (pts: PuntoFigura[]): PuntoFigura[] => {
+    if (pts.length === 0) return pts;
+    const minX = Math.min(...pts.map(p => p.x));
+    const minY = Math.min(...pts.map(p => p.y));
+    return pts.map(p => ({ x: Math.round(p.x - minX), y: Math.round(p.y - minY) }));
+  };
+
+  // Convierte la figura predeterminada actual en vértices editables (las curvas pasan a tramos rectos)
+  const shapeToPoints = (): PuntoFigura[] => {
+    const A = medidaA || 1000;
+    if (shape === 'triangulo') return [{ x: 0, y: 0 }, { x: A, y: 0 }, { x: 0, y: medidaB || 1000 }];
+    if (shape === 'trapecio') return [{ x: 0, y: 0 }, { x: A, y: 0 }, { x: A, y: medidaB2 || 0 }, { x: 0, y: medidaB1 || 0 }];
+    if (shape === 'arco') {
+      const r = medidaR > 0 ? medidaR : Math.round(A / 2);
+      const pts: PuntoFigura[] = [{ x: 0, y: 0 }, { x: A, y: 0 }];
+      const tramos = 12;
+      // Sin altura base, los extremos del arco coinciden con las esquinas de la base
+      for (let i = medidaB > 0 ? 0 : 1; i <= (medidaB > 0 ? tramos : tramos - 1); i++) {
+        const ang = (i * Math.PI) / tramos;
+        pts.push({ x: Math.round(A / 2 + (A / 2) * Math.cos(ang)), y: Math.round(medidaB + r * Math.sin(ang)) });
+      }
+      return pts;
+    }
+    if (shape === 'medio_arco') {
+      const hBase = Math.min(medidaB || 0, medidaB1 || 0);
+      const hArco = Math.max(0, (medidaB1 || 0) - hBase);
+      const pts: PuntoFigura[] = [{ x: 0, y: 0 }, { x: A, y: 0 }];
+      const tramos = 8;
+      for (let i = hBase > 0 ? 0 : 1; i <= tramos; i++) {
+        const ang = (i * Math.PI) / (2 * tramos);
+        pts.push({ x: Math.round(A * Math.cos(ang)), y: Math.round(hBase + hArco * Math.sin(ang)) });
+      }
+      return pts;
+    }
+    if (shape === 'circulo') {
+      const pts: PuntoFigura[] = [];
+      const tramos = 24;
+      for (let i = 0; i < tramos; i++) {
+        const ang = (i * 2 * Math.PI) / tramos;
+        pts.push({ x: Math.round(A / 2 + (A / 2) * Math.cos(ang)), y: Math.round(A / 2 + (A / 2) * Math.sin(ang)) });
+      }
+      return pts;
+    }
+    return puntos;
+  };
+
+  const handleEditarForma = () => {
+    if (shape === 'personalizada') return;
+    setPuntos(shapeToPoints());
+    setPuntoActivo(null);
+    setShape('personalizada');
+  };
+
+  // La opción "Libre" del selector siempre parte de un triángulo de 1000 x 1000 mm
+  const handleFormaLibre = () => {
+    if (shape === 'personalizada') return;
+    setPuntos([{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 0, y: 1000 }]);
+    setPuntoActivo(null);
+    setShape('personalizada');
+  };
+
+  const updatePunto = (idx: number, campo: 'x' | 'y', valor: number) => {
+    setPuntos(puntos.map((p, i) => (i === idx ? { ...p, [campo]: valor } : p)));
+  };
+
+  // Inserta un vértice nuevo en la mitad del lado que sale del punto idx
+  const insertarPunto = (idx: number) => {
+    const p = puntos[idx];
+    const q = puntos[(idx + 1) % puntos.length];
+    const nuevo = { x: Math.round((p.x + q.x) / 2), y: Math.round((p.y + q.y) / 2) };
+    setPuntos([...puntos.slice(0, idx + 1), nuevo, ...puntos.slice(idx + 1)]);
+    setPuntoActivo(idx + 1);
+  };
+
+  const eliminarPunto = (idx: number) => {
+    if (puntos.length <= 3) return;
+    setPuntos(puntos.filter((_, i) => i !== idx));
+    setPuntoActivo(null);
+  };
+
+  const getMedidasFigura = (): NonNullable<TermopanelItem['medidasFigura']> => {
+    if (shape === 'personalizada') {
+      const bounding = getBoundingBox();
+      return { a: bounding.w, b: bounding.h, puntos: normalizarPuntos(puntos) };
+    }
+    return {
+      a: medidaA,
+      b: shape === 'trapecio' ? Math.max(medidaB1, medidaB2) : shape === 'circulo' ? medidaA : medidaB,
+      b1: shape === 'trapecio' ? medidaB1 : shape === 'medio_arco' ? medidaB1 : undefined,
+      b2: shape === 'trapecio' ? medidaB2 : undefined,
+      r: shape === 'arco' ? (medidaR !== undefined && medidaR > 0 ? medidaR : Math.round(medidaA / 2)) : shape === 'circulo' ? Math.round(medidaA / 2) : undefined
+    };
   };
 
   // Temp item for live calculations
@@ -405,13 +525,7 @@ function ShapesCADCotizadorContent() {
     palillajeVerticales,
     conForma: true, // Siempre tiene forma especial en esta página
     tipoFigura: shape,
-    medidasFigura: {
-      a: medidaA,
-      b: shape === 'trapecio' ? Math.max(medidaB1, medidaB2) : shape === 'circulo' ? medidaA : medidaB,
-      b1: shape === 'trapecio' ? medidaB1 : shape === 'medio_arco' ? medidaB1 : undefined,
-      b2: shape === 'trapecio' ? medidaB2 : undefined,
-      r: shape === 'arco' ? (medidaR !== undefined && medidaR > 0 ? medidaR : Math.round(medidaA / 2)) : shape === 'circulo' ? Math.round(medidaA / 2) : undefined
-    },
+    medidasFigura: getMedidasFigura(),
     descuento,
     precioUnitario: 0
   };
@@ -428,6 +542,10 @@ function ShapesCADCotizadorContent() {
   // Add Item to List
   const handleAddItem = () => {
     const bounding = getBoundingBox();
+    if (shape === 'personalizada' && (puntos.length < 3 || bounding.w <= 0 || bounding.h <= 0 || areaPoligono(puntos) <= 0)) {
+      alert("La forma libre necesita al menos 3 puntos que formen una figura con área.");
+      return;
+    }
     const newItem: TermopanelItem = {
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
       label: `V${items.length + 1}`,
@@ -445,13 +563,7 @@ function ShapesCADCotizadorContent() {
       palillajeVerticales,
       conForma: true,
       tipoFigura: shape,
-      medidasFigura: {
-        a: medidaA,
-        b: shape === 'trapecio' ? Math.max(medidaB1, medidaB2) : shape === 'circulo' ? medidaA : medidaB,
-        b1: shape === 'trapecio' ? medidaB1 : shape === 'medio_arco' ? medidaB1 : undefined,
-        b2: shape === 'trapecio' ? medidaB2 : undefined,
-        r: shape === 'arco' ? (medidaR !== undefined && medidaR > 0 ? medidaR : Math.round(medidaA / 2)) : shape === 'circulo' ? Math.round(medidaA / 2) : undefined
-      },
+      medidasFigura: getMedidasFigura(),
       descuento,
       precioUnitario: computedUnitPrice
     };
@@ -618,13 +730,14 @@ function ShapesCADCotizadorContent() {
       const splitLabel = doc.splitTextToSize(labelVal, 25);
       
       let shapeText = '';
-      const med = item.medidasFigura || { a: 0, b: 0 };
+      const med: NonNullable<TermopanelItem['medidasFigura']> = item.medidasFigura || { a: 0, b: 0 };
       if (item.tipoFigura === 'triangulo') shapeText = `Triángulo: Base:${med.a}, Altura:${med.b}`;
       if (item.tipoFigura === 'trapecio') shapeText = `Trapecio: Ancho:${med.a}, Alt.Izq:${med.b1}, Alt.Der:${med.b2}`;
       if (item.tipoFigura === 'arco') shapeText = `Arco: Ancho:${med.a}, Alt.Base:${med.b}, R:${med.r || Math.round(med.a / 2)}`;
       if (item.tipoFigura === 'medio_arco') shapeText = `Medio Arco: Ancho:${med.a}, Alt.Recta:${med.b}, Alt.Total:${med.b1}`;
       if (item.tipoFigura === 'circulo') shapeText = `Círculo: Diámetro:${med.a}`;
       if (item.tipoFigura === 'rectangulo') shapeText = `Rectángulo: Ancho:${med.a}, Alto:${med.b}`;
+      if (item.tipoFigura === 'personalizada') shapeText = describirFormaLibre(med.puntos);
 
       let configDesc = `C1: ${item.cristal1.tipo} ${item.cristal1.espesor}mm | C2: ${item.cristal2.tipo} ${item.cristal2.espesor}mm | Sep: ${item.separador.espesor}mm ${item.separador.color} | Forma: ${shapeText}`;
       const extrasList: string[] = [];
@@ -800,13 +913,14 @@ function ShapesCADCotizadorContent() {
       const splitLabel = pdf.splitTextToSize(labelVal, 28);
       
       let extrasText = "Forma: ";
-      const med = item.medidasFigura || { a: 0, b: 0 };
+      const med: NonNullable<TermopanelItem['medidasFigura']> = item.medidasFigura || { a: 0, b: 0 };
       if (item.tipoFigura === 'triangulo') extrasText += `Triángulo (Base:${med.a}, Alt:${med.b})`;
       if (item.tipoFigura === 'trapecio') extrasText += `Trapecio (Ancho:${med.a}, Alt.Izq:${med.b1}, Alt.Der:${med.b2})`;
       if (item.tipoFigura === 'arco') extrasText += `Arco (Ancho:${med.a}, Alt.Base:${med.b}, R:${med.r || Math.round(med.a / 2)})`;
       if (item.tipoFigura === 'medio_arco') extrasText += `Medio Arco (Ancho:${med.a}, Alt.Recta:${med.b}, Alt.Total:${med.b1})`;
       if (item.tipoFigura === 'circulo') extrasText += `Círculo (Diámetro:${med.a})`;
       if (item.tipoFigura === 'rectangulo') extrasText += `Rectángulo (Ancho:${med.a}, Alt:${med.b})`;
+      if (item.tipoFigura === 'personalizada') extrasText += describirFormaLibre(med.puntos);
 
       const rowHeight = 24; // Aumentado de 14 a 24 para dar espacio a la figura
 
@@ -923,13 +1037,14 @@ function ShapesCADCotizadorContent() {
       const splitLabel = pdf.splitTextToSize(labelVal, 28);
       
       let extrasText = "Forma: ";
-      const med = item.medidasFigura || { a: 0, b: 0 };
+      const med: NonNullable<TermopanelItem['medidasFigura']> = item.medidasFigura || { a: 0, b: 0 };
       if (item.tipoFigura === 'triangulo') extrasText += `Triángulo (Base:${med.a}, Alt:${med.b})`;
       if (item.tipoFigura === 'trapecio') extrasText += `Trapecio (Ancho:${med.a}, Alt.Izq:${med.b1}, Alt.Der:${med.b2})`;
       if (item.tipoFigura === 'arco') extrasText += `Arco (Ancho:${med.a}, Alt.Base:${med.b}, R:${med.r || Math.round(med.a / 2)})`;
       if (item.tipoFigura === 'medio_arco') extrasText += `Medio Arco (Ancho:${med.a}, Alt.Recta:${med.b}, Alt.Total:${med.b1})`;
       if (item.tipoFigura === 'circulo') extrasText += `Círculo (Diámetro:${med.a})`;
       if (item.tipoFigura === 'rectangulo') extrasText += `Rectángulo (Ancho:${med.a}, Alt:${med.b})`;
+      if (item.tipoFigura === 'personalizada') extrasText += describirFormaLibre(med.puntos);
 
       if (item.palillaje) {
         extrasText += ` | Palillaje (${item.palillajeColor}, ${item.palillajeHorizontales} horizontales y ${item.palillajeVerticales} verticales)`;
@@ -1140,6 +1255,75 @@ function ShapesCADCotizadorContent() {
 
   const svgData = getSvgGeometry();
 
+  // Geometría del editor de forma libre: vértices arrastrables, "+" en los lados y largo de cada lado
+  const getCustomGeometry = () => {
+    if (shape !== 'personalizada' || puntos.length < 3) return null;
+    let view = dragView;
+    if (!view) {
+      const xs = puntos.map(p => p.x);
+      const ys = puntos.map(p => p.y);
+      const minX = Math.min(...xs);
+      const minY = Math.min(...ys);
+      const w = Math.max(...xs) - minX || 1;
+      const h = Math.max(...ys) - minY || 1;
+      const scale = Math.min(240 / w, 170 / h);
+      view = { idx: -1, scale, offX: 200 - (minX + w / 2) * scale, offY: 135 + (minY + h / 2) * scale };
+    }
+    const v = view;
+    const verts = puntos.map(p => ({ x: v.offX + p.x * v.scale, y: v.offY - p.y * v.scale }));
+    const centroX = verts.reduce((acc, p) => acc + p.x, 0) / verts.length;
+    const centroY = verts.reduce((acc, p) => acc + p.y, 0) / verts.length;
+    const largos = ladosPoligono(puntos);
+    const lados = verts.map((p, i) => {
+      const q = verts[(i + 1) % verts.length];
+      const mx = (p.x + q.x) / 2;
+      const my = (p.y + q.y) / 2;
+      const largoPx = Math.hypot(q.x - p.x, q.y - p.y);
+      // La etiqueta se empuja hacia afuera de la figura
+      const dx = mx - centroX;
+      const dy = my - centroY;
+      const d = Math.hypot(dx, dy) || 1;
+      return { idx: i, mx, my, lx: mx + (dx / d) * 16, ly: my + (dy / d) * 16 + 4, visible: largoPx > 30, label: `${Math.round(largos[i])}` };
+    });
+    return { view: v, verts, lados, path: `M ${verts.map(p => `${p.x},${p.y}`).join(' L ')} Z` };
+  };
+
+  const customGeo = getCustomGeometry();
+
+  const svgPointFromEvent = (e: React.PointerEvent<SVGElement>) => {
+    const svg = e.currentTarget.ownerSVGElement;
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return null;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    return pt.matrixTransform(ctm.inverse());
+  };
+
+  const handleVertexPointerDown = (e: React.PointerEvent<SVGElement>, idx: number) => {
+    if (!customGeo) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setPuntoActivo(idx);
+    setDragView({ ...customGeo.view, idx });
+  };
+
+  const handleVertexPointerMove = (e: React.PointerEvent<SVGElement>) => {
+    if (!dragView) return;
+    const pt = svgPointFromEvent(e);
+    if (!pt) return;
+    // El arrastre ajusta de 10 en 10 mm; la medida exacta se escribe en la lista de puntos
+    const x = Math.round((pt.x - dragView.offX) / dragView.scale / 10) * 10;
+    const y = Math.round((dragView.offY - pt.y) / dragView.scale / 10) * 10;
+    setPuntos(prev => prev.map((p, i) => (i === dragView.idx ? { x, y } : p)));
+  };
+
+  const handleVertexPointerUp = () => {
+    if (!dragView) return;
+    setDragView(null);
+    setPuntos(prev => normalizarPuntos(prev));
+  };
+
   if (isLoadingConfig) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
@@ -1272,11 +1456,12 @@ function ShapesCADCotizadorContent() {
           {/* SELECCIÓN DE FIGURA */}
           <div>
             <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">1. Seleccionar Figura</h2>
-            <div className="grid grid-cols-5 gap-1.5">
-              {(['triangulo', 'trapecio', 'arco', 'medio_arco', 'circulo'] as ShapeType[]).map((t) => (
+            <div className="grid grid-cols-4 gap-1.5">
+              {(['arco', 'medio_arco', 'circulo', 'personalizada'] as ShapeType[]).map((t) => (
                 <button
                   key={t}
-                  onClick={() => setShape(t)}
+                  onClick={() => (t === 'personalizada' ? handleFormaLibre() : setShape(t))}
+                  title={t === 'personalizada' ? 'Dibujar una forma libre a partir de un triángulo' : undefined}
                   className={`p-2 rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-all text-[10px] font-bold uppercase leading-tight ${
                     shape === t
                       ? 'border-cyan-500 bg-cyan-50 text-cyan-600'
@@ -1284,13 +1469,12 @@ function ShapesCADCotizadorContent() {
                   }`}
                 >
                   <svg className="w-8 h-8" viewBox="0 0 100 100">
-                    {t === 'triangulo' && <polygon points="20,80 80,80 20,20" fill="none" stroke="currentColor" strokeWidth="6" />}
-                    {t === 'trapecio' && <polygon points="15,80 85,80 75,35 15,20" fill="none" stroke="currentColor" strokeWidth="6" />}
                     {t === 'arco' && <path d="M 20,80 L 80,80 L 80,50 A 30,30 0 0,0 20,50 Z" fill="none" stroke="currentColor" strokeWidth="6" />}
                     {t === 'medio_arco' && <path d="M 20,80 L 80,80 L 80,50 A 60,30 0 0,0 20,20 Z" fill="none" stroke="currentColor" strokeWidth="6" />}
                     {t === 'circulo' && <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" strokeWidth="6" />}
+                    {t === 'personalizada' && <polygon points="15,80 85,80 85,45 55,20 15,40" fill="none" stroke="currentColor" strokeWidth="6" strokeDasharray="10 5" />}
                   </svg>
-                  <span>{t === 'medio_arco' ? 'M. Arco' : t === 'circulo' ? 'Círculo' : t === 'triangulo' ? 'Triángulo' : t === 'trapecio' ? 'Trapecio' : 'Arco'}</span>
+                  <span>{t === 'medio_arco' ? 'M. Arco' : t === 'circulo' ? 'Círculo' : t === 'personalizada' ? 'Libre' : 'Arco'}</span>
                 </button>
               ))}
             </div>
@@ -1311,28 +1495,6 @@ function ShapesCADCotizadorContent() {
                     className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
                   />
                 </div>
-              )}
-              {shape === 'triangulo' && (
-                <>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Ancho / Base (A)</label>
-                    <input
-                      type="number" inputMode="numeric"
-                      value={medidaA || ''}
-                      onChange={(e) => setMedidaA(parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Altura (B)</label>
-                    <input
-                      type="number" inputMode="numeric"
-                      value={medidaB || ''}
-                      onChange={(e) => setMedidaB(parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
-                    />
-                  </div>
-                </>
               )}
               {shape === 'arco' && (
                 <>
@@ -1413,36 +1575,65 @@ function ShapesCADCotizadorContent() {
                   </div>
                 </>
               )}
-              {shape === 'trapecio' && (
-                <>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Ancho Base (A)</label>
-                    <input
-                      type="number" inputMode="numeric"
-                      value={medidaA || ''}
-                      onChange={(e) => setMedidaA(parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
-                    />
+              {shape === 'personalizada' && (
+                <div className="col-span-2 space-y-2">
+                  <p className="text-[11px] text-slate-500 leading-snug">
+                    Arrastre los puntos en el visualizador o escriba aquí su posición exacta. X se mide desde la izquierda e Y desde abajo.
+                  </p>
+                  <div className="grid grid-cols-[2rem_1fr_1fr_3.5rem_4rem] gap-1.5 items-center text-[10px] font-bold text-slate-400 uppercase">
+                    <span>N°</span><span>X (mm)</span><span>Y (mm)</span><span className="text-right">Lado</span><span></span>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Altura Izquierda (B1)</label>
-                    <input
-                      type="number" inputMode="numeric"
-                      value={medidaB1 || ''}
-                      onChange={(e) => setMedidaB1(parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
-                    />
+                  <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                    {puntos.map((p, i) => (
+                      <div
+                        key={i}
+                        className={`grid grid-cols-[2rem_1fr_1fr_3.5rem_4rem] gap-1.5 items-center rounded-lg ${puntoActivo === i ? 'bg-cyan-50 ring-1 ring-cyan-300' : ''}`}
+                      >
+                        <span className="text-xs font-bold text-slate-500 text-center">P{i + 1}</span>
+                        <input
+                          type="number" inputMode="numeric"
+                          value={p.x}
+                          onFocus={() => setPuntoActivo(i)}
+                          onChange={(e) => updatePunto(i, 'x', parseInt(e.target.value) || 0)}
+                          className="w-full min-w-0 px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-cyan-500"
+                        />
+                        <input
+                          type="number" inputMode="numeric"
+                          value={p.y}
+                          onFocus={() => setPuntoActivo(i)}
+                          onChange={(e) => updatePunto(i, 'y', parseInt(e.target.value) || 0)}
+                          className="w-full min-w-0 px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-cyan-500"
+                        />
+                        <span className="text-[11px] font-mono text-slate-500 text-right" title={`Largo del lado P${i + 1} → P${((i + 1) % puntos.length) + 1}`}>
+                          {Math.round(ladosPoligono(puntos)[i])}
+                        </span>
+                        <div className="flex justify-end gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => insertarPunto(i)}
+                            className="p-1.5 text-slate-400 hover:text-cyan-600 transition-colors"
+                            title={`Agregar un punto entre P${i + 1} y P${((i + 1) % puntos.length) + 1}`}
+                          >
+                            <Plus size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => eliminarPunto(i)}
+                            disabled={puntos.length <= 3}
+                            className="p-1.5 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                            title="Eliminar punto"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Altura Derecha (B2)</label>
-                    <input
-                      type="number" inputMode="numeric"
-                      value={medidaB2 || ''}
-                      onChange={(e) => setMedidaB2(parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-cyan-500"
-                    />
+                  <div className="flex justify-between text-xs text-slate-500 pt-1 border-t border-slate-200">
+                    <span>Ancho total: <strong className="text-slate-700">{getBoundingBox().w} mm</strong></span>
+                    <span>Alto total: <strong className="text-slate-700">{getBoundingBox().h} mm</strong></span>
                   </div>
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -1628,10 +1819,26 @@ function ShapesCADCotizadorContent() {
               visualizador cad v1.0
             </div>
 
+            {shape !== 'personalizada' ? (
+              <button
+                type="button"
+                onClick={handleEditarForma}
+                className="absolute top-3.5 right-4 flex items-center gap-1.5 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/40 text-orange-400 text-[11px] font-bold px-2.5 py-1 rounded-md transition-colors"
+                title="Convertir esta figura en una forma libre para mover, agregar o quitar puntos"
+              >
+                <Pencil size={12} /> Editar forma
+              </button>
+            ) : (
+              <div className="absolute top-4 right-4 text-orange-400 font-mono text-[10px] tracking-wider uppercase">
+                modo edición
+              </div>
+            )}
+
             {/* Grid CAD SVG */}
             <svg
               className="w-full max-w-[420px] aspect-[4/3] bg-slate-900/40 rounded-xl border border-slate-800/80 mt-8 relative"
               viewBox="0 0 400 300"
+              style={shape === 'personalizada' ? { touchAction: 'none' } : undefined}
             >
               <defs>
                 <pattern id="cadGrid" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -1686,11 +1893,83 @@ function ShapesCADCotizadorContent() {
                   </text>
                 </g>
               ))}
+
+              {/* Editor de forma libre */}
+              {customGeo && (
+                <g>
+                  <path
+                    d={customGeo.path}
+                    fill="rgba(6, 182, 212, 0.04)"
+                    stroke="#06b6d4"
+                    strokeWidth="3"
+                    strokeLinejoin="round"
+                    className="drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]"
+                  />
+                  {customGeo.lados.filter(l => l.visible).map(l => (
+                    <g key={`lado-${l.idx}`}>
+                      <text
+                        x={l.lx}
+                        y={l.ly}
+                        textAnchor="middle"
+                        fill="#f97316"
+                        stroke="#020617"
+                        strokeWidth="3px"
+                        paintOrder="stroke"
+                        className="font-mono text-[10px] font-bold pointer-events-none select-none"
+                      >
+                        {l.label}
+                      </text>
+                      {!dragView && (
+                        <g onClick={() => insertarPunto(l.idx)} className="cursor-pointer">
+                          <title>Agregar punto en este lado</title>
+                          <circle cx={l.mx} cy={l.my} r="10" fill="transparent" />
+                          <circle cx={l.mx} cy={l.my} r="5" fill="#0f172a" stroke="#06b6d4" strokeWidth="1" />
+                          <path d={`M ${l.mx - 2.5},${l.my} L ${l.mx + 2.5},${l.my} M ${l.mx},${l.my - 2.5} L ${l.mx},${l.my + 2.5}`} stroke="#06b6d4" strokeWidth="1.2" />
+                        </g>
+                      )}
+                    </g>
+                  ))}
+                  {customGeo.verts.map((p, i) => (
+                    <g
+                      key={`punto-${i}`}
+                      onPointerDown={(e) => handleVertexPointerDown(e, i)}
+                      onPointerMove={handleVertexPointerMove}
+                      onPointerUp={handleVertexPointerUp}
+                      onPointerCancel={handleVertexPointerUp}
+                      onDoubleClick={() => eliminarPunto(i)}
+                      className="cursor-move"
+                      style={{ touchAction: 'none' }}
+                    >
+                      <circle cx={p.x} cy={p.y} r="14" fill="transparent" />
+                      <circle cx={p.x} cy={p.y} r={puntoActivo === i ? 6.5 : 5} fill={puntoActivo === i ? '#f97316' : '#06b6d4'} stroke="#020617" strokeWidth="1.5" />
+                    </g>
+                  ))}
+                </g>
+              )}
             </svg>
+
+            {shape === 'personalizada' && (
+              <div className="w-full max-w-[420px] flex items-center justify-between gap-2 mt-3 min-h-[34px]">
+                <span className="text-[11px] font-mono text-slate-400">
+                  {puntoActivo !== null && puntos[puntoActivo]
+                    ? `P${puntoActivo + 1} seleccionado (X ${puntos[puntoActivo].x}, Y ${puntos[puntoActivo].y})`
+                    : 'Toque un punto para seleccionarlo'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => puntoActivo !== null && eliminarPunto(puntoActivo)}
+                  disabled={puntoActivo === null || puntos.length <= 3}
+                  className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/40 text-red-400 text-xs font-bold px-3 py-1.5 rounded-md transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                  title={puntos.length <= 3 ? 'La figura necesita al menos 3 puntos' : 'Eliminar el punto seleccionado'}
+                >
+                  <Trash2 size={13} /> Eliminar punto
+                </button>
+              </div>
+            )}
 
             {/* Cad status info */}
             <div className="w-full flex justify-between text-[11px] font-mono text-slate-500 mt-4 px-2">
-              <span>Status: Ready</span>
+              <span>{shape === 'personalizada' ? 'Arrastre los puntos · + agrega un punto' : 'Status: Ready'}</span>
               <span>Units: Milimeters (mm)</span>
             </div>
 
@@ -1756,7 +2035,7 @@ function ShapesCADCotizadorContent() {
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                       <td className="p-3 font-semibold text-slate-500">{item.label || `V${idx + 1}`}</td>
                       <td className="p-3 text-center uppercase font-bold text-cyan-600">
-                        <div>{item.tipoFigura === 'medio_arco' ? 'Medio Arco' : item.tipoFigura}</div>
+                        <div>{item.tipoFigura === 'medio_arco' ? 'Medio Arco' : item.tipoFigura === 'personalizada' ? 'Forma Libre' : item.tipoFigura}</div>
                         {item.medidasFigura && (
                           <div className="text-[10px] text-slate-500 font-normal font-mono lowercase">
                             {item.tipoFigura === 'arco' && `a:${item.medidasFigura.a} b:${item.medidasFigura.b} r:${item.medidasFigura.r || Math.round(item.medidasFigura.a / 2)}`}
@@ -1764,6 +2043,7 @@ function ShapesCADCotizadorContent() {
                             {item.tipoFigura === 'trapecio' && `a:${item.medidasFigura.a} b1:${item.medidasFigura.b1} b2:${item.medidasFigura.b2}`}
                             {item.tipoFigura === 'medio_arco' && `a:${item.medidasFigura.a} b:${item.medidasFigura.b} h:${item.medidasFigura.b1}`}
                             {item.tipoFigura === 'circulo' && `d:${item.medidasFigura.a}`}
+                            {item.tipoFigura === 'personalizada' && `${item.medidasFigura.puntos?.length || 0} puntos`}
                           </div>
                         )}
                       </td>

@@ -1,3 +1,35 @@
+// Vértice de una forma personalizada, en mm (origen abajo-izquierda, Y hacia arriba)
+export interface PuntoFigura { x: number; y: number }
+
+export function ladosPoligono(puntos: PuntoFigura[]): number[] {
+  return puntos.map((p, i) => {
+    const q = puntos[(i + 1) % puntos.length]
+    return Math.hypot(q.x - p.x, q.y - p.y)
+  })
+}
+
+// Área en mm² (fórmula del polígono / shoelace)
+export function areaPoligono(puntos: PuntoFigura[]): number {
+  if (puntos.length < 3) return 0
+  const suma = puntos.reduce((acc, p, i) => {
+    const q = puntos[(i + 1) % puntos.length]
+    return acc + (p.x * q.y - q.x * p.y)
+  }, 0)
+  return Math.abs(suma) / 2
+}
+
+// Perímetro en mm
+export function perimetroPoligono(puntos: PuntoFigura[]): number {
+  if (puntos.length < 2) return 0
+  return ladosPoligono(puntos).reduce((acc, l) => acc + l, 0)
+}
+
+export function describirFormaLibre(puntos: PuntoFigura[] = []): string {
+  const lados = ladosPoligono(puntos).map(l => Math.round(l))
+  if (lados.length === 0 || lados.length > 8) return `Forma libre (${lados.length} lados)`
+  return `Forma libre (${lados.length} lados): ${lados.join(' / ')} mm`
+}
+
 export interface TermopanelItem {
   id: string
   label?: string
@@ -14,8 +46,8 @@ export interface TermopanelItem {
   palillajeHorizontales?: number
   palillajeVerticales?: number
   conForma?: boolean
-  tipoFigura?: 'rectangulo' | 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo'
-  medidasFigura?: { a: number; b: number; b1?: number; b2?: number; r?: number }
+  tipoFigura?: 'rectangulo' | 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo' | 'personalizada'
+  medidasFigura?: { a: number; b: number; b1?: number; b2?: number; r?: number; puntos?: PuntoFigura[] }
   descuento?: number // Porcentaje de descuento (0-100)
   precioUnitario: number
   esPrecioManual?: boolean
@@ -88,6 +120,8 @@ export function calcularItem(item: TermopanelItem): {
     } else if (item.tipoFigura === 'circulo') {
       const a = med.a || 0
       metrosCuadrados = (Math.PI * Math.pow(a / 2, 2)) / 1_000_000
+    } else if (item.tipoFigura === 'personalizada' && med.puntos && med.puntos.length >= 3) {
+      metrosCuadrados = areaPoligono(med.puntos) / 1_000_000
     }
   }
   const totalLinea = item.precioUnitario * item.cantidad
@@ -138,6 +172,9 @@ export function calcularPrecioUnitario(
       const a = med.a || 0
       m2 = (Math.PI * Math.pow(a / 2, 2)) / 1_000_000
       ml = (Math.PI * a) / 1000
+    } else if (item.tipoFigura === 'personalizada' && med.puntos && med.puntos.length >= 3) {
+      m2 = areaPoligono(med.puntos) / 1_000_000
+      ml = perimetroPoligono(med.puntos) / 1000
     }
   }
 
