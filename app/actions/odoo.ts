@@ -166,6 +166,8 @@ export async function guardarCotizacionEnOdoo(data: {
               formaDesc += ` Ancho:${med.a || 0}, Alt.Recta:${med.b || 0}, Alt.Total:${med.b1 || 0}`;
            } else if (item.tipoFigura === 'circulo') {
               formaDesc += ` Diámetro:${med.a || 0}`;
+           } else if (item.tipoFigura === 'personalizada') {
+              formaDesc += ` Puntos:${(med.puntos || []).map((p: { x: number; y: number }) => `${p.x}_${p.y}`).join(' ')}`;
            }
         }
         extras.push(formaDesc);
@@ -508,11 +510,20 @@ function parseTermopanelLine(name: string, idx: number, line?: any): TermopanelI
   }
 
   const conForma = /con forma|forma especial|tri[áa]ngulo|trapecio|medio[ _]arco|arco|c[íi]rculo/i.test(extrasStr);
-  let tipoFigura: 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo' = 'triangulo';
-  let medidasFigura: { a: number; b: number; b1?: number; b2?: number; r?: number } = { a: 0, b: 0 };
+  let tipoFigura: 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo' | 'personalizada' = 'triangulo';
+  let medidasFigura: { a: number; b: number; b1?: number; b2?: number; r?: number; puntos?: { x: number; y: number }[] } = { a: 0, b: 0 };
 
   if (conForma) {
-    if (extrasStr.includes('triángulo') || extrasStr.includes('triangulo')) {
+    const puntosMatch = extrasStr.match(/puntos:\s*((?:\d+_\d+\s*)+)/i);
+    if (puntosMatch) {
+      // Forma libre: vértices "x_y" en mm
+      tipoFigura = 'personalizada';
+      const puntos = puntosMatch[1].trim().split(/\s+/).map(par => {
+        const [x, y] = par.split('_').map(n => parseInt(n, 10) || 0);
+        return { x, y };
+      });
+      medidasFigura = { a: ancho, b: alto, puntos };
+    } else if (extrasStr.includes('triángulo') || extrasStr.includes('triangulo')) {
       tipoFigura = 'triangulo';
       const m = extrasStr.match(/base:\s*(\d+)\s*,\s*altura:\s*(\d+)/i) || extrasStr.match(/a:\s*(\d+)\s*,\s*b:\s*(\d+)/i);
       if (m) {
@@ -899,6 +910,7 @@ export async function actualizarCotizacionEnOdoo(data: {
             else if (item.tipoFigura === 'arco') shapeDesc = `Arco: Ancho:${med.a || 0}, Alt.Base:${med.b || 0}, R:${med.r || Math.round((med.a || 0) / 2)}`;
             else if (item.tipoFigura === 'medio_arco') shapeDesc = `Medio Arco: Ancho:${med.a || 0}, Alt.Recta:${med.b || 0}, Alt.Total:${med.b1 || 0}`;
             else if (item.tipoFigura === 'circulo') shapeDesc = `Círculo: Diámetro:${med.a || 0}`;
+            else if (item.tipoFigura === 'personalizada') shapeDesc = `Forma Libre: Puntos:${(med.puntos || []).map((p: { x: number; y: number }) => `${p.x}_${p.y}`).join(' ')}`;
             extras.push(`Con Forma (${shapeDesc})`);
           }
         }

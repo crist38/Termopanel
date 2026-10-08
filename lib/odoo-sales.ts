@@ -1171,8 +1171,8 @@ export interface TermopanelItemData {
   palillajeHorizontales?: number;
   palillajeVerticales?: number;
   conForma?: boolean;
-  tipoFigura?: 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo';
-  medidasFigura?: { a: number; b: number; b1?: number; b2?: number; r?: number };
+  tipoFigura?: 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo' | 'personalizada';
+  medidasFigura?: { a: number; b: number; b1?: number; b2?: number; r?: number; puntos?: { x: number; y: number }[] };
   descuento?: number;
 }
 
