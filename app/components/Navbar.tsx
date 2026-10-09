@@ -1,13 +1,114 @@
 "use client"
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Settings, Layers, Square, FileText, Triangle, BarChart2, Menu, X } from 'lucide-react';
+import { Settings, Layers, Square, FileText, Triangle, BarChart2, Menu, X, LogOut } from 'lucide-react';
+import { logoutFromOdoo } from '@/app/actions/auth';
+
+interface Vendedor {
+  name: string;
+  email?: string;
+  avatar?: string;
+}
+
+function AvatarVendedor({ vendedor, size }: { vendedor: Vendedor; size: string }) {
+  const iniciales = vendedor.name
+    .split(/[ ]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('');
+
+  if (vendedor.avatar) {
+    return <img src={vendedor.avatar} alt={vendedor.name} className={`${size} rounded-full object-cover border border-white/40 shrink-0`} />;
+  }
+  return (
+    <div className={`${size} rounded-full bg-white/20 border border-white/40 flex items-center justify-center text-xs font-semibold shrink-0`}>
+      {iniciales || '?'}
+    </div>
+  );
+}
+
+// Avatar del vendedor; al tocarlo abre un menú con sus datos y la opción de cerrar sesión
+function MenuVendedor({ vendedor, nombreClassName }: { vendedor: Vendedor; nombreClassName: string }) {
+  const [abierto, setAbierto] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!abierto) return;
+    const cerrar = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setAbierto(false);
+    };
+    document.addEventListener('pointerdown', cerrar);
+    return () => document.removeEventListener('pointerdown', cerrar);
+  }, [abierto]);
+
+  return (
+    <div ref={ref} className="relative min-w-0">
+      <button
+        type="button"
+        onClick={() => setAbierto(!abierto)}
+        className="flex items-center gap-2 min-w-0 rounded-md px-1.5 py-1 hover:bg-[#8f6b88] transition-colors"
+        aria-haspopup="menu"
+        aria-expanded={abierto}
+        title={vendedor.name}
+      >
+        <AvatarVendedor vendedor={vendedor} size="w-8 h-8" />
+        <span className={nombreClassName}>{vendedor.name}</span>
+      </button>
+
+      {abierto && (
+        <div className="absolute right-0 top-full mt-2 w-60 bg-white text-slate-800 rounded-lg shadow-lg border border-slate-200 overflow-hidden z-50" role="menu">
+          <div className="px-4 py-3 border-b border-slate-100">
+            <p className="text-sm font-semibold truncate">{vendedor.name}</p>
+            {vendedor.email && <p className="text-xs text-slate-500 truncate">{vendedor.email}</p>}
+          </div>
+          <form action={logoutFromOdoo}>
+            <button
+              type="submit"
+              role="menuitem"
+              className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <LogOut size={16} /> Cerrar sesión
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Navbar() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [vendedor, setVendedor] = useState<Vendedor | null>(null);
+
+  // Vendedor con sesión iniciada: nombre desde la cookie y foto guardada al hacer login
+  useEffect(() => {
+    if (pathname === '/login') {
+      setVendedor(null);
+      return;
+    }
+    const cookieVal = document.cookie
+      .split('; ')
+      .find((r) => r.startsWith('odoo_user='))
+      ?.split('=')
+      .slice(1)
+      .join('=');
+    if (!cookieVal) return;
+    try {
+      const sesion = JSON.parse(decodeURIComponent(cookieVal));
+      const name: string = sesion.name || sesion.email || '';
+      if (!name) return;
+      let avatar: string | undefined;
+      try {
+        const guardado = JSON.parse(localStorage.getItem('odoo_last_user') || 'null');
+        if (guardado?.email === sesion.email) avatar = guardado.avatar;
+      } catch {}
+      setVendedor({ name, email: sesion.email, avatar });
+    } catch {}
+  }, [pathname]);
 
   // Ocultar en la pantalla de login
   if (pathname === '/login') return null;
@@ -31,6 +132,12 @@ export function Navbar() {
             </div>
             
             {/* Botón menú hamburguesa en móvil */}
+            {vendedor && (
+              <div className="md:hidden ml-auto mr-1 min-w-0">
+                <MenuVendedor vendedor={vendedor} nombreClassName="text-xs font-medium text-white/90 truncate max-w-[9rem]" />
+              </div>
+            )}
+
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               type="button"
@@ -63,6 +170,11 @@ export function Navbar() {
                 </Link>
               );
             })}
+            {vendedor && (
+              <div className="pl-2 ml-1 border-l border-white/20">
+                <MenuVendedor vendedor={vendedor} nombreClassName="hidden xl:block text-sm font-medium text-white/90 truncate max-w-[10rem]" />
+              </div>
+            )}
           </div>
         </div>
 

@@ -1045,10 +1045,6 @@ function CotizadorTermopanelContent() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
-          {sessionName && (
-            <span className="text-xs text-slate-400 hidden sm:block mr-1">{sessionName}</span>
-          )}
-
           <button
             onClick={() => handleProcessQuote(false)}
             className={`flex items-center gap-2 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95 ${
@@ -1057,10 +1053,10 @@ function CotizadorTermopanelContent() {
                 : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700'
             }`}
             disabled={isSyncingOdoo || items.length === 0}
-            title="Guardar como borrador en Odoo y generar PDF del Presupuesto"
+            title="Guardar la cotización en Odoo y generar PDF del Presupuesto"
           >
             <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
-            {isSyncingOdoo && editId ? 'Actualizando...' : (isSyncingOdoo ? 'Guardando...' : (editId ? 'Actualizar Borrador / PDF' : 'Guardar Borrador / Presupuesto PDF'))}
+            {isSyncingOdoo && editId ? 'Actualizando...' : (isSyncingOdoo ? 'Guardando...' : (editId ? 'Actualizar Cotización / PDF' : 'Guardar Cotización / Presupuesto PDF'))}
           </button>
 
           <form action={logoutFromOdoo}>

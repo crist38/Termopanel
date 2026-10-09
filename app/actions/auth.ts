@@ -11,6 +11,7 @@ interface LoginResult {
   error?: string
   uid?: number
   name?: string
+  avatar?: string // Foto del usuario en Odoo como data URL
 }
 
 /**
@@ -60,8 +61,9 @@ export async function loginWithOdoo(
       return { success: false, error: 'Credenciales incorrectas. Verifique su usuario y contraseña de Odoo.' }
     }
 
-    // Obtener nombre del usuario desde Odoo
+    // Obtener nombre y foto del usuario desde Odoo
     let userName = email
+    let avatar: string | undefined
     try {
       const namePayload = {
         jsonrpc: '2.0',
@@ -77,7 +79,7 @@ export async function loginWithOdoo(
             'res.users',
             'read',
             [[uid]],
-            { fields: ['name'] },
+            { fields: ['name', 'image_128'] },
           ],
         },
       }
@@ -91,8 +93,18 @@ export async function loginWithOdoo(
       if (nameData.result?.[0]?.name) {
         userName = nameData.result[0].name
       }
+      const image: unknown = nameData.result?.[0]?.image_128
+      if (typeof image === 'string' && image) {
+        // Odoo entrega la imagen en base64 sin tipo; se deduce por sus primeros bytes
+        const mime = image.startsWith('/9j/') ? 'image/jpeg'
+          : image.startsWith('P') ? 'image/svg+xml'
+          : image.startsWith('R0lG') ? 'image/gif'
+          : image.startsWith('UklG') ? 'image/webp'
+          : 'image/png'
+        avatar = `data:${mime};base64,${image}`
+      }
     } catch {
-      // Si falla la consulta del nombre, usamos el email
+      // Si falla la consulta, usamos el email y no mostramos foto
     }
 
     // Guardar sesión en cookie HTTP-only (segura)
@@ -115,7 +127,7 @@ export async function loginWithOdoo(
       path: '/',
     })
 
-    return { success: true, uid, name: userName }
+    return { success: true, uid, name: userName, avatar }
   } catch (err: any) {
     console.error('Error en loginWithOdoo:', err)
     return { success: false, error: 'No se pudo conectar con el servidor de Odoo.' }
