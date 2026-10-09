@@ -8,10 +8,9 @@ import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, Triangle, ArrowUp, ArrowDown, ArrowUpDown, Scissors } from 'lucide-react';
+import { Printer, Plus, Trash2, Cloud, ClipboardList, Triangle, ArrowUp, ArrowDown, ArrowUpDown, Scissors } from 'lucide-react';
 import { CORTE_IMPORT_KEY, GrupoCorte, PiezaCorte, CorteImport } from '@/lib/types/corte';
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
-import { logoutFromOdoo } from '@/app/actions/auth';
 import { ClientSelector } from '@/components/ClientSelector';
 
 
@@ -1058,17 +1057,6 @@ function CotizadorTermopanelContent() {
             <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
             {isSyncingOdoo && editId ? 'Actualizando...' : (isSyncingOdoo ? 'Guardando...' : (editId ? 'Actualizar Cotización / PDF' : 'Guardar Cotización / Presupuesto PDF'))}
           </button>
-
-          <form action={logoutFromOdoo}>
-            <button
-              type="submit"
-              className="flex items-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-              title="Cerrar sesión"
-            >
-              <LogOut size={16} />
-              Salir
-            </button>
-          </form>
         </div>
       </header>
 
