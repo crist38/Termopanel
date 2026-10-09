@@ -8,7 +8,7 @@ import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, Triangle, ArrowUp, ArrowDown, ArrowUpDown, CheckCircle, Scissors } from 'lucide-react';
+import { Printer, Plus, Trash2, Cloud, ClipboardList, LogOut, Triangle, ArrowUp, ArrowDown, ArrowUpDown, Scissors } from 'lucide-react';
 import { CORTE_IMPORT_KEY, GrupoCorte, PiezaCorte, CorteImport } from '@/lib/types/corte';
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { logoutFromOdoo } from '@/app/actions/auth';
@@ -1061,16 +1061,6 @@ function CotizadorTermopanelContent() {
           >
             <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
             {isSyncingOdoo && editId ? 'Actualizando...' : (isSyncingOdoo ? 'Guardando...' : (editId ? 'Actualizar Borrador / PDF' : 'Guardar Borrador / Presupuesto PDF'))}
-          </button>
-
-          <button
-            onClick={() => handleProcessQuote(true)}
-            className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95"
-            disabled={isSyncingOdoo || items.length === 0}
-            title="Confirmar Orden en Odoo, generar Órdenes de Fabricación y PDF de Taller"
-          >
-            <CheckCircle size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
-            {isSyncingOdoo ? 'Procesando...' : 'Confirmar en Odoo y Enviar a Taller'}
           </button>
 
           <form action={logoutFromOdoo}>

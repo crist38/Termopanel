@@ -5,7 +5,7 @@ import { TermopanelItem, PuntoFigura, calcularItem, calcularTotal, calcularPreci
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Plus, Trash2, Cloud, ArrowLeft, BarChart2, Triangle, RotateCcw, Printer, CheckCircle, Pencil } from 'lucide-react';
+import { Plus, Trash2, Cloud, ArrowLeft, BarChart2, Triangle, RotateCcw, Printer, Pencil } from 'lucide-react';
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { ClientSelector } from '@/components/ClientSelector';
 
@@ -1371,16 +1371,6 @@ function ShapesCADCotizadorContent() {
             <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
             {isSyncingOdoo && !editId ? 'Guardando...' : 'Guardar Borrador / Presupuesto PDF'}
           </button>
-
-          <button
-            onClick={() => handleProcessQuote(true)}
-            className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none transform active:scale-95"
-            disabled={isSyncingOdoo || items.length === 0}
-            title="Confirmar Orden en Odoo, generar Órdenes de Fabricación y PDF de Taller"
-          >
-            <CheckCircle size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
-            {isSyncingOdoo ? 'Procesando...' : 'Confirmar en Odoo y Enviar a Taller'}
-          </button>
         </div>
       </header>
 
@@ -1842,7 +1832,7 @@ function ShapesCADCotizadorContent() {
             >
               <defs>
                 <pattern id="cadGrid" width="20" height="20" patternUnits="userSpaceOnUse">
-                  <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(6, 182, 212, 0.05)" strokeWidth="1" />
+                  <path d="M 20 0 L 0 0 0 20" fill="none" stroke={shape === 'personalizada' ? 'rgba(6, 182, 212, 0.2)' : 'rgba(6, 182, 212, 0.05)'} strokeWidth="1" />
                 </pattern>
                 <marker id="arrowCAD" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                   <path d="M 0 0 L 10 5 L 0 10 z" fill="#f97316" />
