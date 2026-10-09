@@ -650,10 +650,10 @@ function CotizadorMonoliticoContent() {
                 : 'bg-gradient-to-r from-[#7a5973] to-[#6b4c64] hover:from-[#6b4c64] hover:to-[#5a3b53]'
             }`}
             disabled={isSyncingOdoo}
-            title="Guardar como borrador en Odoo y generar PDF del Presupuesto"
+            title="Guardar la cotización en Odoo y generar PDF del Presupuesto"
           >
             <Cloud size={16} className={isSyncingOdoo ? 'animate-spin' : ''} />
-            {isSyncingOdoo && !editId ? 'Guardando...' : 'Guardar Borrador / Presupuesto PDF'}
+            {isSyncingOdoo && !editId ? 'Guardando...' : 'Guardar Cotización / Presupuesto PDF'}
           </button>
 
 
