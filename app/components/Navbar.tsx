@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Settings, Layers, Square, FileText, Triangle, BarChart2, Menu, X, LogOut } from 'lucide-react';
+import { Settings, Layers, Square, FileText, Triangle, BarChart2, Menu, X, LogOut, Hammer } from 'lucide-react';
 import { logoutFromOdoo } from '@/app/actions/auth';
 
 interface Vendedor {
@@ -117,6 +117,7 @@ export function Navbar() {
     { href: '/', label: 'Termopaneles', icon: Layers },
     { href: '/monolitico', label: 'Corte Vidrio Monolítico', icon: Square },
     { href: '/formas', label: 'Formas', icon: Triangle },
+    { href: '/fabricacion', label: 'Fabricación', icon: Hammer },
     { href: '/cotizaciones', label: 'Cotizaciones', icon: FileText },
     { href: '/reports', label: 'Reportes', icon: BarChart2 },
     { href: '/admin/config', label: 'Configuración', icon: Settings },
@@ -124,16 +125,16 @@ export function Navbar() {
 
   return (
     <nav className="bg-[#7a5973] text-white shadow-md sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
-          <div className="flex items-center justify-between w-full md:w-auto">
-            <div className="flex-shrink-0 flex items-center">
+          <div className="flex items-center justify-between w-full xl:w-auto">
+            <div className="flex-shrink-0 flex items-center mr-4">
               <img src="/logo-texto.png" alt="PRO WINDOWS" className="h-7 sm:h-8 object-contain bg-white/95 px-2 py-1 rounded shadow-sm" />
             </div>
             
             {/* Botón menú hamburguesa en móvil */}
             {vendedor && (
-              <div className="md:hidden ml-auto mr-1 min-w-0">
+              <div className="xl:hidden ml-auto mr-1 min-w-0">
                 <MenuVendedor vendedor={vendedor} nombreClassName="text-xs font-medium text-white/90 truncate max-w-[9rem]" />
               </div>
             )}
@@ -141,7 +142,7 @@ export function Navbar() {
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               type="button"
-              className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-white/80 hover:text-white hover:bg-[#8f6b88] focus:outline-none transition-colors"
+              className="xl:hidden inline-flex items-center justify-center p-2 rounded-md text-white/80 hover:text-white hover:bg-[#8f6b88] focus:outline-none transition-colors"
               aria-controls="mobile-menu"
               aria-expanded={isMenuOpen}
             >
@@ -151,7 +152,7 @@ export function Navbar() {
           </div>
 
           {/* Navegación Desktop */}
-          <div className="hidden md:flex items-center space-x-2">
+          <div className="hidden xl:flex items-center gap-1 min-w-0">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
@@ -159,7 +160,7 @@ export function Navbar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
                     isActive 
                       ? 'bg-[#6b4c64] text-white shadow-inner' 
                       : 'text-white/80 hover:bg-[#8f6b88] hover:text-white'
@@ -172,14 +173,14 @@ export function Navbar() {
             })}
             {vendedor && (
               <div className="pl-2 ml-1 border-l border-white/20">
-                <MenuVendedor vendedor={vendedor} nombreClassName="hidden xl:block text-sm font-medium text-white/90 truncate max-w-[10rem]" />
+                <MenuVendedor vendedor={vendedor} nombreClassName="hidden 2xl:block text-sm font-medium text-white/90 truncate max-w-[10rem]" />
               </div>
             )}
           </div>
         </div>
 
         {/* Barra de pestañas con desplazamiento horizontal en móvil */}
-        <div className="md:hidden overflow-x-auto scrollbar-none border-t border-white/10 py-2 -mx-4 px-4 flex items-center gap-2 whitespace-nowrap">
+        <div className="xl:hidden overflow-x-auto scrollbar-none border-t border-white/10 py-2 -mx-4 px-4 flex items-center gap-2 whitespace-nowrap">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
@@ -203,7 +204,7 @@ export function Navbar() {
 
       {/* Menú desplegable vertical en móvil */}
       {isMenuOpen && (
-        <div className="md:hidden border-t border-[#6b4c64] bg-[#6e4e67] shadow-lg" id="mobile-menu">
+        <div className="xl:hidden border-t border-[#6b4c64] bg-[#6e4e67] shadow-lg" id="mobile-menu">
           <div className="px-2 pt-2 pb-3 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;

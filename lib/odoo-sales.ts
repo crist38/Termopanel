@@ -48,6 +48,7 @@ export interface OrderSearchParams {
   limit?: number;
   offset?: number;
   orderBy?: string;
+  tagName?: string;        // Etiqueta por la que filtrar (por defecto, la de Termopanel)
 }
 
 /**
@@ -119,6 +120,7 @@ export function getEscuadraName(espesor: number): string {
 
 export class OdooSalesService {
   private termopanelTagId: number | null = null;
+  private tagCache: Record<string, number> = {};
 
   /**
    * Obtiene o crea la etiqueta configurada (ej: "Termopanel") en Odoo.
@@ -157,6 +159,23 @@ export class OdooSalesService {
       console.error(`Error al obtener o crear la etiqueta "${process.env.ODOO_TAG_NAME || 'Termopanel'}" en Odoo:`, error);
       return null;
     }
+  }
+
+  /**
+   * Busca una etiqueta de venta por nombre (sin crearla). Retorna su ID o null.
+   */
+  async getTagIdByName(name: string): Promise<number | null> {
+    const key = name.toLowerCase();
+    if (this.tagCache[key]) return this.tagCache[key];
+    const tags = await odoo.executeKw(
+      'crm.tag',
+      'search_read',
+      [[['name', '=ilike', name]]],
+      { fields: ['id'], limit: 1 }
+    );
+    if (!tags || tags.length === 0) return null;
+    this.tagCache[key] = tags[0].id;
+    return tags[0].id;
   }
 
   /**
@@ -473,7 +492,8 @@ export class OdooSalesService {
     saleOrderId: number,
     lines: SaleOrderLineInput[],
     rawItems: TermopanelItemData[],
-    clientName = ''
+    clientName = '',
+    originName?: string // Número de la venta en Odoo (ej: S00552); por defecto se usa su ID interno
   ): Promise<number[]> {
     const productLines = lines.filter(l => !l.is_note && l.product_id && l.product_uom_qty > 0);
 
@@ -596,7 +616,7 @@ export class OdooSalesService {
       return {
         product_id: line.product_id,
         product_qty: line.product_uom_qty,
-        origin: `S${saleOrderId}`,
+        origin: originName || `S${saleOrderId}`,
         product_description_variants: fullDesc,
         bom_id: false,
       };
@@ -935,7 +955,7 @@ export class OdooSalesService {
    * Obtiene órdenes de venta con filtros y paginación.
    */
   async getOrders(params: OrderSearchParams = {}): Promise<{ orders: SaleOrder[]; total: number }> {
-    const { search = '', state = '', limit = 15, offset = 0, orderBy } = params;
+    const { search = '', state = '', limit = 15, offset = 0, orderBy, tagName } = params;
 
     const domain: any[] = [];
 
@@ -949,10 +969,17 @@ export class OdooSalesService {
       domain.push(['partner_id.name', 'ilike', search.trim()]);
     }
 
-    // Filtrar por la etiqueta de Termopanel
-    const tagId = await this.getOrCreateTermopanelTagId();
-    if (tagId) {
+    if (tagName) {
+      // Filtrar por una etiqueta existente; si no existe no hay nada que listar
+      const tagId = await this.getTagIdByName(tagName);
+      if (!tagId) return { orders: [], total: 0 };
       domain.push(['tag_ids', 'in', [tagId]]);
+    } else {
+      // Filtrar por la etiqueta de Termopanel
+      const tagId = await this.getOrCreateTermopanelTagId();
+      if (tagId) {
+        domain.push(['tag_ids', 'in', [tagId]]);
+      }
     }
 
     const [orders, total] = await Promise.all([

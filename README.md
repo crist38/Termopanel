@@ -13,6 +13,7 @@ Una aplicación web moderna y dinámica diseñada para facilitar el cálculo, co
   3. Fuerza el precio correcto de la app vía `write()` antes de confirmar (evita que la lista de precios de Odoo lo sobreescriba)
   4. Confirma la orden de venta (`action_confirm`)
   5. Crea automáticamente la **orden de fabricación** (`mrp.production`) con las especificaciones del termopanel (cantidad, dimensiones, cristales, separador, extras) visibles en el campo `product_description_variants` y en el chatter
+* **Fabricación de Obras (Taller PVC)**: La página `/fabricacion` lista las ventas de Odoo con la etiqueta **Taller PVC** (obras completas donde el termopanel ya está cobrado) y permite adjuntarles las medidas de los termopaneles, enviarlas a fabricación e imprimir las órdenes de taller, sin crear una venta nueva ni tocar precios.
 * **Base de Datos en Tiempo Real**: Guarda y edita el historial de presupuestos utilizando Firebase Firestore.
 * **Panel de Administración**: Permite actualizar los precios base (cristales, separadores) directamente desde la plataforma.
 
@@ -65,6 +66,10 @@ Una aplicación web moderna y dinámica diseñada para facilitar el cálculo, co
 
     # Nombre de la etiqueta (Tags / Etiquetas) en Odoo para clasificar y diferenciar las cotizaciones del taller
     ODOO_TAG_NAME="Termopanel"
+
+    # Nombre de la etiqueta de Odoo de las ventas de obra completa que se muestran en /fabricacion
+    # (opcional; por defecto "Taller PVC". La etiqueta debe existir en Odoo: la app no la crea)
+    ODOO_PVC_TAG_NAME="Taller PVC"
     ```
 
 4. **Logo de empresa**
@@ -103,7 +108,29 @@ La integración se maneja desde el servidor (Next.js Server Actions), garantizan
    - Referencia a la orden de venta en el campo `origin`
    - Nota detallada en el chatter con las especificaciones del termopanel
 
+## 🔨 Flujo de Fabricación (Taller PVC)
+
+Las obras completas (ventanas de PVC con sus termopaneles incluidos) se cotizan y cobran en Odoo con la etiqueta **Taller PVC**. La página `/fabricacion` trabaja sobre esas ventas ya existentes:
+
+1. **Listado**: muestra solo las ventas con la etiqueta `ODOO_PVC_TAG_NAME`, con buscador por N° de venta o cliente e indicador "Con medidas / Sin medidas".
+2. **Medidas**: al abrir una venta se conserva su número de Odoo (ej. `S00552`) y se cargan sus ventanas (`V1`, `V2`…). Cada ventana agrega filas a una tabla igual a la de Termopaneles (cantidad, ancho, alto, cristales, separador, extras), sin precios. Si una ventana lleva varios paños, las filas se nombran `V1a`, `V1b`, `V1c`…
+3. **Figuras**: cada fila puede abrir el editor de formas (arco, medio arco, círculo y forma libre con puntos arrastrables).
+4. **Adjuntar medidas a la venta**: guarda el archivo `medidas_termopaneles.json` como adjunto de la `sale.order` (permite reabrir y editar) y publica una nota con la tabla de medidas en su historial. No modifica líneas ni precios de la venta.
+5. **Enviar a fabricación**: con la venta confirmada y las medidas adjuntas, crea una `mrp.production` por medida, con sus órdenes de trabajo en Taller Corte Vidrio y Taller Termopaneles y el número de la venta en el campo `origin`. El envío queda registrado; reenviar pide confirmación porque crea órdenes nuevas. Este flujo **no** genera órdenes de compra.
+6. **Taller PDF**: descarga las órdenes de trabajo de ambos talleres con el número de venta, incluyendo el dibujo a escala de las figuras.
+
 ## 📋 Changelog
+
+### v3.0 - Octubre 2026
+- ✅ **Nueva página Fabricación (`/fabricacion`)**: Ubicada después de Formas en el menú. Lista las ventas de Odoo con la etiqueta **Taller PVC**, donde está cobrada la obra completa incluyendo termopaneles, y permite adjuntarles las medidas de fabricación sin crear una venta nueva.
+- ✅ **Editor al estilo Termopaneles**: Tabla editable en línea (Ref, Cant., Ancho, Alto, Cristal 1 y 2, Separador, Pulido / Micropersiana / Palillaje, Observación) sin precios, con pie fijo de metraje total y el **número de venta de Odoo** en el encabezado.
+- ✅ **Ventanas con varios paños**: Cada ventana de la venta puede llevar más de un termopanel; las referencias se asignan solas como `V1a`, `V1b`, `V1c`… y el nuevo paño copia el vidrio del anterior.
+- ✅ **Editor de figuras en Fabricación**: Arco, medio arco, círculo y forma libre con puntos arrastrables, igual al de Formas, disponible por fila (`components/fabricacion/EditorMedida.tsx`).
+- ✅ **Medidas adjuntas en Odoo**: Se guardan como adjunto `medidas_termopaneles.json` de la venta y como nota con tabla en su historial, sin tocar líneas ni precios.
+- ✅ **Enviar a fabricación**: Crea las órdenes de fabricación y de trabajo (Taller Corte Vidrio y Taller Termopaneles) a partir de las medidas adjuntas, usando el número de venta como origen. Registra el envío para evitar duplicados.
+- ✅ **Taller PDF con dibujo de figuras**: Órdenes de trabajo para ambos talleres con el número de venta y el dibujo a escala de cada figura. La rutina de dibujo se movió a `lib/utils/pdf-figuras.ts` y es compartida con Formas.
+- ✅ **Barra de navegación redimensionada**: Más ancha, sin saltos de línea en los enlaces y con el menú de pestañas deslizables por debajo de 1280 px, para dar cabida al nuevo enlace.
+- ✅ **Nueva variable opcional `ODOO_PVC_TAG_NAME`**: Nombre de la etiqueta de las ventas de obra (por defecto `Taller PVC`).
 
 ### v2.7 - Agosto 2026
 - ✅ **Gestión de RUT de Clientes**: Se incorporó el campo de **RUT del Cliente** en todos los cotizadores (Termopaneles `/`, Monolíticos `/monolitico` y Formas CAD `/formas`).
