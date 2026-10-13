@@ -1,29 +1,30 @@
 # Cotizador de Termopaneles 🪟
 
-Una aplicación web moderna y dinámica diseñada para facilitar el cálculo, cotización y gestión de ventas de termopaneles a medida. Permite a los usuarios generar presupuestos rápidos basados en dimensiones y configuraciones de cristales, guardarlos en la nube, exportarlos como PDF y enviarlos automáticamente al ERP Odoo generando órdenes de venta y de fabricación.
+Aplicación web de PRO WINDOWS para cotizar, vender y fabricar termopaneles y cristales a medida. Calcula presupuestos según dimensiones y configuración de cristales, los guarda como ventas en el ERP Odoo, genera los PDF de presupuesto y de taller, y crea las órdenes de fabricación y de trabajo para los talleres.
+
+**Versión actual: 3.0**
 
 ## ✨ Características Principales
 
-* **Autenticación Segura**: Login con correo/contraseña o Google (Firebase Auth). La app inicia en `/login` y redirige automáticamente si no hay sesión activa.
-* **Cálculo Automático de Precios**: Calcula instantáneamente el costo en base al área (m²) y al tipo/espesor del vidrio (Incoloro, Bronce, etc.).
-* **Generación de PDF con Logo**: Exporta presupuestos formales con el logo de la empresa, listos para entregar al cliente.
-* **Integración ERP (Odoo)**: Al presionar "Enviar a Odoo" se ejecuta el flujo completo:
-  1. Crea o localiza al cliente en `res.partner`
-  2. Crea la orden de venta (`sale.order`) con unidad **Units**, precio por pieza y dimensiones en los campos personalizados `x_studio_ancho_m` / `x_studio_alto_m`
-  3. Fuerza el precio correcto de la app vía `write()` antes de confirmar (evita que la lista de precios de Odoo lo sobreescriba)
-  4. Confirma la orden de venta (`action_confirm`)
-  5. Crea automáticamente la **orden de fabricación** (`mrp.production`) con las especificaciones del termopanel (cantidad, dimensiones, cristales, separador, extras) visibles en el campo `product_description_variants` y en el chatter
-* **Fabricación de Obras (Taller PVC)**: La página `/fabricacion` lista las ventas de Odoo con la etiqueta **Taller PVC** (obras completas donde el termopanel ya está cobrado) y permite adjuntarles las medidas de los termopaneles, enviarlas a fabricación e imprimir las órdenes de taller, sin crear una venta nueva ni tocar precios.
-* **Base de Datos en Tiempo Real**: Guarda y edita el historial de presupuestos utilizando Firebase Firestore.
-* **Panel de Administración**: Permite actualizar los precios base (cristales, separadores) directamente desde la plataforma.
+* **Acceso con usuario de Odoo**: Cada vendedor entra con su correo y contraseña de Odoo. La barra superior muestra su nombre y foto, y las ventas que crea quedan asignadas a él.
+* **Cotizador de Termopaneles (`/`)**: Tabla editable con cantidad, medidas, cristales, separador, extras (pulido, micropersiana, palillaje) y descuento. Calcula el precio con la fórmula de costos configurable.
+* **Corte de Vidrio Monolítico (`/monolitico`)**: Cotizador de cristales simples cortados a medida.
+* **Formas (`/formas`)**: Termopaneles con figura: arco, medio arco, círculo y forma libre con puntos arrastrables, con visualizador y cálculo de área y perímetro reales.
+* **Fabricación de Obras (`/fabricacion`)**: Lista las ventas de Odoo con la etiqueta **Taller PVC** (obras completas donde el termopanel ya está cobrado) y permite adjuntarles las medidas de los termopaneles, enviarlas a fabricación e imprimir las órdenes de taller, sin crear una venta nueva ni tocar precios.
+* **Cotizaciones (`/cotizaciones`)**: Listado de las ventas creadas desde la app, con búsqueda, filtro por estado, detalle, edición, cancelación, confirmación con creación de órdenes de taller y reimpresión de PDF.
+* **Reportes (`/reports`)**: Ingresos, volumen de producción por taller, mano de obra, insumos y componentes utilizados, ranking de clientes y detalle de ventas confirmadas.
+* **Planchas a Cortar (`/corte`)**: Optimizador que recibe las medidas del cotizador y distribuye los cristales en planchas.
+* **Configuración (`/admin/config`)**: Precios de cristales, espesores y colores de separador, matriz de precios de separadores y parámetros de costos e insumos.
+* **PDF con logo**: Presupuesto para el cliente y órdenes de trabajo para Taller Corte Vidrio y Taller Termopaneles, con el dibujo de las figuras.
+* **Borrador automático**: Los cotizadores guardan la cotización en curso en el navegador y ofrecen recuperarla.
 
 ## 🛠️ Stack Tecnológico
 
-* **Frontend / Backend**: [Next.js](https://nextjs.org/) (App Router, Server Actions)
+* **Frontend / Backend**: [Next.js](https://nextjs.org/) 16 (App Router, Server Actions) con React 19 y TypeScript
 * **Estilos**: [Tailwind CSS](https://tailwindcss.com/)
-* **Base de Datos & Auth**: [Firebase](https://firebase.google.com/) (Firestore y Authentication)
-* **ERP Backend**: Odoo 19 (vía API nativa JSON-RPC)
-* **Generación PDF**: jsPDF (incluye logo de empresa)
+* **ERP y autenticación**: Odoo 19 (vía API nativa JSON-RPC)
+* **Configuración de precios**: [Firebase](https://firebase.google.com/) Firestore (opcional; sin Firebase se usan los valores por defecto y los guardados en el navegador)
+* **Generación PDF**: jsPDF
 * **Iconos**: Lucide React
 
 ## 🚀 Instalación y Configuración Local
@@ -40,45 +41,51 @@ Una aplicación web moderna y dinámica diseñada para facilitar el cálculo, co
    ```
 
 3. **Configurar Variables de Entorno**
-   Crea un archivo `.env.local` en la raíz del proyecto. **No lo subas a GitHub.**
+   Crea un archivo `.env.local` (o `.env`) en la raíz del proyecto. **No lo subas a GitHub.**
 
    ```env
-   # Firebase Config (Cliente)
+   # Odoo (Servidor - Mantener seguro)
+   ODOO_URL="https://tu-empresa.odoo.com"       # sin slash final
+   ODOO_DB="nombre_base_de_datos"
+   ODOO_USERNAME="usuario_api_odoo"             # usuario de sistema con el que la app opera en Odoo
+   ODOO_API_KEY="clave_api_odoo"                # también se acepta ODOO_PASSWORD
+
+   # ID del producto genérico en Odoo para las líneas de termopaneles (DVH)
+   ODOO_DEFAULT_PRODUCT_ID=12345
+
+   # ID del producto genérico en Odoo para las líneas de cristal monolítico
+   # (si falta, se usa ODOO_DEFAULT_PRODUCT_ID)
+   ODOO_MONOLITIC_PRODUCT_ID=67890
+
+   # Etiqueta de Odoo con la que se marcan las ventas creadas desde la app
+   # (opcional; por defecto "Termopanel". Se crea sola si no existe)
+   ODOO_TAG_NAME="Termopanel"
+
+   # Etiqueta de Odoo de las ventas de obra completa que se muestran en /fabricacion
+   # (opcional; por defecto "Taller PVC". Debe existir en Odoo: la app no la crea)
+   ODOO_PVC_TAG_NAME="Taller PVC"
+
+   # Firebase (opcional): solo para guardar la configuración de precios en la nube
    NEXT_PUBLIC_FIREBASE_API_KEY="tu_api_key"
    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="tu-proyecto.firebaseapp.com"
    NEXT_PUBLIC_FIREBASE_PROJECT_ID="tu-proyecto"
    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="tu-proyecto.firebasestorage.app"
    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="tu_sender_id"
    NEXT_PUBLIC_FIREBASE_APP_ID="tu_app_id"
+   ```
 
-    # Odoo Config (Servidor - Mantener seguro)
-    ODOO_URL="https://tu-empresa.odoo.com"
-    ODOO_DB="nombre_base_de_datos"
-    ODOO_USERNAME="tu_correo_admin_odoo"
-    ODOO_API_KEY="tu_clave_api_odoo"
+4. **Requisitos en Odoo**
+   - Centros de trabajo **Taller Corte Vidrio** y **Taller Termopaneles** (módulo de Fabricación).
+   - Campos personalizados `x_studio_ancho_m` y `x_studio_alto_m` en las líneas de venta.
+   - Etiqueta **Taller PVC** en las ventas de obra que se quieran ver en Fabricación.
 
-    # ID del producto genérico en Odoo para las líneas de cotización de termopaneles (DVH)
-    # Debe ser un producto de tipo "service" que genere órdenes de fabricación
-    ODOO_DEFAULT_PRODUCT_ID=12345
+5. **Logo de empresa**
+   Coloca `logo.png` y `logo-texto.png` dentro de la carpeta `/public` del proyecto.
 
-    # ID del producto genérico en Odoo para las líneas de cotización monolíticas
-    ODOO_MONOLITIC_PRODUCT_ID=67890
+6. **Firebase (opcional)**
+   Si se usa, configura en la consola de Firebase (`Firestore > Reglas`) los permisos del documento `configuracion/termopaneles`.
 
-    # Nombre de la etiqueta (Tags / Etiquetas) en Odoo para clasificar y diferenciar las cotizaciones del taller
-    ODOO_TAG_NAME="Termopanel"
-
-    # Nombre de la etiqueta de Odoo de las ventas de obra completa que se muestran en /fabricacion
-    # (opcional; por defecto "Taller PVC". La etiqueta debe existir en Odoo: la app no la crea)
-    ODOO_PVC_TAG_NAME="Taller PVC"
-    ```
-
-4. **Logo de empresa**
-   Coloca el archivo `logo.png` dentro de la carpeta `/public` del proyecto.
-
-5. **Reglas de Seguridad en Firebase**
-   Configura en la consola de Firebase (`Firestore > Reglas`) los permisos para las colecciones `/configuracion` y `/presupuestos_termopaneles`.
-
-6. **Levantar el servidor de desarrollo**
+7. **Levantar el servidor de desarrollo**
    ```bash
    npm run dev
    ```
@@ -86,27 +93,37 @@ Una aplicación web moderna y dinámica diseñada para facilitar el cálculo, co
 
 ## 🔐 Flujo de Autenticación
 
-- La app arranca en `/login` mostrando el logo de la empresa.
-- Soporta login con **correo + contraseña** y con **Google**.
-- Si el usuario ya tiene sesión activa, es redirigido automáticamente al cotizador (`/`).
-- Si accede a `/` sin sesión, es redirigido automáticamente a `/login`.
+- La app arranca en `/login`. El vendedor ingresa su **correo y contraseña de Odoo**, que se validan directamente contra Odoo.
+- Si son correctos, la sesión se guarda en una cookie segura (HTTP-only) que dura **8 horas**. La contraseña no se almacena.
+- Todas las páginas exigen sesión: sin ella se redirige a `/login`.
+- El menú del avatar en la barra superior muestra los datos del vendedor y la opción **Cerrar sesión**.
+- Las operaciones en Odoo se ejecutan con el usuario de sistema (`ODOO_USERNAME`); las ventas se asignan al vendedor que inició sesión.
 
 ## 🏭 Flujo de Odoo (Integración ERP)
 
-La integración se maneja desde el servidor (Next.js Server Actions), garantizando que las credenciales ERP nunca viajen al navegador:
+La integración se maneja desde el servidor (Next.js Server Actions), por lo que las credenciales del ERP nunca viajan al navegador.
 
-1. **Cliente**: Busca por nombre. Si no existe, lo crea en `res.partner`.
-2. **Orden de Venta**: Crea en `sale.order` con:
-   - Unidad de medida: **Units** (evita conflictos con campos m² de Odoo Studio)
-   - Precio por pieza exacto de la app (forzado vía `write()` antes de confirmar)
-   - Campos personalizados `x_studio_ancho_m` y `x_studio_alto_m` para visualización
-   - Línea de nota con dirección y observaciones
-   - Etiquetas de clasificación/taller (`tag_ids`) configuradas vía la variable `ODOO_TAG_NAME` (crea la etiqueta automáticamente si no existe)
-3. **Confirmación**: Llama a `action_confirm` para pasar la orden a estado "Orden de Venta".
-4. **Orden de Fabricación**: Crea `mrp.production` por cada línea con:
-   - Descripción completa: cantidad, dimensiones, cristales, separador y extras
-   - Referencia a la orden de venta en el campo `origin`
-   - Nota detallada en el chatter con las especificaciones del termopanel
+**Al guardar una cotización** (botón "Guardar Cotización / Presupuesto PDF" de los cotizadores):
+
+1. **Cliente**: Se elige con el buscador por nombre o RUT. Si no existe, se crea en `res.partner`.
+2. **Venta en borrador**: Se crea una `sale.order` con:
+   - Una línea por ítem, con la cantidad en **m² totales** y el precio por m², de modo que el subtotal coincide con el de la app
+   - Lista de precios desactivada y precio forzado vía `write()`, para que Odoo no lo sobreescriba
+   - Campos `x_studio_ancho_m` y `x_studio_alto_m` con las dimensiones
+   - Descripción con referencia, cantidad, medidas, cristales, separador, extras y figura
+   - Obra y fecha de entrega en la nota de la venta
+   - Etiqueta `ODOO_TAG_NAME` y el vendedor que inició sesión
+3. **PDF**: Se descarga el presupuesto con el número de venta asignado por Odoo.
+
+Una cotización en borrador se puede reabrir y editar desde `/cotizaciones`; al guardar se actualiza la misma venta.
+
+**Al confirmar** (botón "Confirmar y Crear Órdenes de Taller" en `/cotizaciones`):
+
+1. **Confirmación**: `action_confirm` pasa la venta a "Orden de Venta".
+2. **Órdenes de fabricación**: Una `mrp.production` por línea, con la descripción del ítem. En termopaneles incluye además sus componentes (cristales, separador, hotmelt, butilo, sal, escuadras y pulido) y una nota con especificaciones e insumos.
+3. **Órdenes de trabajo**: Una `mrp.workorder` en **Taller Corte Vidrio** y otra en **Taller Termopaneles** por cada termopanel (solo corte para los monolíticos).
+4. **Resumen de insumos**: Se publica en el historial de la venta.
+5. **Órdenes de compra** (solo termopaneles): Se generan pedidos a **Alar** (planchas de cristal) y **Soluex** (insumos).
 
 ## 🔨 Flujo de Fabricación (Taller PVC)
 
