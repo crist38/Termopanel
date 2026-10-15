@@ -2,7 +2,7 @@
 
 Aplicación web de PRO WINDOWS para cotizar, vender y fabricar termopaneles y cristales a medida. Calcula presupuestos según dimensiones y configuración de cristales, los guarda como ventas en el ERP Odoo, genera los PDF de presupuesto y de taller, y crea las órdenes de fabricación y de trabajo para los talleres.
 
-**Versión actual: 3.0**
+**Versión actual: 3.1**
 
 ## ✨ Características Principales
 
@@ -137,6 +137,9 @@ Las obras completas (ventanas de PVC con sus termopaneles incluidos) se cotizan 
 6. **Taller PDF**: descarga las órdenes de trabajo de ambos talleres con el número de venta, incluyendo el dibujo a escala de las figuras.
 
 ## 📋 Changelog
+
+### v3.1 - Octubre 2026
+- ✅ **Botón Eliminar fila más visible**: El basurero de cada fila ahora se muestra en rojo sobre fondo rojo claro y pasa a rojo intenso con ícono blanco al pasar el mouse, en todas las tablas (Termopaneles, Monolíticos, Formas y Fabricación).
 
 ### v3.0 - Octubre 2026
 - ✅ **Nueva página Fabricación (`/fabricacion`)**: Ubicada después de Formas en el menú. Lista las ventas de Odoo con la etiqueta **Taller PVC**, donde está cobrada la obra completa incluyendo termopaneles, y permite adjuntarles las medidas de fabricación sin crear una venta nueva.
