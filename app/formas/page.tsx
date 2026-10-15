@@ -1922,7 +1922,7 @@ function ShapesCADCotizadorContent() {
                       <td className="p-3 text-center">
                         <button
                           onClick={() => handleRemoveItem(item.id)}
-                          className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                          className="text-red-500 bg-red-50 hover:bg-red-500 hover:text-white rounded transition-colors p-1"
                         >
                           <Trash2 size={14} />
                         </button>

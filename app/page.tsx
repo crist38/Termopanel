@@ -1361,7 +1361,7 @@ function CotizadorTermopanelContent() {
                   <td className="p-1 text-center">
                     <button
                       onClick={() => removeItem(item.id)}
-                      className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                      className="text-red-500 bg-red-50 hover:bg-red-500 hover:text-white rounded transition-colors p-1"
                       title="Eliminar fila"
                     >
                       <Trash2 size={14} />
