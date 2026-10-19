@@ -336,7 +336,7 @@ export class OdooSalesService {
       if (order.opportunity_id) {
         await odoo.executeKw('crm.lead', 'write', [
           [order.opportunity_id[0]],
-          { expected_revenue: order.amount_untaxed },
+          { expected_revenue: order.amount_untaxed, color: 10 },
         ]);
         return;
       }
@@ -346,6 +346,7 @@ export class OdooSalesService {
         name: partnerName ? `${order.name} - ${partnerName}` : order.name,
         type: 'opportunity',
         expected_revenue: order.amount_untaxed,
+        color: 10, // Verde en la paleta de colores del kanban de Odoo
       };
       if (order.partner_id) leadData.partner_id = order.partner_id[0];
       if (order.user_id) leadData.user_id = order.user_id[0];
