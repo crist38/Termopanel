@@ -274,6 +274,7 @@ export class OdooSalesService {
     // Forzar precio correcto ANTES de confirmar
     // (Odoo puede reemplazar price_unit con su lista de precios al crear)
     await this.forceLinePrices(orderId, lines);
+    await this.syncOpportunity(orderId);
 
     if (autoConfirm) {
       await this.confirmOrder(orderId);
@@ -315,6 +316,46 @@ export class OdooSalesService {
         [lineId],
         { price_unit: appLine.price_unit }
       ]);
+    }
+  }
+
+  /**
+   * Vincula la cotización a una oportunidad del CRM (crm.lead), para que aparezca
+   * en el botón "Cotizaciones" de la oportunidad. Si ya tiene una, actualiza el
+   * ingreso esperado; si no, crea la oportunidad y la asigna a la venta.
+   * No lanza errores: si falla, la cotización queda guardada igual.
+   */
+  async syncOpportunity(orderId: number): Promise<void> {
+    try {
+      const orders = await odoo.executeKw('sale.order', 'read', [[orderId]], {
+        fields: ['name', 'partner_id', 'user_id', 'amount_untaxed', 'tag_ids', 'opportunity_id'],
+      });
+      if (!orders || orders.length === 0) return;
+      const order = orders[0];
+
+      if (order.opportunity_id) {
+        await odoo.executeKw('crm.lead', 'write', [
+          [order.opportunity_id[0]],
+          { expected_revenue: order.amount_untaxed },
+        ]);
+        return;
+      }
+
+      const partnerName = order.partner_id ? order.partner_id[1] : '';
+      const leadData: any = {
+        name: partnerName ? `${order.name} - ${partnerName}` : order.name,
+        type: 'opportunity',
+        expected_revenue: order.amount_untaxed,
+      };
+      if (order.partner_id) leadData.partner_id = order.partner_id[0];
+      if (order.user_id) leadData.user_id = order.user_id[0];
+      if (order.tag_ids && order.tag_ids.length > 0) leadData.tag_ids = [[6, 0, order.tag_ids]];
+
+      const newLeadId = await odoo.executeKw('crm.lead', 'create', [[leadData]]);
+      const leadId = Array.isArray(newLeadId) ? newLeadId[0] : newLeadId;
+      await odoo.executeKw('sale.order', 'write', [[orderId], { opportunity_id: leadId }]);
+    } catch (error) {
+      console.error(`Error al vincular la cotización ${orderId} con el CRM:`, error);
     }
   }
 
@@ -1110,6 +1151,7 @@ export class OdooSalesService {
     const orderId = Array.isArray(newOrderId) ? newOrderId[0] : newOrderId;
 
     await this.forceLinePrices(orderId, lines);
+    await this.syncOpportunity(orderId);
 
     if (autoConfirm) {
       await this.confirmOrder(orderId);

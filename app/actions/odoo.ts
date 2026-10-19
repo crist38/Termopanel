@@ -981,6 +981,7 @@ export async function actualizarCotizacionEnOdoo(data: {
     
     // Forzar precio unitario correcto (Odoo puede sobreescribirlo)
     await odooSales.forceLinePrices(data.orderId, lineas);
+    await odooSales.syncOpportunity(data.orderId);
 
     // Obtener el nombre de la cotización para retornarlo
     const orderDataResp = await odoo.executeKw('sale.order', 'search_read', [[['id', '=', data.orderId]]], { fields: ['name'], limit: 1 });
