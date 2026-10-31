@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { verifySessionToken } from '@/lib/session'
 
 const PUBLIC_PATHS = ['/login']
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Rutas públicas siempre accesibles
@@ -18,11 +19,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // Validar que el JSON es parseable
-  try {
-    const parsed = JSON.parse(session)
-    if (!parsed?.uid) throw new Error('invalid')
-  } catch {
+  // Validar la firma y la expiración de la sesión
+  if (!(await verifySessionToken(session))) {
     const loginUrl = request.nextUrl.clone()
     loginUrl.pathname = '/login'
     const res = NextResponse.redirect(loginUrl)

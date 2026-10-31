@@ -44,6 +44,9 @@ Aplicación web de PRO WINDOWS para cotizar, vender y fabricar termopaneles y cr
    Crea un archivo `.env.local` (o `.env`) en la raíz del proyecto. **No lo subas a GitHub.**
 
    ```env
+   # Firma de la cookie de sesión (obligatorio, mínimo 32 caracteres aleatorios)
+   SESSION_SECRET="genera_una_cadena_aleatoria_larga"
+
    # Odoo (Servidor - Mantener seguro)
    ODOO_URL="https://tu-empresa.odoo.com"       # sin slash final
    ODOO_DB="nombre_base_de_datos"

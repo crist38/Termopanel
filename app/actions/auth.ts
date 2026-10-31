@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { createSessionToken, SESSION_MAX_AGE, verifySessionToken } from '@/lib/session'
 
 const ODOO_URL = process.env.ODOO_URL || ''
 const ODOO_DB  = process.env.ODOO_DB  || ''
@@ -107,14 +108,18 @@ export async function loginWithOdoo(
       // Si falla la consulta, usamos el email y no mostramos foto
     }
 
-    // Guardar sesión en cookie HTTP-only (segura)
-    const session = JSON.stringify({ uid, email })
+    // Guardar sesión firmada en cookie HTTP-only (segura)
+    const session = await createSessionToken({ uid, email })
+    if (!session) {
+      console.error('Falta SESSION_SECRET o tiene menos de 32 caracteres')
+      return { success: false, error: 'El servidor no está configurado correctamente.' }
+    }
     const cookieStore = await cookies()
     cookieStore.set('odoo_session', session, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 8, // 8 horas
+      maxAge: SESSION_MAX_AGE,
       path: '/',
     })
 
@@ -123,7 +128,7 @@ export async function loginWithOdoo(
       httpOnly: false,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 8,
+      maxAge: SESSION_MAX_AGE,
       path: '/',
     })
 
@@ -147,13 +152,7 @@ export async function logoutFromOdoo(): Promise<void> {
 /**
  * Retorna los datos de la sesión actual, o null si no hay sesión.
  */
-export async function getSession(): Promise<{ uid: number; email: string; name: string } | null> {
+export async function getSession(): Promise<{ uid: number; email: string } | null> {
   const cookieStore = await cookies()
-  const raw = cookieStore.get('odoo_session')?.value
-  if (!raw) return null
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
+  return verifySessionToken(cookieStore.get('odoo_session')?.value)
 }

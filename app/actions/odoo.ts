@@ -120,6 +120,9 @@ export async function guardarCotizacionEnOdoo(data: {
   autoConfirm?: boolean;
 }) {
   try {
+    const session = await getSession();
+    if (!session) return { exito: false, error: 'No autorizado' };
+
     if (!data.clientName && !data.clientId) {
       return { exito: false, error: 'El nombre del cliente es obligatorio' };
     }
@@ -232,8 +235,7 @@ export async function guardarCotizacionEnOdoo(data: {
       finalNote = `${finalNote}\nFecha de Entrega: ${data.fechaEntrega}`.trim();
     }
 
-    const session = await getSession();
-    const userId = session?.uid;
+    const userId = session.uid;
     const autoConfirm = data.autoConfirm !== undefined ? data.autoConfirm : false;
     const odooQuote = await odooSales.createQuote(clienteId, lineas, rawItems, autoConfirm, data.clientName, userId, finalNote);
 
@@ -259,6 +261,9 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
   totalNeto: number;
 }) {
   try {
+    const session = await getSession();
+    if (!session) return { exito: false, error: 'No autorizado' };
+
     if (!data.clientName && !data.clientId) {
       return { exito: false, error: 'El nombre del cliente es obligatorio' };
     }
@@ -315,8 +320,7 @@ export async function guardarCotizacionMonoliticoEnOdoo(data: {
       finalNote = `${finalNote}\nFecha de Entrega: ${data.fechaEntrega}`.trim();
     }
 
-    const session = await getSession();
-    const userId = session?.uid;
+    const userId = session.uid;
     const odooQuote = await odooSales.createMonoliticQuote(clienteId, lineas, rawItems, false, data.clientName, userId, finalNote);
     return { exito: true, cotizacionId: odooQuote.id, cotizacionName: odooQuote.name };
   } catch (error: any) {
