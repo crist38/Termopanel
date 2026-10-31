@@ -62,9 +62,12 @@ export async function loginWithOdoo(
       return { success: false, error: 'Credenciales incorrectas. Verifique su usuario y contraseña de Odoo.' }
     }
 
-    // Obtener nombre y foto del usuario desde Odoo
+    // Obtener nombre y foto del usuario desde Odoo, y confirmar que es un usuario interno.
+    // Odoo también autentica cuentas de portal (clientes), y después de entrar la app
+    // opera con el usuario técnico, así que esas cuentas no deben pasar.
     let userName = email
     let avatar: string | undefined
+    let isInternalUser = false
     try {
       const namePayload = {
         jsonrpc: '2.0',
@@ -80,7 +83,7 @@ export async function loginWithOdoo(
             'res.users',
             'read',
             [[uid]],
-            { fields: ['name', 'image_128'] },
+            { fields: ['name', 'image_128', 'share'] },
           ],
         },
       }
@@ -91,6 +94,7 @@ export async function loginWithOdoo(
         cache: 'no-store',
       })
       const nameData = await nameRes.json()
+      isInternalUser = nameData.result?.[0]?.share === false
       if (nameData.result?.[0]?.name) {
         userName = nameData.result[0].name
       }
@@ -104,8 +108,13 @@ export async function loginWithOdoo(
           : 'image/png'
         avatar = `data:${mime};base64,${image}`
       }
-    } catch {
-      // Si falla la consulta, usamos el email y no mostramos foto
+    } catch (err) {
+      console.error('Error al leer el usuario en Odoo:', err)
+    }
+
+    // Si no se pudo confirmar que es interno, no entra
+    if (!isInternalUser) {
+      return { success: false, error: 'No se pudo confirmar que este usuario tenga acceso a la aplicación.' }
     }
 
     // Guardar sesión firmada en cookie HTTP-only (segura)
