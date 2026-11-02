@@ -59,7 +59,7 @@ function parseOdooLinePdf(line: any, index: number) {
 }
 
 function ReportsDashboardContent() {
-  const [filtro, setFiltro] = useState<'diario' | 'mes' | 'historico' | 'fecha_especifica'>('mes');
+  const [filtro, setFiltro] = useState<'diario' | 'mes' | 'mes_anterior' | 'historico' | 'fecha_especifica'>('mes');
   const [fechaSeleccionada, setFechaSeleccionada] = useState<string>('');
   const [clienteSeleccionado, setClienteSeleccionado] = useState<number | null>(null);
   const [clientes, setClientes] = useState<Array<{ id: number; name: string }>>([]);
@@ -89,7 +89,7 @@ function ReportsDashboardContent() {
   }, []);
 
   // Cargar datos de Odoo
-  const fetchReportData = async (filterVal: 'diario' | 'mes' | 'historico' | 'fecha_especifica', clientVal: number | null, fecha?: string) => {
+  const fetchReportData = async (filterVal: 'diario' | 'mes' | 'mes_anterior' | 'historico' | 'fecha_especifica', clientVal: number | null, fecha?: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -445,11 +445,12 @@ function ReportsDashboardContent() {
           <div className="relative w-full sm:w-44">
             <select
               value={filtro}
-              onChange={(e) => setFiltro(e.target.value as 'diario' | 'mes' | 'historico' | 'fecha_especifica')}
+              onChange={(e) => setFiltro(e.target.value as 'diario' | 'mes' | 'mes_anterior' | 'historico' | 'fecha_especifica')}
               className="w-full appearance-none bg-white border border-slate-200 px-4 py-2.5 pr-10 rounded-xl text-slate-700 font-semibold shadow-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all cursor-pointer text-sm"
             >
               <option value="diario">Diario (Hoy)</option>
               <option value="mes">Este Mes</option>
+              <option value="mes_anterior">Mes Anterior</option>
               <option value="historico">Histórico</option>
               <option value="fecha_especifica">Fecha Específica</option>
             </select>

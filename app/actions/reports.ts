@@ -203,7 +203,7 @@ function calcularConsumoVidrioReal(
 }
 
 export async function obtenerDatosReportes(
-  filtro: 'diario' | 'mes' | 'historico' | 'fecha_especifica' = 'mes',
+  filtro: 'diario' | 'mes' | 'mes_anterior' | 'historico' | 'fecha_especifica' = 'mes',
   clienteId?: number,
   fechaEspecifica?: string
 ): Promise<{
@@ -280,6 +280,14 @@ export async function obtenerDatosReportes(
         // date_order está en formato "YYYY-MM-DD HH:MM:SS"
         const orderDate = new Date(o.date_order.replace(' ', 'T'));
         return orderDate.getFullYear() === currentYear && orderDate.getMonth() === currentMonth;
+      });
+    } else if (filtro === 'mes_anterior') {
+      // new Date con mes -1 resuelve el cambio de año (enero → diciembre del año anterior)
+      const mesAnterior = new Date(currentYear, currentMonth - 1, 1);
+      ordersFiltrados = orders.filter(o => {
+        if (!o.date_order) return false;
+        const orderDate = new Date(o.date_order.replace(' ', 'T'));
+        return orderDate.getFullYear() === mesAnterior.getFullYear() && orderDate.getMonth() === mesAnterior.getMonth();
       });
     } else if (filtro === 'fecha_especifica' && fechaEspecifica) {
       ordersFiltrados = orders.filter(o => {
