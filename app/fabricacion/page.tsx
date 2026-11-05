@@ -9,6 +9,8 @@ import {
 } from "@/app/actions/fabricacion";
 import { EnvioFabricacion, MedidaFabricacion, NOMBRES_FIGURA, describirFigura } from "@/lib/types/fabricacion";
 import { PRECIOS_VIDRIOS } from "@/lib/data/vidrios";
+import { estaFueraDeNorma, espesorMinimoNorma } from "@/lib/calculos/termopanel";
+import { refsFueraDeNorma, avisoFueraDeNorma, confirmarFueraDeNorma } from "@/lib/utils/norma";
 import { getTermopanelConfig } from "@/lib/configService";
 import { imprimirOrdenesTaller } from "@/lib/utils/pdf-fabricacion";
 import { EditorMedida, OpcionesVidrio } from "@/components/fabricacion/EditorMedida";
@@ -39,6 +41,7 @@ interface SaleOrder {
   partner_id: [number, string];
   state: string;
   date_order: string;
+  taller?: string | null;
   tieneMedidas?: boolean;
 }
 
@@ -79,6 +82,18 @@ function StateBadge({ state }: { state: string }) {
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${cfg.bg} ${cfg.color}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
       {cfg.label}
+    </span>
+  );
+}
+
+function TallerBadge({ taller }: { taller?: string | null }) {
+  if (!taller) return <span className="text-slate-400">—</span>;
+  const aluminio = /aluminio/i.test(taller);
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+      aluminio ? "text-sky-700 bg-sky-50 border-sky-200" : "text-violet-700 bg-violet-50 border-violet-200"
+    }`}>
+      {taller}
     </span>
   );
 }
@@ -360,6 +375,8 @@ export default function FabricacionPage() {
     return null;
   };
 
+  const refsFN = () => refsFueraDeNorma(filas, (fila, i) => fila.ref || `Fila ${i + 1}`);
+
   const handleGuardar = async () => {
     if (!detail) return;
     const problema = validarFilas();
@@ -367,6 +384,7 @@ export default function FabricacionPage() {
       setMensaje({ tipo: "error", texto: problema });
       return;
     }
+    if (!confirmarFueraDeNorma(refsFN())) return;
     setSaving(true);
     setMensaje(null);
     try {
@@ -399,7 +417,8 @@ export default function FabricacionPage() {
       : `¿Enviar la venta ${detail.name} a fabricación?\n\n` +
         `Se crearán ${filas.length} orden${filas.length !== 1 ? "es" : ""} de fabricación en Odoo ` +
         `(Taller Corte Vidrio y Taller Termopaneles). Puede tardar un momento.`;
-    if (!confirm(pregunta)) return;
+    const avisoFN = avisoFueraDeNorma(refsFN());
+    if (!confirm(avisoFN ? `⚠ ${avisoFN}\n\n${pregunta}` : pregunta)) return;
     setEnviando(true);
     setMensaje(null);
     try {
@@ -428,6 +447,7 @@ export default function FabricacionPage() {
       setMensaje({ tipo: "error", texto: problema });
       return;
     }
+    if (!confirmarFueraDeNorma(refsFN())) return;
     await imprimirOrdenesTaller({
       ventaName: detail.name,
       clientName: detail.partner_id?.[1] ?? "",
@@ -452,7 +472,7 @@ export default function FabricacionPage() {
             <img src="/logo.png" alt="ProWindows Logo" className="h-10 sm:h-12 object-contain" />
             <div className="hidden sm:block border-l-2 border-slate-200 pl-4">
               <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Fabricación</h2>
-              <p className="text-xs text-slate-500 mt-1">Ventas de obra con la etiqueta Taller PVC en Odoo</p>
+              <p className="text-xs text-slate-500 mt-1">Ventas de obra con la etiqueta Taller PVC o Taller de Aluminio en Odoo</p>
             </div>
           </div>
           <button
@@ -478,7 +498,7 @@ export default function FabricacionPage() {
               />
             </div>
             <span className="text-xs text-slate-500">
-              {loading ? "Cargando..." : `${total} venta${total !== 1 ? "s" : ""} de Taller PVC`}
+              {loading ? "Cargando..." : `${total} venta${total !== 1 ? "s" : ""} de taller`}
               {totalPages > 1 && ` · Página ${page + 1} de ${totalPages}`}
             </span>
           </div>
@@ -510,7 +530,7 @@ export default function FabricacionPage() {
             <div className="flex flex-col items-center justify-center py-20 gap-2 text-slate-400">
               <Hammer size={40} strokeWidth={1.2} />
               <p className="text-sm font-medium">No se encontraron ventas</p>
-              <p className="text-xs">Solo se muestran las que tienen la etiqueta Taller PVC en Odoo</p>
+              <p className="text-xs">Solo se muestran las que tienen la etiqueta Taller PVC o Taller de Aluminio en Odoo</p>
             </div>
           )}
 
@@ -521,6 +541,7 @@ export default function FabricacionPage() {
                   <tr>
                     <th className="p-3 text-left">N° Venta</th>
                     <th className="p-3 text-left">Cliente</th>
+                    <th className="p-3 text-center">Taller</th>
                     <th className="p-3 text-center">Fecha</th>
                     <th className="p-3 text-center">Estado</th>
                     <th className="p-3 text-center">Medidas</th>
@@ -535,6 +556,7 @@ export default function FabricacionPage() {
                     >
                       <td className="p-3 font-bold text-slate-800">{order.name}</td>
                       <td className="p-3 text-slate-600">{order.partner_id?.[1] ?? "—"}</td>
+                      <td className="p-3 text-center"><TallerBadge taller={order.taller} /></td>
                       <td className="p-3 text-center text-slate-500 text-xs">{formatDate(order.date_order)}</td>
                       <td className="p-3 text-center"><StateBadge state={order.state} /></td>
                       <td className="p-3 text-center">
@@ -593,7 +615,7 @@ export default function FabricacionPage() {
           </button>
           <img src="/logo.png" alt="ProWindows Logo" className="h-10 sm:h-12 object-contain" />
           <div className="border-l-2 border-slate-200 pl-4">
-            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Fabricación · Taller PVC</h2>
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Fabricación{detail?.taller ? ` · ${detail.taller}` : ""}</h2>
             <div className="flex items-center gap-1.5 text-slate-500 text-xs mt-1">
               <span>Venta N°</span>
               <div className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-slate-700 font-bold min-w-[4rem] text-center">
@@ -747,6 +769,7 @@ export default function FabricacionPage() {
                   <th className="p-3 text-center border-r border-slate-200 w-24">Extras</th>
                   <th className="p-3 text-center border-r border-slate-200 w-28">Figura</th>
                   <th className="p-3 text-center border-r border-slate-200">Observación</th>
+                  <th className="p-3 text-center border-r border-slate-200 w-14" title="Espesor mínimo: (m² × 0,65) + 2,5 mm">Norma</th>
                   <th className="p-3 text-center w-16"></th>
                 </tr>
                 <tr className="text-[10px] text-slate-500 bg-slate-50">
@@ -763,13 +786,14 @@ export default function FabricacionPage() {
                   <th className="p-1 border-r border-t border-slate-200 text-center font-semibold">Pu/M/P</th>
                   <th className="p-1 border-r border-t border-slate-200 text-center font-semibold">Forma</th>
                   <th className="border-r border-slate-200"></th>
+                  <th className="border-r border-slate-200"></th>
                   <th></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filas.length === 0 && (
                   <tr>
-                    <td colSpan={14} className="p-8 text-center text-slate-400 text-sm">
+                    <td colSpan={15} className="p-8 text-center text-slate-400 text-sm">
                       Esta venta aún no tiene medidas. Toca «+» en una ventana o usa «Agregar Fila».
                     </td>
                   </tr>
@@ -777,8 +801,9 @@ export default function FabricacionPage() {
                 {filas.map((fila) => {
                   const figura = fila.tipoFigura || "rectangulo";
                   const conFigura = figura !== "rectangulo";
+                  const fueraDeNorma = estaFueraDeNorma(fila);
                   return (
-                    <tr key={fila.id} className="hover:bg-slate-50 transition-colors group">
+                    <tr key={fila.id} className={`transition-colors group ${fueraDeNorma ? "bg-red-50 hover:bg-red-100/70" : "hover:bg-slate-50"}`}>
                       <td className="p-1 border-r border-slate-100">
                         <input
                           type="text"
@@ -923,6 +948,18 @@ export default function FabricacionPage() {
                           onChange={(e) => actualizarFila(fila.id, { observacion: e.target.value })}
                           className="w-full min-w-[110px] bg-transparent focus:bg-white focus:ring-1 focus:ring-blue-500 rounded px-1 outline-none text-xs text-slate-700"
                         />
+                      </td>
+
+                      {/* Norma */}
+                      <td className="p-1 border-r border-slate-100 text-center">
+                        {fueraDeNorma && (
+                          <span
+                            className="inline-block bg-red-600 text-white text-[10px] font-bold rounded px-1.5 py-0.5"
+                            title={`Fuera de norma: el cristal más grueso debe ser de al menos ${espesorMinimoNorma(fila.ancho, fila.alto).toFixed(2)} mm`}
+                          >
+                            FN
+                          </span>
+                        )}
                       </td>
 
                       {/* Duplicar / Eliminar */}

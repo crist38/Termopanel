@@ -5,8 +5,11 @@ import { odooSales, OrderSearchParams, SaleOrderLineInput, TermopanelItemData } 
 import { getSession } from '@/app/actions/auth';
 import { EnvioFabricacion, FiguraFabricacion, MedidaFabricacion, MedidasGuardadas, describirFigura, describirExtras } from '@/lib/types/fabricacion';
 
-// Etiqueta de Odoo de las cotizaciones de obra completa (ventanas + termopaneles)
+// Etiquetas de Odoo de las cotizaciones de obra completa (ventanas + termopaneles)
 const PVC_TAG_NAME = process.env.ODOO_PVC_TAG_NAME || 'Taller PVC';
+const ALUMINIO_TAG_NAME = process.env.ODOO_ALUMINIO_TAG_NAME || 'Taller de Aluminio';
+const TALLER_TAGS = [PVC_TAG_NAME, ALUMINIO_TAG_NAME];
+const TALLER_TAGS_TEXTO = TALLER_TAGS.map(n => `"${n}"`).join(' o ');
 // Adjunto de la orden de venta donde se guardan las medidas para poder volver a editarlas
 const MEDIDAS_FILE = 'medidas_termopaneles.json';
 
@@ -18,13 +21,22 @@ function escapeHtml(text: string) {
     .replace(/"/g, '&quot;');
 }
 
-async function esCotizacionPvc(orderId: number): Promise<boolean> {
-  const tagId = await odooSales.getTagIdByName(PVC_TAG_NAME);
-  if (!tagId) return false;
-  const count = await odoo.executeKw('sale.order', 'search_count', [
-    [['id', '=', orderId], ['tag_ids', 'in', [tagId]]],
-  ]);
-  return count > 0;
+// Etiquetas de taller que existen en Odoo, con su ID
+async function etiquetasTaller(): Promise<{ id: number; nombre: string }[]> {
+  const ids = await Promise.all(TALLER_TAGS.map(n => odooSales.getTagIdByName(n)));
+  return TALLER_TAGS.flatMap((nombre, i) => (ids[i] ? [{ id: ids[i]!, nombre }] : []));
+}
+
+function tallerDeEtiquetas(etiquetas: { id: number; nombre: string }[], tagIds: number[] = []): string | null {
+  return etiquetas.find(t => tagIds.includes(t.id))?.nombre ?? null;
+}
+
+// Nombre de la etiqueta de taller de la cotización, o null si no tiene ninguna
+async function tallerDeCotizacion(orderId: number): Promise<string | null> {
+  const etiquetas = await etiquetasTaller();
+  if (etiquetas.length === 0) return null;
+  const orders = await odoo.executeKw('sale.order', 'read', [[orderId]], { fields: ['tag_ids'] });
+  return tallerDeEtiquetas(etiquetas, orders?.[0]?.tag_ids);
 }
 
 // Lee el adjunto de medidas de la orden. `medidas` es null si no existe o no se puede leer.
@@ -139,7 +151,8 @@ function notaMedidasHtml(items: MedidaFabricacion[], autor: string) {
 }
 
 /**
- * Lista las cotizaciones con la etiqueta de Taller PVC, indicando cuáles ya tienen medidas adjuntas.
+ * Lista las cotizaciones con la etiqueta de Taller PVC o Taller de Aluminio,
+ * indicando de qué taller es cada una y cuáles ya tienen medidas adjuntas.
  */
 export async function listarCotizacionesFabricacion(params: OrderSearchParams = {}): Promise<{
   exito: boolean;
@@ -151,10 +164,10 @@ export async function listarCotizacionesFabricacion(params: OrderSearchParams = 
     const session = await getSession();
     if (!session) return { exito: false, error: 'No autorizado' };
 
-    const tagId = await odooSales.getTagIdByName(PVC_TAG_NAME);
-    if (!tagId) return { exito: false, error: `No existe la etiqueta "${PVC_TAG_NAME}" en Odoo.` };
+    const etiquetas = await etiquetasTaller();
+    if (etiquetas.length === 0) return { exito: false, error: `No existe la etiqueta ${TALLER_TAGS_TEXTO} en Odoo.` };
 
-    const result = await odooSales.getOrders({ ...params, tagName: PVC_TAG_NAME });
+    const result = await odooSales.getOrders({ ...params, tagNames: etiquetas.map(t => t.nombre) });
 
     const ids = result.orders.map(o => o.id);
     let conMedidas = new Set<number>();
@@ -168,7 +181,11 @@ export async function listarCotizacionesFabricacion(params: OrderSearchParams = 
       conMedidas = new Set(adjuntos.map((a: any) => a.res_id));
     }
 
-    const orders = result.orders.map(o => ({ ...o, tieneMedidas: conMedidas.has(o.id) }));
+    const orders = result.orders.map(o => ({
+      ...o,
+      taller: tallerDeEtiquetas(etiquetas, o.tag_ids),
+      tieneMedidas: conMedidas.has(o.id),
+    }));
     return { exito: true, orders, total: result.total };
   } catch (error: any) {
     console.error('Error al listar cotizaciones de fabricación:', error);
@@ -177,7 +194,7 @@ export async function listarCotizacionesFabricacion(params: OrderSearchParams = 
 }
 
 /**
- * Obtiene el detalle de una cotización de Taller PVC junto con las medidas ya adjuntas (si las hay).
+ * Obtiene el detalle de una cotización de taller junto con las medidas ya adjuntas (si las hay).
  */
 export async function obtenerMedidasFabricacion(orderId: number): Promise<{
   exito: boolean;
@@ -188,15 +205,16 @@ export async function obtenerMedidasFabricacion(orderId: number): Promise<{
   try {
     const session = await getSession();
     if (!session) return { exito: false, error: 'No autorizado' };
-    if (!(await esCotizacionPvc(orderId))) {
-      return { exito: false, error: `La cotización no tiene la etiqueta "${PVC_TAG_NAME}".` };
+    const taller = await tallerDeCotizacion(orderId);
+    if (!taller) {
+      return { exito: false, error: `La cotización no tiene la etiqueta ${TALLER_TAGS_TEXTO}.` };
     }
 
     const order = await odooSales.getOrderDetail(orderId);
     if (!order) return { exito: false, error: 'Cotización no encontrada' };
 
     const guardado = await leerMedidas(orderId);
-    return { exito: true, order, medidas: guardado.medidas ?? { items: [] } };
+    return { exito: true, order: { ...order, taller }, medidas: guardado.medidas ?? { items: [] } };
   } catch (error: any) {
     console.error('Error al obtener medidas de fabricación:', error);
     return { exito: false, error: error.message || 'Error desconocido' };
@@ -204,7 +222,7 @@ export async function obtenerMedidasFabricacion(orderId: number): Promise<{
 }
 
 /**
- * Adjunta las medidas de los termopaneles a la cotización de Taller PVC:
+ * Adjunta las medidas de los termopaneles a la cotización de taller:
  * guarda el archivo de medidas en la orden y publica una nota con la tabla en su historial.
  * No modifica líneas ni precios de la cotización.
  */
@@ -215,8 +233,8 @@ export async function guardarMedidasFabricacion(
   try {
     const session = await getSession();
     if (!session) return { exito: false, error: 'No autorizado' };
-    if (!(await esCotizacionPvc(orderId))) {
-      return { exito: false, error: `La cotización no tiene la etiqueta "${PVC_TAG_NAME}".` };
+    if (!(await tallerDeCotizacion(orderId))) {
+      return { exito: false, error: `La cotización no tiene la etiqueta ${TALLER_TAGS_TEXTO}.` };
     }
 
     const medidas = limpiarMedidas(items || []);
@@ -258,7 +276,7 @@ export async function guardarMedidasFabricacion(
 
 /**
  * Crea en Odoo las órdenes de fabricación y de trabajo (Taller Corte Vidrio y Taller Termopaneles)
- * a partir de las medidas ya adjuntas a la cotización de Taller PVC.
+ * a partir de las medidas ya adjuntas a la cotización de taller.
  * Usa siempre las medidas guardadas, para que lo fabricado coincida con lo adjunto.
  * Si ya se había enviado, solo se repite con `reenviar` (crea órdenes nuevas, no reemplaza las anteriores).
  */
@@ -269,8 +287,8 @@ export async function enviarAFabricacion(
   try {
     const session = await getSession();
     if (!session) return { exito: false, error: 'No autorizado' };
-    if (!(await esCotizacionPvc(orderId))) {
-      return { exito: false, error: `La cotización no tiene la etiqueta "${PVC_TAG_NAME}".` };
+    if (!(await tallerDeCotizacion(orderId))) {
+      return { exito: false, error: `La cotización no tiene la etiqueta ${TALLER_TAGS_TEXTO}.` };
     }
 
     const orders = await odoo.executeKw('sale.order', 'read', [[orderId]], { fields: ['name', 'state', 'partner_id'] });

@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import { MedidaFabricacion, describirFigura, describirExtras } from '@/lib/types/fabricacion';
+import { MedidaFabricacion, describirFigura } from '@/lib/types/fabricacion';
 import { drawShapeInPdf } from '@/lib/utils/pdf-figuras';
 
 // Recuadro máximo (mm) del dibujo de una figura bajo su fila
@@ -46,7 +46,7 @@ function paginaTaller(
   xExtras: number,
   pie: string[]
 ) {
-  if (logo) pdf.addImage(logo, 'PNG', 14, 10, 36, 18);
+  if (logo) pdf.addImage(logo, 'PNG', 14, 10, 18, 18);
 
   pdf.setFontSize(18);
   pdf.setFont('helvetica', 'bold');
@@ -83,8 +83,8 @@ function paginaTaller(
 
   datos.medidas.forEach((m, index) => {
     const splitLabel = pdf.splitTextToSize(m.ref || `V${index + 1}`, columnas[1].x - columnas[0].x - 2);
-    // Figura, extras y observación van en una segunda línea bajo la fila
-    const detalle = [describirFigura(m), ...describirExtras(m), m.observacion ? `Obs: ${m.observacion}` : '']
+    // Figura y observación van en una segunda línea bajo la fila
+    const detalle = [describirFigura(m), m.observacion ? `Obs: ${m.observacion}` : '']
       .filter(Boolean)
       .join(' | ');
     pdf.setFontSize(8);

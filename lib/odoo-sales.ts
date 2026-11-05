@@ -14,6 +14,7 @@ export interface SaleOrder {
   date_order: string;
   user_id: [number, string] | false;
   note: string | false;
+  tag_ids?: number[];
 }
 
 /**
@@ -48,7 +49,7 @@ export interface OrderSearchParams {
   limit?: number;
   offset?: number;
   orderBy?: string;
-  tagName?: string;        // Etiqueta por la que filtrar (por defecto, la de Termopanel)
+  tagNames?: string[];     // Etiquetas por las que filtrar, basta una (por defecto, la de Termopanel)
 }
 
 /**
@@ -997,7 +998,7 @@ export class OdooSalesService {
    * Obtiene órdenes de venta con filtros y paginación.
    */
   async getOrders(params: OrderSearchParams = {}): Promise<{ orders: SaleOrder[]; total: number }> {
-    const { search = '', state = '', limit = 15, offset = 0, orderBy, tagName } = params;
+    const { search = '', state = '', limit = 15, offset = 0, orderBy, tagNames } = params;
 
     const domain: any[] = [];
 
@@ -1011,11 +1012,11 @@ export class OdooSalesService {
       domain.push(['partner_id.name', 'ilike', search.trim()]);
     }
 
-    if (tagName) {
-      // Filtrar por una etiqueta existente; si no existe no hay nada que listar
-      const tagId = await this.getTagIdByName(tagName);
-      if (!tagId) return { orders: [], total: 0 };
-      domain.push(['tag_ids', 'in', [tagId]]);
+    if (tagNames) {
+      // Filtrar por las etiquetas que existan; si no existe ninguna no hay nada que listar
+      const tagIds = (await Promise.all(tagNames.map(n => this.getTagIdByName(n)))).filter((id): id is number => !!id);
+      if (tagIds.length === 0) return { orders: [], total: 0 };
+      domain.push(['tag_ids', 'in', tagIds]);
     } else {
       // Filtrar por la etiqueta de Termopanel
       const tagId = await this.getOrCreateTermopanelTagId();
@@ -1030,7 +1031,7 @@ export class OdooSalesService {
         'search_read',
         [domain],
         {
-          fields: ['id', 'name', 'partner_id', 'state', 'amount_total', 'amount_untaxed', 'amount_tax', 'date_order', 'user_id'],
+          fields: ['id', 'name', 'partner_id', 'state', 'amount_total', 'amount_untaxed', 'amount_tax', 'date_order', 'user_id', 'tag_ids'],
           order: orderBy || 'id desc',
           limit,
           offset,

@@ -384,7 +384,7 @@ export default function CotizacionesPage() {
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-      doc.addImage(logoBase64, 'PNG', 14, 10, 45, 22);
+      doc.addImage(logoBase64, 'PNG', 14, 10, 22, 22);
     } catch (e) {
       console.error("Error al cargar el logo en el PDF", e);
     }
@@ -665,32 +665,6 @@ export default function CotizacionesPage() {
         label = refMatch[1];
       }
 
-      // Extras text
-      const extrasPart = parts.find(p => p.toLowerCase().startsWith("extras:"));
-      let extrasText = "";
-      if (extrasPart) {
-        extrasText = extrasPart.trim();
-      } else {
-        const otherParts = parts.filter(
-          p =>
-            !p.startsWith("[") &&
-            !p.toLowerCase().includes("cantidad:") &&
-            !p.toLowerCase().includes("termopanel") &&
-            !p.toLowerCase().includes("monolítico") &&
-            !p.toLowerCase().includes("monolitico") &&
-            !p.toLowerCase().startsWith("cristal 1") &&
-            !p.toLowerCase().startsWith("c1:") &&
-            !p.toLowerCase().startsWith("cristal 2") &&
-            !p.toLowerCase().startsWith("c2:") &&
-            !p.toLowerCase().startsWith("separador") &&
-            !p.toLowerCase().startsWith("sep:") &&
-            !p.toLowerCase().startsWith("cristal:")
-        );
-        if (otherParts.length > 0) {
-          extrasText = `Extras: ${otherParts.join(", ")}`;
-        }
-      }
-
       const isTermopanel = name.toLowerCase().includes("termopanel") || hasCristal2 || hasSeparador || cristal2_espesor > 0 || sep_espesor > 0;
 
       return {
@@ -701,7 +675,6 @@ export default function CotizacionesPage() {
         cristal1: { tipo: cristal1_tipo, espesor: cristal1_espesor },
         cristal2: hasCristal2 ? { tipo: cristal2_tipo, espesor: cristal2_espesor } : null,
         separador: hasSeparador ? { espesor: sep_espesor, color: sep_color } : null,
-        extrasText,
         isTermopanel,
       };
     });
@@ -729,7 +702,7 @@ export default function CotizacionesPage() {
     // ======================================================
     // PÁGINA 1: TALLER CORTE VIDRIO
     // ======================================================
-    if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
+    if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 18, 18);
 
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
@@ -774,7 +747,7 @@ export default function CotizacionesPage() {
 
     parsedItems.forEach((item, index) => {
       const splitLabel = doc.splitTextToSize(item.label, 28);
-      const rowHeight = item.extrasText ? 14 : Math.max(8, (splitLabel.length * 4) + 4);
+      const rowHeight = Math.max(8, (splitLabel.length * 4) + 4);
 
       if (yPos + rowHeight > 275) {
         doc.addPage();
@@ -819,13 +792,6 @@ export default function CotizacionesPage() {
         doc.text("—", 150, yPos);
       }
 
-      if (item.extrasText) {
-        doc.setFontSize(8);
-        doc.setTextColor(100, 100, 100);
-        doc.text(item.extrasText, 110, yPos + 4.5);
-        doc.setTextColor(0, 0, 0);
-      }
-
       yPos += rowHeight;
     });
 
@@ -852,7 +818,7 @@ export default function CotizacionesPage() {
     if (hasTermopaneles) {
       doc.addPage();
 
-      if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
+      if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 18, 18);
 
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
@@ -899,7 +865,7 @@ export default function CotizacionesPage() {
       const termopanelItems = parsedItems.filter(item => item.isTermopanel);
       termopanelItems.forEach((item, index) => {
         const splitLabel = doc.splitTextToSize(item.label, 28);
-        const rowHeight = item.extrasText ? 14 : Math.max(8, (splitLabel.length * 4) + 4);
+        const rowHeight = Math.max(8, (splitLabel.length * 4) + 4);
 
         if (yPos + rowHeight > 275) {
           doc.addPage();
@@ -950,13 +916,6 @@ export default function CotizacionesPage() {
         } else {
           doc.text("—", 154, yPos);
           doc.text("—", 175, yPos);
-        }
-
-        if (item.extrasText) {
-          doc.setFontSize(8);
-          doc.setTextColor(100, 100, 100);
-          doc.text(item.extrasText, 88, yPos + 4.5);
-          doc.setTextColor(0, 0, 0);
         }
 
         yPos += rowHeight;

@@ -10,7 +10,7 @@ Aplicación web de PRO WINDOWS para cotizar, vender y fabricar termopaneles y cr
 * **Cotizador de Termopaneles (`/`)**: Tabla editable con cantidad, medidas, cristales, separador, extras (pulido, micropersiana, palillaje) y descuento. Calcula el precio con la fórmula de costos configurable.
 * **Corte de Vidrio Monolítico (`/monolitico`)**: Cotizador de cristales simples cortados a medida.
 * **Formas (`/formas`)**: Termopaneles con figura: arco, medio arco, círculo y forma libre con puntos arrastrables, con visualizador y cálculo de área y perímetro reales.
-* **Fabricación de Obras (`/fabricacion`)**: Lista las ventas de Odoo con la etiqueta **Taller PVC** (obras completas donde el termopanel ya está cobrado) y permite adjuntarles las medidas de los termopaneles, enviarlas a fabricación e imprimir las órdenes de taller, sin crear una venta nueva ni tocar precios.
+* **Fabricación de Obras (`/fabricacion`)**: Lista las ventas de Odoo con la etiqueta **Taller PVC** o **Taller de Aluminio** (obras completas donde el termopanel ya está cobrado) y permite adjuntarles las medidas de los termopaneles, enviarlas a fabricación e imprimir las órdenes de taller, sin crear una venta nueva ni tocar precios.
 * **Cotizaciones (`/cotizaciones`)**: Listado de las ventas creadas desde la app, con búsqueda, filtro por estado, detalle, edición, cancelación, confirmación con creación de órdenes de taller y reimpresión de PDF.
 * **Reportes (`/reports`)**: Ingresos, volumen de producción por taller, mano de obra, insumos y componentes utilizados, ranking de clientes y detalle de ventas confirmadas.
 * **Planchas a Cortar (`/corte`)**: Optimizador que recibe las medidas del cotizador y distribuye los cristales en planchas.
@@ -64,9 +64,10 @@ Aplicación web de PRO WINDOWS para cotizar, vender y fabricar termopaneles y cr
    # (opcional; por defecto "Termopanel". Se crea sola si no existe)
    ODOO_TAG_NAME="Termopanel"
 
-   # Etiqueta de Odoo de las ventas de obra completa que se muestran en /fabricacion
-   # (opcional; por defecto "Taller PVC". Debe existir en Odoo: la app no la crea)
+   # Etiquetas de Odoo de las ventas de obra completa que se muestran en /fabricacion
+   # (opcionales; por defecto "Taller PVC" y "Taller de Aluminio". Deben existir en Odoo: la app no las crea)
    ODOO_PVC_TAG_NAME="Taller PVC"
+   ODOO_ALUMINIO_TAG_NAME="Taller de Aluminio"
 
    # Firebase (opcional): solo para guardar la configuración de precios en la nube
    NEXT_PUBLIC_FIREBASE_API_KEY="tu_api_key"
@@ -80,7 +81,7 @@ Aplicación web de PRO WINDOWS para cotizar, vender y fabricar termopaneles y cr
 4. **Requisitos en Odoo**
    - Centros de trabajo **Taller Corte Vidrio** y **Taller Termopaneles** (módulo de Fabricación).
    - Campos personalizados `x_studio_ancho_m` y `x_studio_alto_m` en las líneas de venta.
-   - Etiqueta **Taller PVC** en las ventas de obra que se quieran ver en Fabricación.
+   - Etiqueta **Taller PVC** o **Taller de Aluminio** en las ventas de obra que se quieran ver en Fabricación.
 
 5. **Logo de empresa**
    Coloca `logo.png` y `logo-texto.png` dentro de la carpeta `/public` del proyecto.
@@ -128,11 +129,11 @@ Una cotización en borrador se puede reabrir y editar desde `/cotizaciones`; al 
 4. **Resumen de insumos**: Se publica en el historial de la venta.
 5. **Órdenes de compra** (solo termopaneles): Se generan pedidos a **Alar** (planchas de cristal) y **Soluex** (insumos).
 
-## 🔨 Flujo de Fabricación (Taller PVC)
+## 🔨 Flujo de Fabricación (Taller PVC y Taller de Aluminio)
 
-Las obras completas (ventanas de PVC con sus termopaneles incluidos) se cotizan y cobran en Odoo con la etiqueta **Taller PVC**. La página `/fabricacion` trabaja sobre esas ventas ya existentes:
+Las obras completas (ventanas de PVC o de aluminio con sus termopaneles incluidos) se cotizan y cobran en Odoo con la etiqueta **Taller PVC** o **Taller de Aluminio**. La página `/fabricacion` trabaja sobre esas ventas ya existentes:
 
-1. **Listado**: muestra solo las ventas con la etiqueta `ODOO_PVC_TAG_NAME`, con buscador por N° de venta o cliente e indicador "Con medidas / Sin medidas".
+1. **Listado**: muestra solo las ventas con la etiqueta `ODOO_PVC_TAG_NAME` o `ODOO_ALUMINIO_TAG_NAME`, indicando de qué taller es cada una, con buscador por N° de venta o cliente e indicador "Con medidas / Sin medidas".
 2. **Medidas**: al abrir una venta se conserva su número de Odoo (ej. `S00552`) y se cargan sus ventanas (`V1`, `V2`…). Cada ventana agrega filas a una tabla igual a la de Termopaneles (cantidad, ancho, alto, cristales, separador, extras), sin precios. Si una ventana lleva varios paños, las filas se nombran `V1a`, `V1b`, `V1c`…
 3. **Figuras**: cada fila puede abrir el editor de formas (arco, medio arco, círculo y forma libre con puntos arrastrables).
 4. **Adjuntar medidas a la venta**: guarda el archivo `medidas_termopaneles.json` como adjunto de la `sale.order` (permite reabrir y editar) y publica una nota con la tabla de medidas en su historial. No modifica líneas ni precios de la venta.

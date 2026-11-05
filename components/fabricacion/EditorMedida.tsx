@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react";
-import { PuntoFigura, areaPoligono, perimetroPoligono, ladosPoligono } from "@/lib/calculos/termopanel";
+import { PuntoFigura, areaPoligono, perimetroPoligono, ladosPoligono, estaFueraDeNorma, espesorMinimoNorma } from "@/lib/calculos/termopanel";
 import { FiguraFabricacion, MedidaFabricacion } from "@/lib/types/fabricacion";
 import { Plus, Trash2, Pencil, X, Check } from "lucide-react";
 
@@ -672,6 +672,12 @@ export function EditorMedida({
                     </select>
                   </div>
                 </div>
+                {estaFueraDeNorma({ ancho: bounding.w, alto: bounding.h, cristal1, cristal2 }) && (
+                  <div className="mt-3 flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs">
+                    <span className="bg-red-600 text-white font-bold rounded px-1.5 py-0.5 text-[10px]">FN</span>
+                    <span>Fuera de norma: el cristal más grueso debe ser de al menos {espesorMinimoNorma(bounding.w, bounding.h).toFixed(2)} mm.</span>
+                  </div>
+                )}
               </div>
 
               {/* EXTRAS */}

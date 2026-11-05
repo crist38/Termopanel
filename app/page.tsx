@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, Suspense } from "react"
-import { TermopanelItem, calcularItem, calcularTotal, calcularPrecioUnitario, PARAMETROS_DEFAULT } from "@/lib/calculos/termopanel"
+import { TermopanelItem, calcularItem, calcularTotal, calcularPrecioUnitario, PARAMETROS_DEFAULT, estaFueraDeNorma, espesorMinimoNorma } from "@/lib/calculos/termopanel"
 import { PRECIOS_VIDRIOS, Vidrio, TIPOS_UNICOS as STATIC_TIPOS_UNICOS } from "@/lib/data/vidrios"
 import { collection, getDocs, query, orderBy, limit, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -12,6 +12,7 @@ import { Printer, Plus, Trash2, Cloud, ClipboardList, Triangle, ArrowUp, ArrowDo
 import { CORTE_IMPORT_KEY, GrupoCorte, PiezaCorte, CorteImport } from '@/lib/types/corte';
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { ClientSelector } from '@/components/ClientSelector';
+import { refsFueraDeNorma, confirmarFueraDeNorma } from '@/lib/utils/norma';
 
 
 function CotizadorTermopanelContent() {
@@ -425,11 +426,14 @@ function CotizadorTermopanelContent() {
   };
 
 
+  const refsFN = () => refsFueraDeNorma(items, (item, i) => item.label || `V${i + 1}`);
+
   const handleProcessQuote = async (isConfirm: boolean = false) => {
     if (!clientName) {
       alert("Por favor ingrese el nombre del cliente para procesar la cotización");
       return;
     }
+    if (!confirmarFueraDeNorma(refsFN())) return;
     setIsSyncingOdoo(true);
     try {
       let odooRes;
@@ -543,7 +547,7 @@ function CotizadorTermopanelContent() {
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-      doc.addImage(logoBase64, 'PNG', 14, 10, 45, 22);
+      doc.addImage(logoBase64, 'PNG', 14, 10, 22, 22);
     } catch (e) {
       console.error("Error al cargar el logo en el PDF", e);
     }
@@ -725,7 +729,7 @@ function CotizadorTermopanelContent() {
     // ======================================================
     // PÁGINA 1: TALLER CORTE VIDRIO
     // ======================================================
-    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
+    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 18, 18);
 
     pdf.setFontSize(18);
     pdf.setFont("helvetica", "bold");
@@ -792,17 +796,7 @@ function CotizadorTermopanelContent() {
       const labelVal = item.label || `V${index + 1}`;
       const splitLabel = pdf.splitTextToSize(labelVal, 28);
       
-      let extrasText = "";
-      const extrasParts = [];
-      if (item.pulido) extrasParts.push("Pulido");
-      if (item.micropersiana) extrasParts.push("Micropersiana");
-      if (item.palillaje) extrasParts.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales y ${item.palillajeVerticales || 0} verticales)`);
-      if (item.conForma) extrasParts.push("Con Forma");
-      if (extrasParts.length > 0) {
-        extrasText = `Extras: ${extrasParts.join(", ")}`;
-      }
-
-      const rowHeight = extrasText ? 14 : Math.max(8, (splitLabel.length * 4) + 4);
+      const rowHeight = Math.max(8, (splitLabel.length * 4) + 4);
 
       if (yPos + rowHeight > 275) {
         pdf.addPage();
@@ -842,13 +836,6 @@ function CotizadorTermopanelContent() {
       pdf.text(`${item.cantidad}`, 140, yPos);
       pdf.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 150, yPos);
 
-      if (extrasText) {
-        pdf.setFontSize(8);
-        pdf.setTextColor(100, 100, 100);
-        pdf.text(extrasText, 110, yPos + 4.5);
-        pdf.setTextColor(0, 0, 0);
-      }
-
       yPos += rowHeight;
     });
 
@@ -875,7 +862,7 @@ function CotizadorTermopanelContent() {
     // ======================================================
     pdf.addPage();
 
-    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
+    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 18, 18);
 
     pdf.setFontSize(18);
     pdf.setFont("helvetica", "bold");
@@ -942,17 +929,7 @@ function CotizadorTermopanelContent() {
       const labelVal = item.label || `V${index + 1}`;
       const splitLabel = pdf.splitTextToSize(labelVal, 28);
       
-      let extrasText = "";
-      const extrasParts = [];
-      if (item.pulido) extrasParts.push("Pulido");
-      if (item.micropersiana) extrasParts.push("Micropersiana");
-      if (item.palillaje) extrasParts.push(`Palillaje (${item.palillajeColor || 'Blanco'}, ${item.palillajeHorizontales || 0} horizontales y ${item.palillajeVerticales || 0} verticales)`);
-      if (item.conForma) extrasParts.push("Con Forma");
-      if (extrasParts.length > 0) {
-        extrasText = `Extras: ${extrasParts.join(", ")}`;
-      }
-
-      const rowHeight = extrasText ? 14 : Math.max(8, (splitLabel.length * 4) + 4);
+      const rowHeight = Math.max(8, (splitLabel.length * 4) + 4);
 
       if (yPos + rowHeight > 275) {
         pdf.addPage();
@@ -995,13 +972,6 @@ function CotizadorTermopanelContent() {
       pdf.text(`${item.separador.espesor}`, 154, yPos);
       pdf.text(`${item.separador.color}`, 175, yPos);
       pdf.setFont("helvetica", "normal");
-
-      if (extrasText) {
-        pdf.setFontSize(8);
-        pdf.setTextColor(100, 100, 100);
-        pdf.text(extrasText, 88, yPos + 4.5);
-        pdf.setTextColor(0, 0, 0);
-      }
 
       yPos += rowHeight;
     });
@@ -1160,6 +1130,7 @@ function CotizadorTermopanelContent() {
               <th className="p-3 text-center border-r border-slate-200 w-20">Desc. (%)</th>
               <th className="p-3 text-center border-r border-slate-200 w-28">P. Unit (V)</th>
               <th className="p-3 text-center border-r border-slate-200 w-28">Total</th>
+              <th className="p-3 text-center border-r border-slate-200 w-14" title="Espesor mínimo: (m² × 0,65) + 2,5 mm">Norma</th>
               <th className="p-3 text-center w-10"></th>
             </tr>
             <tr className="text-[10px] text-slate-500 bg-slate-50">
@@ -1177,15 +1148,17 @@ function CotizadorTermopanelContent() {
               <th className="p-1 border-r border-t border-slate-200 text-center font-semibold">%</th>
               <th className="border-r border-slate-200 text-center font-semibold">($)</th>
               <th className="border-r border-slate-200 text-center font-semibold">($)</th>
+              <th className="border-r border-slate-200"></th>
               <th></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {items.map((item, index) => {
               const calculo = calcularItem(item)
+              const fueraDeNorma = estaFueraDeNorma(item)
 
               return (
-                <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
+                <tr key={item.id} className={`transition-colors group ${fueraDeNorma ? 'bg-red-50 hover:bg-red-100/70' : 'hover:bg-slate-50'}`}>
                   <td className="p-1 border-r border-slate-100">
                     <input
                       type="text"
@@ -1357,6 +1330,18 @@ function CotizadorTermopanelContent() {
                     ${calculo.totalLinea.toLocaleString()}
                   </td>
 
+                  {/* Norma */}
+                  <td className="p-1 border-r border-slate-100 text-center">
+                    {fueraDeNorma && (
+                      <span
+                        className="inline-block bg-red-600 text-white text-[10px] font-bold rounded px-1.5 py-0.5"
+                        title={`Fuera de norma: el cristal más grueso debe ser de al menos ${espesorMinimoNorma(item.ancho, item.alto).toFixed(2)} mm`}
+                      >
+                        FN
+                      </span>
+                    )}
+                  </td>
+
                   {/* Eliminar */}
                   <td className="p-1 text-center">
                     <button
@@ -1378,6 +1363,7 @@ function CotizadorTermopanelContent() {
               <td className="p-2 text-right text-slate-900 font-mono text-base px-2">
                 ${totalNeto.toLocaleString()}
               </td>
+              <td className="border-r border-slate-100"></td>
               <td></td>
             </tr>
             <tr>
@@ -1385,6 +1371,7 @@ function CotizadorTermopanelContent() {
               <td className="p-2 text-right text-slate-900 font-mono text-base px-2">
                 ${Math.round(totalNeto * 0.19).toLocaleString()}
               </td>
+              <td className="border-r border-slate-100"></td>
               <td></td>
             </tr>
             <tr className="bg-slate-100/50">
@@ -1392,6 +1379,7 @@ function CotizadorTermopanelContent() {
               <td className="p-3 text-right text-teal-700 font-mono text-lg font-bold px-2">
                 ${Math.round(totalNeto * 1.19).toLocaleString()}
               </td>
+              <td className="border-r border-slate-100"></td>
               <td></td>
             </tr>
           </tfoot>
@@ -1417,7 +1405,7 @@ function CotizadorTermopanelContent() {
           </button>
 
           <button
-            onClick={() => handleExportPDF()}
+            onClick={() => confirmarFueraDeNorma(refsFN()) && handleExportPDF()}
             className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200"
             title="Descargar Presupuesto PDF localmente"
           >
@@ -1425,7 +1413,7 @@ function CotizadorTermopanelContent() {
           </button>
           
           <button
-            onClick={() => handleExportWorkOrders()}
+            onClick={() => confirmarFueraDeNorma(refsFN()) && handleExportWorkOrders()}
             className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200"
             title="Descargar Taller PDF localmente"
           >

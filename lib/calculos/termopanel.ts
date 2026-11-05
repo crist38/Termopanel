@@ -228,6 +228,25 @@ export function calcularPrecioUnitario(
   return Math.round(pu)
 }
 
+/**
+ * Norma de espesor (columna "Norma" del Excel original):
+ * el cristal más grueso debe tener al menos (m² × 0,65) + 2,5 mm.
+ * Si no lo cumple, el termopanel queda "Fuera de Norma" (FN).
+ */
+export const NORMA_FACTOR_M2 = 0.65
+export const NORMA_ESPESOR_BASE = 2.5
+
+export function espesorMinimoNorma(ancho: number, alto: number): number {
+  const m2 = (ancho * alto) / 1_000_000
+  return m2 * NORMA_FACTOR_M2 + NORMA_ESPESOR_BASE
+}
+
+export function estaFueraDeNorma(item: Pick<TermopanelItem, 'ancho' | 'alto' | 'cristal1' | 'cristal2'>): boolean {
+  const espesorMayor = Math.max(item.cristal1?.espesor || 0, item.cristal2?.espesor || 0)
+  if (espesorMayor === 0 || item.ancho <= 0 || item.alto <= 0) return false
+  return espesorMayor < espesorMinimoNorma(item.ancho, item.alto)
+}
+
 export function calcularTotal(items: TermopanelItem[]) {
   return items.reduce((acc, item) => acc + item.precioUnitario * item.cantidad, 0)
 }

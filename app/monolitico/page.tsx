@@ -270,7 +270,7 @@ function CotizadorMonoliticoContent() {
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-      doc.addImage(logoBase64, 'PNG', 14, 10, 45, 22);
+      doc.addImage(logoBase64, 'PNG', 14, 10, 22, 22);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(18);
       doc.setTextColor(0, 0, 0);
@@ -422,7 +422,7 @@ function CotizadorMonoliticoContent() {
       console.error("Error al cargar el logo en el PDF", e);
     }
 
-    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
+    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 18, 18);
 
     pdf.setFontSize(18);
     pdf.setFont("helvetica", "bold");

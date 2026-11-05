@@ -1,13 +1,14 @@
 "use client"
 
 import { useState, useEffect, Suspense } from "react"
-import { TermopanelItem, PuntoFigura, calcularItem, calcularTotal, calcularPrecioUnitario, PARAMETROS_DEFAULT, areaPoligono, perimetroPoligono, ladosPoligono, describirFormaLibre } from "@/lib/calculos/termopanel"
+import { TermopanelItem, PuntoFigura, calcularItem, calcularTotal, calcularPrecioUnitario, PARAMETROS_DEFAULT, areaPoligono, perimetroPoligono, ladosPoligono, describirFormaLibre, estaFueraDeNorma, espesorMinimoNorma } from "@/lib/calculos/termopanel"
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { Plus, Trash2, Cloud, ArrowLeft, BarChart2, Triangle, RotateCcw, Printer, Pencil } from 'lucide-react';
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
 import { ClientSelector } from '@/components/ClientSelector';
+import { refsFueraDeNorma, confirmarFueraDeNorma } from '@/lib/utils/norma';
 import { drawShapeInPdf } from '@/lib/utils/pdf-figuras';
 
 type ShapeType = 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo' | 'personalizada';
@@ -407,6 +408,7 @@ function ShapesCADCotizadorContent() {
 
   const computedUnitPrice = calcularPrecioUnitario(tempItem, p1, p2, precioSep, params);
   const computedTotalLine = computedUnitPrice * cantidad;
+  const tempFueraDeNorma = estaFueraDeNorma(tempItem);
 
   // Add Item to List
   const handleAddItem = () => {
@@ -450,11 +452,14 @@ function ShapesCADCotizadorContent() {
   const totalNeto = items.reduce((acc, item) => acc + item.precioUnitario * item.cantidad, 0);
 
   // PDF and Odoo functions
+  const refsFN = () => refsFueraDeNorma(items, (item, i) => item.label || `V${i + 1}`);
+
   const handleProcessQuote = async (isConfirm: boolean = false) => {
     if (!clientName) {
       alert("Por favor ingrese el nombre del cliente para procesar la cotización");
       return;
     }
+    if (!confirmarFueraDeNorma(refsFN())) return;
     setIsSyncingOdoo(true);
     try {
       let odooRes;
@@ -544,7 +549,7 @@ function ShapesCADCotizadorContent() {
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-      doc.addImage(logoBase64, 'PNG', 14, 10, 45, 22);
+      doc.addImage(logoBase64, 'PNG', 14, 10, 22, 22);
     } catch (e) {
       console.error("Error al cargar el logo en el PDF", e);
     }
@@ -726,7 +731,7 @@ function ShapesCADCotizadorContent() {
     }
 
     // PAGE 1: CORTE VIDRIO
-    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
+    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 18, 18);
     pdf.setFontSize(18);
     pdf.setFont("helvetica", "bold");
     pdf.setTextColor(0, 0, 0);
@@ -852,7 +857,7 @@ function ShapesCADCotizadorContent() {
     
     // PAGE 2: TERMOPANELES
     pdf.addPage();
-    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
+    if (logoBase64) pdf.addImage(logoBase64, 'PNG', 14, 10, 18, 18);
     pdf.setFontSize(18);
     pdf.setFont("helvetica", "bold");
     pdf.setTextColor(0, 0, 0);
@@ -914,10 +919,6 @@ function ShapesCADCotizadorContent() {
       if (item.tipoFigura === 'circulo') extrasText += `Círculo (Diámetro:${med.a})`;
       if (item.tipoFigura === 'rectangulo') extrasText += `Rectángulo (Ancho:${med.a}, Alt:${med.b})`;
       if (item.tipoFigura === 'personalizada') extrasText += describirFormaLibre(med.puntos);
-
-      if (item.palillaje) {
-        extrasText += ` | Palillaje (${item.palillajeColor}, ${item.palillajeHorizontales} horizontales y ${item.palillajeVerticales} verticales)`;
-      }
 
       const rowHeight = 24; // Aumentado de 14 a 24 para dar espacio a la figura
 
@@ -1654,6 +1655,13 @@ function ShapesCADCotizadorContent() {
             </div>
           </div>
 
+          {tempFueraDeNorma && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 text-xs">
+              <span className="bg-red-600 text-white font-bold rounded px-1.5 py-0.5 text-[10px]">FN</span>
+              <span>Fuera de norma: el cristal más grueso debe ser de al menos {espesorMinimoNorma(tempItem.ancho, tempItem.alto).toFixed(2)} mm.</span>
+            </div>
+          )}
+
           <button
             onClick={handleAddItem}
             className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold transition-colors shadow-sm flex items-center justify-center gap-2"
@@ -1886,8 +1894,9 @@ function ShapesCADCotizadorContent() {
               <tbody className="divide-y divide-slate-100 text-slate-700 text-xs">
                 {items.map((item, idx) => {
                   const calc = calcularItem(item);
+                  const fueraDeNorma = estaFueraDeNorma(item);
                   return (
-                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={item.id} className={`transition-colors ${fueraDeNorma ? 'bg-red-50 hover:bg-red-100/70' : 'hover:bg-slate-50'}`}>
                       <td className="p-3 font-semibold text-slate-500">{item.label || `V${idx + 1}`}</td>
                       <td className="p-3 text-center uppercase font-bold text-cyan-600">
                         <div>{item.tipoFigura === 'medio_arco' ? 'Medio Arco' : item.tipoFigura === 'personalizada' ? 'Forma Libre' : item.tipoFigura}</div>
@@ -1908,6 +1917,14 @@ function ShapesCADCotizadorContent() {
                         <div className="space-y-0.5">
                           <div>
                             <strong>C1:</strong> {item.cristal1.tipo} {item.cristal1.espesor}mm | <strong>C2:</strong> {item.cristal2.tipo} {item.cristal2.espesor}mm | <strong>Sep:</strong> {item.separador.espesor}mm {item.separador.color}
+                            {fueraDeNorma && (
+                              <span
+                                className="ml-2 inline-block bg-red-600 text-white text-[10px] font-bold rounded px-1.5 py-0.5"
+                                title={`Fuera de norma: el cristal más grueso debe ser de al menos ${espesorMinimoNorma(item.ancho, item.alto).toFixed(2)} mm`}
+                              >
+                                FN
+                              </span>
+                            )}
                           </div>
                           <div className="text-[10px] text-slate-400">
                             {item.pulido && <span className="bg-slate-100 px-1 py-0.5 rounded mr-1">Pulido</span>}
@@ -1942,7 +1959,7 @@ function ShapesCADCotizadorContent() {
         {items.length > 0 && (
           <div className="mt-4 flex justify-end gap-2">
             <button
-              onClick={() => handleExportPDF()}
+              onClick={() => confirmarFueraDeNorma(refsFN()) && handleExportPDF()}
               className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200"
               title="Descargar Presupuesto PDF localmente"
             >
@@ -1950,7 +1967,7 @@ function ShapesCADCotizadorContent() {
             </button>
             
             <button
-              onClick={() => handleExportWorkOrders()}
+              onClick={() => confirmarFueraDeNorma(refsFN()) && handleExportWorkOrders()}
               className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-200"
               title="Descargar Taller PDF localmente"
             >

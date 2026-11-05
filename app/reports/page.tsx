@@ -142,7 +142,7 @@ function ReportsDashboardContent() {
           reader.onerror = reject;
           reader.readAsDataURL(blob);
         });
-        doc.addImage(logoBase64, 'PNG', 14, 10, 45, 22);
+        doc.addImage(logoBase64, 'PNG', 14, 10, 22, 22);
       } catch { /* sin logo */ }
 
       doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
@@ -277,16 +277,8 @@ function ReportsDashboardContent() {
         const refMatch = parts[0]?.match(/^\[([^\]]+)\]/);
         if (refMatch) label = refMatch[1];
 
-        const extrasPart = parts.find(p => p.toLowerCase().startsWith('extras:'));
-        let extrasText = '';
-        if (extrasPart) { extrasText = extrasPart.trim(); }
-        else {
-          const others = parts.filter(p => !p.startsWith('[') && !p.toLowerCase().includes('cantidad:') && !p.toLowerCase().includes('termopanel') && !p.toLowerCase().includes('monolítico') && !p.toLowerCase().includes('monolitico') && !p.toLowerCase().startsWith('cristal 1') && !p.toLowerCase().startsWith('c1:') && !p.toLowerCase().startsWith('cristal 2') && !p.toLowerCase().startsWith('c2:') && !p.toLowerCase().startsWith('separador') && !p.toLowerCase().startsWith('sep:') && !p.toLowerCase().startsWith('cristal:'));
-          if (others.length > 0) extrasText = `Extras: ${others.join(', ')}`;
-        }
-
         const isTermopanel = name.toLowerCase().includes('termopanel') || hasCristal2 || hasSeparador || sep_espesor > 0;
-        return { label, cantidad, ancho, alto, cristal1: { tipo: cristal1_tipo, espesor: cristal1_espesor }, cristal2: hasCristal2 ? { tipo: cristal2_tipo, espesor: cristal2_espesor } : null, separador: hasSeparador ? { espesor: sep_espesor, color: sep_color } : null, extrasText, isTermopanel };
+        return { label, cantidad, ancho, alto, cristal1: { tipo: cristal1_tipo, espesor: cristal1_espesor }, cristal2: hasCristal2 ? { tipo: cristal2_tipo, espesor: cristal2_espesor } : null, separador: hasSeparador ? { espesor: sep_espesor, color: sep_color } : null, isTermopanel };
       });
 
       const hasTermopaneles = parsedItems.some((i: any) => i.isTermopanel);
@@ -301,7 +293,7 @@ function ReportsDashboardContent() {
       } catch { /* sin logo */ }
 
       // Página 1: Taller Corte Vidrio
-      if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
+      if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 18, 18);
       doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
       doc.text('ORDEN DE TRABAJO', 105, 20, { align: 'center' });
       doc.setFontSize(13); doc.setTextColor(80, 80, 80);
@@ -323,7 +315,7 @@ function ReportsDashboardContent() {
 
       parsedItems.forEach((item: any, index: number) => {
         const splitLabel = doc.splitTextToSize(item.label, 28);
-        const rowHeight = item.extrasText ? 14 : Math.max(8, (splitLabel.length * 4) + 4);
+        const rowHeight = Math.max(8, (splitLabel.length * 4) + 4);
         if (yPos + rowHeight > 275) { doc.addPage(); yPos = 20; }
         if (index % 2 === 0) { doc.setFillColor(248, 250, 252); doc.rect(14, yPos - 5, 182, rowHeight, 'F'); }
         doc.setFontSize(9);
@@ -333,7 +325,6 @@ function ReportsDashboardContent() {
         doc.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 89, yPos);
         if (item.cristal2) { doc.text(`${item.cantidad}`, 140, yPos); doc.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 150, yPos); }
         else { doc.text('—', 140, yPos); doc.text('—', 150, yPos); }
-        if (item.extrasText) { doc.setFontSize(8); doc.setTextColor(100, 100, 100); doc.text(item.extrasText, 110, yPos + 4.5); doc.setTextColor(0, 0, 0); }
         yPos += rowHeight;
       });
       doc.setDrawColor(200, 200, 200); doc.line(14, yPos, 196, yPos);
@@ -344,7 +335,7 @@ function ReportsDashboardContent() {
       // Página 2: Taller Termopaneles
       if (hasTermopaneles) {
         doc.addPage();
-        if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 36, 18);
+        if (logoBase64) doc.addImage(logoBase64, 'PNG', 14, 10, 18, 18);
         doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
         doc.text('ORDEN DE TRABAJO', 105, 20, { align: 'center' });
         doc.setFontSize(13); doc.setTextColor(80, 80, 80);
@@ -365,7 +356,7 @@ function ReportsDashboardContent() {
         const termoItems = parsedItems.filter((i: any) => i.isTermopanel);
         termoItems.forEach((item: any, index: number) => {
           const splitLabel = doc.splitTextToSize(item.label, 28);
-          const rowHeight = item.extrasText ? 14 : Math.max(8, (splitLabel.length * 4) + 4);
+          const rowHeight = Math.max(8, (splitLabel.length * 4) + 4);
           if (yPos + rowHeight > 275) { doc.addPage(); yPos = 20; }
           if (index % 2 === 0) { doc.setFillColor(240, 253, 250); doc.rect(14, yPos - 5, 182, rowHeight, 'F'); }
           doc.setFontSize(9);
@@ -375,7 +366,6 @@ function ReportsDashboardContent() {
           if (item.cristal2) { doc.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 121, yPos); } else { doc.text('—', 121, yPos); }
           if (item.separador) { doc.setFont('helvetica', 'bold'); doc.text(`${item.separador.espesor}`, 154, yPos); doc.text(`${item.separador.color}`, 175, yPos); doc.setFont('helvetica', 'normal'); }
           else { doc.text('—', 154, yPos); doc.text('—', 175, yPos); }
-          if (item.extrasText) { doc.setFontSize(8); doc.setTextColor(100, 100, 100); doc.text(item.extrasText, 88, yPos + 4.5); doc.setTextColor(0, 0, 0); }
           yPos += rowHeight;
         });
         doc.setDrawColor(200, 200, 200); doc.line(14, yPos, 196, yPos);
