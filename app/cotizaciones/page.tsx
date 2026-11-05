@@ -761,10 +761,10 @@ export default function CotizacionesPage() {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.text("Ref", 17, yPos);
-    doc.text("Ancho (mm)", 36, yPos);
-    doc.text("Alto (mm)", 58, yPos);
-    doc.text("Cant.", 77, yPos);
-    doc.text("Cristal 1", 89, yPos);
+    doc.text("Ancho (mm)", 46, yPos);
+    doc.text("Alto (mm)", 66, yPos);
+    doc.text("Cant.", 84, yPos);
+    doc.text("Cristal 1", 95, yPos);
     doc.text("Cant.", 138, yPos);
     doc.text("Cristal 2", 150, yPos);
     doc.setTextColor(0, 0, 0);
@@ -786,10 +786,10 @@ export default function CotizacionesPage() {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(9);
         doc.text("Ref", 17, yPos);
-        doc.text("Ancho (mm)", 36, yPos);
-        doc.text("Alto (mm)", 58, yPos);
-        doc.text("Cant.", 77, yPos);
-        doc.text("Cristal 1", 89, yPos);
+        doc.text("Ancho (mm)", 46, yPos);
+        doc.text("Alto (mm)", 66, yPos);
+        doc.text("Cant.", 84, yPos);
+        doc.text("Cristal 1", 95, yPos);
         doc.text("Cant.", 138, yPos);
         doc.text("Cristal 2", 150, yPos);
         doc.setTextColor(0, 0, 0);
@@ -806,11 +806,11 @@ export default function CotizacionesPage() {
       doc.setFontSize(9);
       doc.text(splitLabel, 17, yPos);
       doc.setFont("helvetica", "bold");
-      doc.text(`${item.ancho}`, 36, yPos);
-      doc.text(`${item.alto}`, 58, yPos);
+      doc.text(`${item.ancho}`, 46, yPos);
+      doc.text(`${item.alto}`, 66, yPos);
       doc.setFont("helvetica", "normal");
-      doc.text(`${item.cantidad}`, 79, yPos);
-      doc.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 89, yPos);
+      doc.text(`${item.cantidad}`, 86, yPos);
+      doc.text(`${item.cristal1.tipo} ${item.cristal1.espesor}mm`, 95, yPos);
       if (item.cristal2) {
         doc.text(`${item.cantidad}`, 140, yPos);
         doc.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 150, yPos);

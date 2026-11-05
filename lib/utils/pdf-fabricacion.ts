@@ -82,7 +82,7 @@ function paginaTaller(
   encabezado();
 
   datos.medidas.forEach((m, index) => {
-    const splitLabel = pdf.splitTextToSize(m.ref || `V${index + 1}`, 28);
+    const splitLabel = pdf.splitTextToSize(m.ref || `V${index + 1}`, columnas[1].x - columnas[0].x - 2);
     // Figura, extras y observación van en una segunda línea bajo la fila
     const detalle = [describirFigura(m), ...describirExtras(m), m.observacion ? `Obs: ${m.observacion}` : '']
       .filter(Boolean)
@@ -168,10 +168,10 @@ export async function imprimirOrdenesTaller(datos: DatosOrden) {
     pdf, datos, logo, 'Taller Corte Vidrio', [51, 65, 85], [248, 250, 252],
     [
       { titulo: 'Ref', x: 17, valor: m => m.ref },
-      { titulo: 'Ancho (mm)', x: 36, valor: m => `${m.ancho}`, negrita: true },
-      { titulo: 'Alto (mm)', x: 58, valor: m => `${m.alto}`, negrita: true },
-      { titulo: 'Cant.', x: 78, valor: m => `${m.cantidad}` },
-      { titulo: 'Cristal 1', x: 89, valor: m => cristal(m.cristal1) },
+      { titulo: 'Ancho (mm)', x: 46, valor: m => `${m.ancho}`, negrita: true },
+      { titulo: 'Alto (mm)', x: 66, valor: m => `${m.alto}`, negrita: true },
+      { titulo: 'Cant.', x: 85, valor: m => `${m.cantidad}` },
+      { titulo: 'Cristal 1', x: 95, valor: m => cristal(m.cristal1) },
       { titulo: 'Cant.', x: 139, valor: m => `${m.cantidad}` },
       { titulo: 'Cristal 2', x: 150, valor: m => cristal(m.cristal2) },
     ],

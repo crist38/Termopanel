@@ -312,13 +312,13 @@ function CotizadorMonoliticoContent() {
     doc.setFillColor(240, 240, 240);
     doc.rect(14, yPos, 182, 8, 'F');
     doc.text("Ref", 16, yPos + 6);
-    doc.text("Cant", 30, yPos + 6);
-    doc.text("Ancho", 45, yPos + 6);
-    doc.text("Alto", 65, yPos + 6);
-    doc.text("Cristal", 85, yPos + 6);
-    doc.text("Área m2", 140, yPos + 6);
-    doc.text("P. Unit", 160, yPos + 6);
-    doc.text("Total", 180, yPos + 6);
+    doc.text("Cant", 50, yPos + 6);
+    doc.text("Ancho", 62, yPos + 6);
+    doc.text("Alto", 80, yPos + 6);
+    doc.text("Cristal", 98, yPos + 6);
+    doc.text("Área m2", 136, yPos + 6);
+    doc.text("P. Unit", 156, yPos + 6);
+    doc.text("Total", 178, yPos + 6);
     yPos += 10;
     
     doc.setFont("helvetica", "normal");
@@ -332,16 +332,17 @@ function CotizadorMonoliticoContent() {
         yPos = 20;
       }
 
-      doc.text(item.label || '', 16, yPos);
-      doc.text(item.cantidad.toString(), 30, yPos);
-      doc.text(item.ancho.toString(), 45, yPos);
-      doc.text(item.alto.toString(), 65, yPos);
-      doc.text(`${item.cristal.tipo} ${item.cristal.espesor}mm`, 85, yPos);
-      doc.text(area.toFixed(2), 140, yPos);
-      doc.text(`$${item.precioUnitario.toLocaleString()}`, 160, yPos);
-      doc.text(`$${totalLinea.toLocaleString()}`, 180, yPos);
+      const splitLabel = doc.splitTextToSize(item.label || '', 32);
+      doc.text(splitLabel, 16, yPos);
+      doc.text(item.cantidad.toString(), 50, yPos);
+      doc.text(item.ancho.toString(), 62, yPos);
+      doc.text(item.alto.toString(), 80, yPos);
+      doc.text(`${item.cristal.tipo} ${item.cristal.espesor}mm`, 98, yPos);
+      doc.text(area.toFixed(2), 136, yPos);
+      doc.text(`$${item.precioUnitario.toLocaleString()}`, 156, yPos);
+      doc.text(`$${totalLinea.toLocaleString()}`, 178, yPos);
       
-      yPos += 8;
+      yPos += Math.max(8, splitLabel.length * 5 + 3);
     });
 
     yPos += 5;
@@ -462,9 +463,9 @@ function CotizadorMonoliticoContent() {
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(9);
     pdf.text("Ref", 17, yPos);
-    pdf.text("Ancho (mm)", 39, yPos);
-    pdf.text("Alto (mm)", 68, yPos);
-    pdf.text("Cant.", 97, yPos);
+    pdf.text("Ancho (mm)", 48, yPos);
+    pdf.text("Alto (mm)", 74, yPos);
+    pdf.text("Cant.", 99, yPos);
     pdf.text("Cristal Monolítico", 115, yPos);
     pdf.setTextColor(0, 0, 0);
     pdf.setFont("helvetica", "normal");
@@ -485,9 +486,9 @@ function CotizadorMonoliticoContent() {
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(9);
         pdf.text("Ref", 17, yPos);
-        pdf.text("Ancho (mm)", 39, yPos);
-        pdf.text("Alto (mm)", 68, yPos);
-        pdf.text("Cant.", 97, yPos);
+        pdf.text("Ancho (mm)", 48, yPos);
+        pdf.text("Alto (mm)", 74, yPos);
+        pdf.text("Cant.", 99, yPos);
         pdf.text("Cristal Monolítico", 115, yPos);
         pdf.setTextColor(0, 0, 0);
         pdf.setFont("helvetica", "normal");
@@ -502,10 +503,10 @@ function CotizadorMonoliticoContent() {
       pdf.setFontSize(9);
       pdf.text(splitLabel, 17, yPos);
       pdf.setFont("helvetica", "bold");
-      pdf.text(`${item.ancho}`, 39, yPos);
-      pdf.text(`${item.alto}`, 68, yPos);
+      pdf.text(`${item.ancho}`, 48, yPos);
+      pdf.text(`${item.alto}`, 74, yPos);
       pdf.setFont("helvetica", "normal");
-      pdf.text(`${item.cantidad}`, 99, yPos);
+      pdf.text(`${item.cantidad}`, 101, yPos);
       pdf.text(`${item.cristal.tipo} ${item.cristal.espesor}mm`, 115, yPos);
 
       yPos += rowHeight;
