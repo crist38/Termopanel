@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Settings, Layers, Square, FileText, Triangle, BarChart2, Menu, X, LogOut, Hammer } from 'lucide-react';
+import { Settings, Layers, Square, FileText, Triangle, BarChart2, Menu, X, LogOut, Hammer, LifeBuoy } from 'lucide-react';
 import { logoutFromOdoo } from '@/app/actions/auth';
 
 interface Vendedor {
@@ -118,6 +118,7 @@ export function Navbar() {
     { href: '/monolitico', label: 'Corte Vidrio Monolítico', icon: Square },
     { href: '/formas', label: 'Formas', icon: Triangle },
     { href: '/fabricacion', label: 'Fabricación', icon: Hammer },
+    { href: '/reposiciones', label: 'Reposiciones', icon: LifeBuoy },
     { href: '/cotizaciones', label: 'Cotizaciones', icon: FileText },
     { href: '/reports', label: 'Reportes', icon: BarChart2 },
     { href: '/admin/config', label: 'Configuración', icon: Settings },

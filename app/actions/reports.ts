@@ -4,6 +4,7 @@ import { odoo } from '@/lib/odoo';
 import { getTermopanelConfig } from '@/lib/configService';
 import { getSession } from '@/app/actions/auth';
 import { odooSales } from '@/lib/odoo-sales';
+import { lineaEquivalente, listarReposicionesVigentes } from '@/lib/reposiciones';
 
 export interface ReportStats {
   ingresosTotales: number;
@@ -14,6 +15,13 @@ export interface ReportStats {
   tallerTermoM2: number;
   totalManoDeObra: number;
   costoManoDeObra: number;
+  // Piezas repuestas por tickets de Soporte al Cliente (ya incluidas en los m² de taller y la mano de obra)
+  reposiciones: {
+    tickets: number;
+    corteM2: number;
+    termoM2: number;
+    manoDeObra: number;
+  };
   insumos: {
     escuadras: number;
     hotmelt: number;
@@ -337,6 +345,46 @@ export async function obtenerDatosReportes(
       });
     }
 
+    // 4b. Reposiciones de Soporte al Cliente: se fabrican de nuevo, así que suman m² e insumos
+    // a los talleres en la fecha de la reposición (no suman ingresos).
+    const fechaEnFiltro = (d: Date) => {
+      if (filtro === 'diario') {
+        return d.getFullYear() === currentYear && d.getMonth() === currentMonth && d.getDate() === currentDay;
+      }
+      if (filtro === 'mes') return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+      if (filtro === 'mes_anterior') {
+        const mesAnterior = new Date(currentYear, currentMonth - 1, 1);
+        return d.getFullYear() === mesAnterior.getFullYear() && d.getMonth() === mesAnterior.getMonth();
+      }
+      return true;
+    };
+    const reposiciones = { tickets: 0, corteM2: 0, termoM2: 0, manoDeObra: 0 };
+    try {
+      const vigentes = await listarReposicionesVigentes();
+      for (const rep of vigentes) {
+        if (clienteId && rep.partnerId !== clienteId) continue;
+        if (filtro === 'fecha_especifica' && fechaEspecifica) {
+          if (rep.fecha !== fechaEspecifica) continue;
+        } else if (!fechaEnFiltro(new Date(`${rep.fecha}T12:00:00`))) {
+          continue;
+        }
+        reposiciones.tickets += 1;
+        for (const pieza of rep.items) {
+          if (pieza.tipo === 'termopanel') {
+            reposiciones.corteM2 += pieza.m2 * 2;
+            reposiciones.termoM2 += pieza.m2;
+            reposiciones.manoDeObra += costoManoDeObra * pieza.m2;
+          } else {
+            reposiciones.corteM2 += pieza.m2;
+          }
+          lines.push(lineaEquivalente(pieza));
+        }
+      }
+    } catch (e) {
+      // Si no se pueden leer los tickets (p. ej. sin acceso a Soporte), el reporte sigue sin reposiciones
+      console.error('Error al leer reposiciones de Soporte al Cliente:', e);
+    }
+
     // 5. Agregación de talleres, insumos y mano de obra
     let tallerCorteM2 = 0;
     let tallerTermoM2 = 0;
@@ -513,6 +561,7 @@ export async function obtenerDatosReportes(
         tallerTermoM2,
         totalManoDeObra,
         costoManoDeObra,
+        reposiciones,
         insumos: {
           escuadras: totalEscuadras,
           hotmelt: totalHotmelt,

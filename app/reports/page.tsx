@@ -650,8 +650,20 @@ function ReportsDashboardContent() {
                 </div>
               </div>
 
+              {stats.reposiciones?.tickets > 0 && (
+                <div className="mt-6 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-800">
+                  <RefreshCw size={14} className="flex-shrink-0 mt-0.5" />
+                  <span>
+                    Incluye <strong>{stats.reposiciones.tickets}</strong> reposición{stats.reposiciones.tickets !== 1 ? 'es' : ''} de Soporte al Cliente:{' '}
+                    <strong className="font-mono">{stats.reposiciones.corteM2.toFixed(2)} m²</strong> en Corte Vidrio y{' '}
+                    <strong className="font-mono">{stats.reposiciones.termoM2.toFixed(2)} m²</strong> en Termopaneles
+                    {stats.reposiciones.manoDeObra > 0 && <> (${Math.round(stats.reposiciones.manoDeObra).toLocaleString('es-CL')} de mano de obra)</>}.
+                  </span>
+                </div>
+              )}
+
               <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between text-xs text-slate-500">
-                <span>* Calculado a partir de órdenes de venta confirmadas</span>
+                <span>* Calculado a partir de órdenes de venta confirmadas y reposiciones de Soporte al Cliente</span>
                 <span>ProWindows Ltda.</span>
               </div>
             </div>
