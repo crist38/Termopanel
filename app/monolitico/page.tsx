@@ -736,8 +736,7 @@ function CotizadorMonoliticoContent() {
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="bg-[#7a5973] text-white">
               <tr>
-                <th className="p-3 font-medium border-r border-[#6b4c64]">N°</th>
-                <th className="p-3 font-medium border-r border-[#6b4c64] text-center w-20">Ref</th>
+                <th className="p-3 font-medium border-r border-[#6b4c64] text-center w-40">Ref</th>
                 <th className="p-3 font-medium border-r border-[#6b4c64] text-center w-20">Cant</th>
                 <th className="p-3 font-medium border-r border-[#6b4c64] text-center w-24">Ancho (mm)</th>
                 <th className="p-3 font-medium border-r border-[#6b4c64] text-center w-24">Alto (mm)</th>
@@ -751,7 +750,6 @@ function CotizadorMonoliticoContent() {
               {items.map((item, index) => {
                 return (
                   <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-2 text-center text-slate-400 text-xs border-r border-slate-100">{index + 1}</td>
                     <td className="p-1 border-r border-slate-100">
                       <input
                         type="text"
@@ -817,21 +815,21 @@ function CotizadorMonoliticoContent() {
             </tbody>
             <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
               <tr>
-                <td colSpan={8} className="p-2 text-right text-slate-600 text-sm border-r border-slate-100">Total Neto:</td>
+                <td colSpan={7} className="p-2 text-right text-slate-600 text-sm border-r border-slate-100">Total Neto:</td>
                 <td className="p-2 text-right text-slate-900 font-mono text-base px-2">
                   ${totalNeto.toLocaleString()}
                 </td>
                 <td></td>
               </tr>
               <tr>
-                <td colSpan={8} className="p-2 text-right text-slate-600 text-sm border-r border-slate-100">IVA (19%):</td>
+                <td colSpan={7} className="p-2 text-right text-slate-600 text-sm border-r border-slate-100">IVA (19%):</td>
                 <td className="p-2 text-right text-slate-900 font-mono text-base px-2">
                   ${Math.round(totalNeto * 0.19).toLocaleString()}
                 </td>
                 <td></td>
               </tr>
               <tr className="bg-slate-100/50">
-                <td colSpan={8} className="p-3 text-right text-slate-800 text-sm border-r border-slate-100">Total:</td>
+                <td colSpan={7} className="p-3 text-right text-slate-800 text-sm border-r border-slate-100">Total:</td>
                 <td className="p-3 text-right text-[#7a5973] font-mono text-lg font-bold px-2">
                   ${Math.round(totalNeto * 1.19).toLocaleString()}
                 </td>
