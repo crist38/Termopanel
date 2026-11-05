@@ -47,7 +47,7 @@ function parseOdooLinePdf(line: any, index: number) {
   const cantPart = parts.find((p: string) => p.toLowerCase().includes('cantidad:'));
   if (cantPart) { const m = cantPart.match(/cantidad:\s*(\d+)/i); if (m) cant = m[1]; }
   const dimPart = parts.find((p: string) => p.toLowerCase().includes('termopanel') || p.toLowerCase().includes('cristal monolítico'));
-  if (dimPart) { const m = dimPart.match(/(\d+)\s*x\s*(\d+)/i); if (m) dim = `${m[1]} x ${m[2]}`; }
+  if (dimPart) { const m = dimPart.match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i); if (m) dim = `${m[1]} x ${m[2]}`; }
   else if (line.x_studio_ancho_m != null && line.x_studio_alto_m != null) {
     const w = Math.round(line.x_studio_ancho_m * 1000);
     const h = Math.round(line.x_studio_alto_m * 1000);
@@ -249,7 +249,7 @@ function ReportsDashboardContent() {
 
         let ancho = 0, alto = 0;
         const dimPart = parts.find(p => /termopanel\s+\d/i.test(p) || /^dimensiones?:/i.test(p) || /cristal monol/i.test(p));
-        if (dimPart) { const m = dimPart.match(/(\d+)\s*x\s*(\d+)/i); if (m) { ancho = parseInt(m[1], 10); alto = parseInt(m[2], 10); } }
+        if (dimPart) { const m = dimPart.match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i); if (m) { ancho = parseFloat(m[1]); alto = parseFloat(m[2]); } }
         else if (line.x_studio_ancho_m != null) { ancho = Math.round(line.x_studio_ancho_m * 1000); alto = Math.round((line.x_studio_alto_m * 1000) / cantidad); }
 
         const c1Part = parts.find(p => /^(cristal 1|c1|cristal):/i.test(p));

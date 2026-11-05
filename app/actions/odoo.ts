@@ -416,9 +416,9 @@ function parseTermopanelLine(name: string, idx: number, line?: any): TermopanelI
 
   // Dimensiones "Termopanel 800 x 1200 mm"
   const dimPart = parts.find(p => /^termopanel/i.test(p) || /\d+\s*x\s*\d+/i.test(p));
-  const dimMatch = (dimPart || name).match(/(\d+)\s*x\s*(\d+)/i);
-  let ancho = parseInt(dimMatch?.[1] || '0') || 0;
-  let alto  = parseInt(dimMatch?.[2] || '0') || 0;
+  const dimMatch = (dimPart || name).match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
+  let ancho = parseFloat(dimMatch?.[1] || '0') || 0;
+  let alto  = parseFloat(dimMatch?.[2] || '0') || 0;
 
   if (ancho === 0 && alto === 0 && line) {
     if (line.x_studio_ancho_m != null && line.x_studio_alto_m != null) {
@@ -601,9 +601,9 @@ function parseMonoliticoLine(name: string, idx: number, line?: any): MonoliticoI
 
   // Dimensiones "Cristal Monolítico 800 x 1200 mm"
   const dimPart = parts.find(p => /^cristal monol/i.test(p) || /\d+\s*x\s*\d+/i.test(p));
-  const dimMatch = (dimPart || name).match(/(\d+)\s*x\s*(\d+)/i);
-  let ancho    = parseInt(dimMatch?.[1] || '0') || 0;
-  let alto     = parseInt(dimMatch?.[2] || '0') || 0;
+  const dimMatch = (dimPart || name).match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
+  let ancho    = parseFloat(dimMatch?.[1] || '0') || 0;
+  let alto     = parseFloat(dimMatch?.[2] || '0') || 0;
 
   if (ancho === 0 && alto === 0 && line) {
     if (line.x_studio_ancho_m != null && line.x_studio_alto_m != null) {

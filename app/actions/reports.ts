@@ -370,10 +370,10 @@ export async function obtenerDatosReportes(
       // Parsear dimensiones
       let ancho = 0;
       let alto = 0;
-      const dimMatch = name.match(/(?:Termopanel|Cristal Monolítico)\s*(\d+)\s*x\s*(\d+)/i);
+      const dimMatch = name.match(/(?:Termopanel|Cristal Monolítico)\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
       if (dimMatch) {
-        ancho = parseInt(dimMatch[1], 10);
-        alto = parseInt(dimMatch[2], 10);
+        ancho = parseFloat(dimMatch[1]);
+        alto = parseFloat(dimMatch[2]);
       } else {
         // Fallback usando los campos x_studio
         ancho = Math.round((line.x_studio_ancho_m || 0) * 1000);

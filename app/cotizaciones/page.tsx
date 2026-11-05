@@ -98,7 +98,7 @@ function parseOdooLine(line: OrderLine, index: number) {
   
   const dimPart = parts.find(p => p.toLowerCase().includes("termopanel") || p.toLowerCase().includes("cristal monolítico"));
   if (dimPart) {
-    const match = dimPart.match(/(\d+)\s*x\s*(\d+)/i);
+    const match = dimPart.match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
     if (match) {
       dim = `${match[1]} x ${match[2]}`;
     }
@@ -141,19 +141,19 @@ function parseDimensions(name: string): { ancho: number; alto: number } | null {
   const parts = name.split(" | ").map(p => p.trim());
   const dimPart = parts.find(p => p.toLowerCase().includes("termopanel") || p.toLowerCase().includes("cristal monolítico") || p.toLowerCase().includes("cristal"));
   if (dimPart) {
-    const match = dimPart.match(/(\d+)\s*x\s*(\d+)/i);
+    const match = dimPart.match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
     if (match) {
       return {
-        ancho: parseInt(match[1], 10) || 0,
-        alto: parseInt(match[2], 10) || 0
+        ancho: parseFloat(match[1]) || 0,
+        alto: parseFloat(match[2]) || 0
       };
     }
   }
-  const match = name.match(/(\d+)\s*x\s*(\d+)/i);
+  const match = name.match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
   if (match) {
     return {
-      ancho: parseInt(match[1], 10) || 0,
-      alto: parseInt(match[2], 10) || 0
+      ancho: parseFloat(match[1]) || 0,
+      alto: parseFloat(match[2]) || 0
     };
   }
   return null;
@@ -579,10 +579,10 @@ export default function CotizacionesPage() {
         /cristal monol/i.test(p)
       );
       if (dimPart) {
-        const match = dimPart.match(/(\d+)\s*x\s*(\d+)/i);
+        const match = dimPart.match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
         if (match) {
-          ancho = parseInt(match[1], 10);
-          alto = parseInt(match[2], 10);
+          ancho = parseFloat(match[1]);
+          alto = parseFloat(match[2]);
         }
       } else if (line.x_studio_ancho_m != null && line.x_studio_alto_m != null) {
         ancho = Math.round(line.x_studio_ancho_m * 1000);
