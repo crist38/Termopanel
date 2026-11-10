@@ -73,52 +73,80 @@ function stripHtml(htmlStr: string) {
   return htmlStr.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
 }
 
+// Divide la descripción de una línea en partes. Soporta el formato nuevo
+// separado por " | " y el antiguo separado por saltos de línea, donde
+// "[V1] Cantidad: 4" puede venir junto en un mismo trozo.
+function splitLineParts(name: string): string[] {
+  const rawSplit = name.includes(" | ")
+    ? name.split(" | ").map(p => p.trim())
+    : name.split(/\n/).map(p => p.trim());
+  const parts: string[] = [];
+  for (const rp of rawSplit) {
+    if (!rp) continue;
+    const bracketEnd = rp.indexOf("]");
+    if (rp.startsWith("[") && bracketEnd !== -1 && bracketEnd < rp.length - 1) {
+      parts.push(rp.slice(0, bracketEnd + 1).trim());
+      const rest = rp.slice(bracketEnd + 1).trim();
+      if (rest) parts.push(rest);
+    } else {
+      parts.push(rp);
+    }
+  }
+  return parts;
+}
+
+function isDimPart(p: string) {
+  return /^termopanel\s+\d/i.test(p) || /^dimensiones?:/i.test(p) || /^cristal monol/i.test(p);
+}
+
 function parseOdooLine(line: OrderLine, index: number) {
   const name = line.name || "";
-  
+
   let ref = `L${index + 1}`;
-  let cant = line.product_uom_qty.toString(); 
+  let cant = line.product_uom_qty.toString();
   let dim = "—";
   let config = name;
-  
-  const parts = name.split(" | ").map(p => p.trim());
-  
+
+  const parts = splitLineParts(name);
+
   const refMatch = parts[0]?.match(/^\[([^\]]+)\]$/);
   if (refMatch) {
     ref = refMatch[1];
   }
-  
+
+  let piezas = 1;
   const cantPart = parts.find(p => p.toLowerCase().includes("cantidad:"));
   if (cantPart) {
     const match = cantPart.match(/cantidad:\s*(\d+)/i);
     if (match) {
       cant = match[1];
+      piezas = parseInt(match[1], 10) || 1;
     }
   }
-  
-  const dimPart = parts.find(p => p.toLowerCase().includes("termopanel") || p.toLowerCase().includes("cristal monolítico"));
-  if (dimPart) {
-    const match = dimPart.match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
-    if (match) {
-      dim = `${match[1]} x ${match[2]}`;
-    }
+
+  const dimPart = parts.find(isDimPart);
+  const dimMatch = dimPart?.match(/(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)/i);
+  if (dimMatch) {
+    dim = `${dimMatch[1]} x ${dimMatch[2]}`;
   } else if (line.x_studio_ancho_m != null && line.x_studio_alto_m != null) {
+    // En Odoo el alto se guarda multiplicado por la cantidad de piezas
     const w = Math.round(line.x_studio_ancho_m * 1000);
-    const h = Math.round(line.x_studio_alto_m * 1000);
+    const h = Math.round((line.x_studio_alto_m * 1000) / piezas);
     if (w > 0 && h > 0) {
       dim = `${w} x ${h}`;
     }
   }
-  
-  const configParts = parts.filter(p => 
-    !p.startsWith("[") && 
-    !p.toLowerCase().includes("cantidad:") && 
+
+  const configParts = parts.filter(p =>
+    !p.startsWith("[") &&
+    !p.toLowerCase().includes("cantidad:") &&
     !p.toLowerCase().startsWith("termopanel") &&
-    !p.toLowerCase().startsWith("cristal monolítico")
+    !p.toLowerCase().startsWith("cristal monolítico") &&
+    !isDimPart(p)
   );
   
   if (configParts.length > 0) {
-    config = configParts.join(" | ");
+    config = configParts.join(name.includes(" | ") ? " | " : "\n");
   }
   
   return { ref, cant, dim, config };
@@ -543,22 +571,7 @@ export default function CotizacionesPage() {
 
     const parsedItems = productLines.map((line, index) => {
       const name = line.name || "";
-      // Handle both pipe-separated (new) and newline-separated (old) formats
-      const rawSplit = name.includes(" | ")
-        ? name.split(" | ").map(p => p.trim())
-        : name.split(/\n/).map(p => p.trim());
-      // Old format can have "[V1] Cantidad: 4" merged in one chunk — split it
-      const parts: string[] = [];
-      for (const rp of rawSplit) {
-        const bracketEnd = rp.indexOf("]");
-        if (rp.startsWith("[") && bracketEnd !== -1 && bracketEnd < rp.length - 1) {
-          parts.push(rp.slice(0, bracketEnd + 1).trim());
-          const rest = rp.slice(bracketEnd + 1).trim();
-          if (rest) parts.push(rest);
-        } else {
-          parts.push(rp);
-        }
-      }
+      const parts = splitLineParts(name);
 
       // Cantidad
       let cantidad = 1;
