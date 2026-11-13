@@ -93,15 +93,12 @@ Aplicación web de PRO WINDOWS para cotizar, vender y fabricar termopaneles y cr
    ```bash
    npm run dev
    ```
-   Abre [http://localhost:3000/login](http://localhost:3000/login) en tu navegador.
+   Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 
 ## 🔐 Flujo de Autenticación
 
-- La app arranca en `/login`. El vendedor ingresa su **correo y contraseña de Odoo**, que se validan directamente contra Odoo.
-- Si son correctos, la sesión se guarda en una cookie segura (HTTP-only) que dura **8 horas**. La contraseña no se almacena.
-- Todas las páginas exigen sesión: sin ella se redirige a `/login`.
-- El menú del avatar en la barra superior muestra los datos del vendedor y la opción **Cerrar sesión**.
-- Las operaciones en Odoo se ejecutan con el usuario de sistema (`ODOO_USERNAME`); las ventas se asignan al vendedor que inició sesión.
+- La pantalla de login (correo y contraseña de Odoo) está **desactivada** mientras Odoo esté suspendido: la app abre directo en los cotizadores, sin iniciar sesión.
+- Las acciones del servidor que leen o escriben en Odoo siguen exigiendo sesión, así que responden "No autorizado" hasta que se restaure el login (`app/login`, `middleware.ts` y `app/actions/auth.ts` en el historial de git).
 
 ## 🏭 Flujo de Odoo (Integración ERP)
 
