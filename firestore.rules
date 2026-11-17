@@ -1,9 +1,8 @@
 rules_version = '2';
 
 // Reglas de Firestore para el cotizador de Termopaneles (Prowindows).
-// La app no usa Firebase Auth (la sesión es de Odoo), por eso el documento de
-// configuración se lee y escribe sin autenticación de Firebase. Todo lo demás
-// queda cerrado.
+// La app no usa Firebase Auth (la sesión es de Odoo), por eso se lee y escribe
+// sin autenticación de Firebase. No se permite borrar nada.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -15,19 +14,33 @@ service cloud.firestore {
       );
     }
 
-    // Cotizaciones antiguas (hoy las cotizaciones viven en Odoo): solo lectura
-    match /presupuestos_termopaneles/{id} {
-      allow read: if true;
-      allow write: if false;
-    }
-    match /presupuestos_monoliticos/{id} {
-      allow read: if true;
-      allow write: if false;
+    // Cotizaciones guardadas en Firebase mientras Odoo está suspendido:
+    // lib/cotizacionesFirestore.ts
+    function cotizacionValida() {
+      let d = request.resource.data;
+      return d.clientName is string && d.clientName.size() > 0
+        && d.items is list
+        && d.totalNeto is number
+        && d.budgetNumber is int
+        && d.budgetName is string;
     }
 
-    // Cualquier otra colección: cerrada
-    match /{document=**} {
-      allow read, write: if false;
+    match /{coleccion}/{id} {
+      allow read: if coleccion in ['presupuestos_termopaneles', 'presupuestos_monoliticos', 'presupuestos_formas'];
+      allow create: if coleccion in ['presupuestos_termopaneles', 'presupuestos_monoliticos', 'presupuestos_formas']
+        && cotizacionValida();
+      // Al editar no se puede cambiar el número
+      allow update: if coleccion in ['presupuestos_termopaneles', 'presupuestos_monoliticos', 'presupuestos_formas']
+        && cotizacionValida()
+        && request.resource.data.budgetNumber == resource.data.budgetNumber;
+    }
+
+    // Correlativos: solo pueden avanzar de a uno
+    match /contadores/{coleccion} {
+      allow read: if true;
+      allow create: if coleccion in ['presupuestos_termopaneles', 'presupuestos_monoliticos', 'presupuestos_formas']
+        && request.resource.data.ultimo == 1;
+      allow update: if request.resource.data.ultimo == resource.data.ultimo + 1;
     }
   }
 }

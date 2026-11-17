@@ -7,6 +7,9 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { Plus, Trash2, Cloud, ArrowLeft, BarChart2, Triangle, RotateCcw, Printer, Pencil } from 'lucide-react';
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
+import { guardarCotizacionFirestore, esErrorSinSesion, esIdFirestore, firebaseConfigurado } from '@/lib/cotizacionesFirestore';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { ClientSelector } from '@/components/ClientSelector';
 import { refsFueraDeNorma, confirmarFueraDeNorma } from '@/lib/utils/norma';
 import { drawShapeInPdf } from '@/lib/utils/pdf-figuras';
@@ -127,6 +130,17 @@ function ShapesCADCotizadorContent() {
             setItems(res.items || []);
           } else {
             alert(`Error al cargar cotización de Odoo: ${res.error}`);
+          }
+        } else if (firebaseConfigurado()) {
+          const docSnap = await getDoc(doc(db, 'presupuestos_formas', editId));
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setClientName(data.clientName || '');
+            setClientRut(data.clientRut || '');
+            if (data.clientId) setClientId(data.clientId);
+            setObra(data.obra || '');
+            setBudgetName(data.budgetName || 'Borrador');
+            setItems(data.items || []);
           }
         }
       } catch (e) {
@@ -462,7 +476,7 @@ function ShapesCADCotizadorContent() {
     if (!confirmarFueraDeNorma(refsFN())) return;
     setIsSyncingOdoo(true);
     try {
-      let odooRes;
+      let odooRes: { exito: boolean; cotizacionName?: string; error?: string };
       const isOdooId = editId && /^\d+$/.test(editId);
       if (isOdooId) {
         odooRes = await actualizarCotizacionEnOdoo({
@@ -476,6 +490,8 @@ function ShapesCADCotizadorContent() {
           isMonolitico: false,
           autoConfirm: isConfirm
         });
+      } else if (esIdFirestore(editId)) {
+        odooRes = { exito: false };
       } else {
         odooRes = await guardarCotizacionEnOdoo({
           clientId,
@@ -489,8 +505,24 @@ function ShapesCADCotizadorContent() {
         });
       }
 
+      // Odoo suspendido (sin sesión) o cotización que ya vive en Firebase: guardar en Firestore
+      let enFirebase = false;
+      if (esIdFirestore(editId) || (!odooRes.exito && esErrorSinSesion(odooRes.error))) {
+        enFirebase = true;
+        odooRes = await guardarCotizacionFirestore('presupuestos_formas', {
+          clientId,
+          clientName,
+          clientRut,
+          obra,
+          items,
+          totalNeto,
+        }, { id: esIdFirestore(editId) ? editId : undefined, confirmada: isConfirm });
+      }
+
       if (odooRes.exito) {
-        if (isOdooId) {
+        if (enFirebase) {
+          alert(`✅ Cotización ${odooRes.cotizacionName} guardada en Firebase (Odoo está suspendido). A continuación se descargará${isConfirm ? 'n los PDFs' : ' el Presupuesto PDF'}.`);
+        } else if (isOdooId) {
           if (isConfirm) {
             alert(`✅ ¡Listo! Cotización ${odooRes.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
           } else {
@@ -522,11 +554,11 @@ function ShapesCADCotizadorContent() {
         setBudgetName('Borrador');
         setItems([]);
 
-        if (isOdooId) {
+        if (isOdooId || esIdFirestore(editId)) {
           router.push('/cotizaciones');
         }
       } else {
-        alert(`Error desde Odoo: ${odooRes.error}`);
+        alert(`Error desde ${enFirebase ? 'Firebase' : 'Odoo'}: ${odooRes.error}`);
       }
     } catch (error) {
       console.error(error);

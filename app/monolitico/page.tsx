@@ -10,6 +10,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
 import { Printer, Plus, Trash2, Cloud, ClipboardList, ArrowLeft } from 'lucide-react';
 import { guardarCotizacionMonoliticoEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
+import { guardarCotizacionFirestore, esErrorSinSesion, esIdFirestore } from '@/lib/cotizacionesFirestore';
 import { ClientSelector } from '@/components/ClientSelector';
 
 function CotizadorMonoliticoContent() {
@@ -96,6 +97,7 @@ function CotizadorMonoliticoContent() {
               const data = docSnap.data();
               setClientName(data.clientName || '');
               setClientRut(data.clientRut || '');
+              if (data.clientId) setClientId(data.clientId);
               setObra(data.obra || '');
               setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
               setItems(data.items || []);
@@ -544,7 +546,7 @@ function CotizadorMonoliticoContent() {
 
     setIsSyncingOdoo(true);
     try {
-      let response;
+      let response: { exito: boolean; cotizacionName?: string; error?: string };
       const isOdooId = editId && /^\d+$/.test(editId);
       
       if (isOdooId) {
@@ -559,6 +561,8 @@ function CotizadorMonoliticoContent() {
           isMonolitico: true,
           autoConfirm: isConfirm
         });
+      } else if (esIdFirestore(editId)) {
+        response = { exito: false };
       } else {
         response = await guardarCotizacionMonoliticoEnOdoo({
           clientId,
@@ -571,8 +575,24 @@ function CotizadorMonoliticoContent() {
         });
       }
 
+      // Odoo suspendido (sin sesión) o cotización que ya vive en Firebase: guardar en Firestore
+      let enFirebase = false;
+      if (esIdFirestore(editId) || (!response.exito && esErrorSinSesion(response.error))) {
+        enFirebase = true;
+        response = await guardarCotizacionFirestore('presupuestos_monoliticos', {
+          clientId,
+          clientName,
+          clientRut,
+          obra,
+          items,
+          totalNeto,
+        }, { id: esIdFirestore(editId) ? editId : undefined, confirmada: isConfirm });
+      }
+
       if (response.exito) {
-        if (isOdooId) {
+        if (enFirebase) {
+          alert(`✅ Cotización ${response.cotizacionName} guardada en Firebase (Odoo está suspendido). A continuación se descargará${isConfirm ? 'n los PDFs' : ' el Presupuesto PDF'}.`);
+        } else if (isOdooId) {
           if (isConfirm) {
             alert(`✅ ¡Listo! Cotización ${response.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
           } else {
@@ -602,11 +622,11 @@ function CotizadorMonoliticoContent() {
         setBudgetName('Borrador');
         setItems([{ id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15), label: "V1", cantidad: 1, ancho: 1000, alto: 1000, cristal: { tipo: "Incoloro", espesor: 4 }, precioUnitario: 0 }]);
 
-        if (isOdooId) {
+        if (isOdooId || esIdFirestore(editId)) {
           router.push('/cotizaciones');
         }
       } else {
-        alert(`Error al guardar en Odoo: ${response.error}`);
+        alert(`Error al guardar en ${enFirebase ? 'Firebase' : 'Odoo'}: ${response.error}`);
       }
     } catch (error) {
       console.error(error);
