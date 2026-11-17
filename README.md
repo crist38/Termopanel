@@ -87,7 +87,7 @@ Aplicación web de PRO WINDOWS para cotizar, vender y fabricar termopaneles y cr
    Coloca `logo.png` y `logo-texto.png` dentro de la carpeta `/public` del proyecto.
 
 6. **Firebase (opcional)**
-   Si se usa, configura en la consola de Firebase (`Firestore > Reglas`) los permisos del documento `configuracion/termopaneles`.
+   Proyecto: `cotizador-termopaneles` (Firestore en `southamerica-west1`). Las reglas están en `firestore.rules`; para publicarlas: `npx firebase-tools deploy --only firestore:rules`.
 
 7. **Levantar el servidor de desarrollo**
    ```bash

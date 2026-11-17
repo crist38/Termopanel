@@ -1,0 +1,33 @@
+rules_version = '2';
+
+// Reglas de Firestore para el cotizador de Termopaneles (Prowindows).
+// La app no usa Firebase Auth (la sesión es de Odoo), por eso el documento de
+// configuración se lee y escribe sin autenticación de Firebase. Todo lo demás
+// queda cerrado.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Configuración de precios: lib/configService.ts
+    match /configuracion/termopaneles {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasAll(
+        ['vidrios', 'separadores', 'coloresSeparador', 'preciosSeparadores', 'parametrosCalculo']
+      );
+    }
+
+    // Cotizaciones antiguas (hoy las cotizaciones viven en Odoo): solo lectura
+    match /presupuestos_termopaneles/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /presupuestos_monoliticos/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Cualquier otra colección: cerrada
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
