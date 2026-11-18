@@ -1,6 +1,6 @@
 {
   "name": "cotizador-termopaneles",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "",
   "main": "index.js",
   "directories": {
@@ -10,7 +10,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "crear-admin": "tsx --env-file-if-exists=.env.local scripts/crear-admin.ts",
+    "importar-odoo": "tsx --env-file-if-exists=.env.local scripts/importar-odoo.ts"
   },
   "keywords": [],
   "author": "",
@@ -20,14 +24,20 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "clsx": "^2.1.1",
+    "drizzle-orm": "^0.45.4",
     "firebase": "^12.13.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.16.0",
     "next": "^16.2.6",
+    "postgres": "^4.1.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "tailwind-merge": "^3.6.0",
     "transbank-sdk": "^6.1.1",
     "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.23.15"
   }
 }

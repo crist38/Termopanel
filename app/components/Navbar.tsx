@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Settings, Layers, Square, FileText, Triangle, BarChart2, Menu, X, Hammer, LifeBuoy } from 'lucide-react';
+import { Settings, Layers, Square, FileText, Triangle, BarChart2, Menu, X, Hammer, LifeBuoy, Users, LogOut } from 'lucide-react';
+import { logout } from '@/app/actions/auth';
+import { puedeAcceder, ROL_LABELS, type Rol } from '@/lib/roles';
 
-export function Navbar() {
+export function Navbar({ usuario }: { usuario: { nombre: string; rol: Rol } }) {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -18,7 +20,20 @@ export function Navbar() {
     { href: '/cotizaciones', label: 'Cotizaciones', icon: FileText },
     { href: '/reports', label: 'Reportes', icon: BarChart2 },
     { href: '/admin/config', label: 'Configuración', icon: Settings },
-  ];
+    { href: '/admin/usuarios', label: 'Usuarios', icon: Users },
+  ].filter((item) => puedeAcceder(usuario.rol, item.href));
+
+  const cuenta = (
+    <form action={logout} className="flex items-center gap-2 text-sm">
+      <span className="text-white/90 truncate max-w-[12rem]" title={ROL_LABELS[usuario.rol]}>
+        {usuario.nombre} <span className="text-white/60">· {ROL_LABELS[usuario.rol]}</span>
+      </span>
+      <button type="submit" title="Cerrar sesión" aria-label="Cerrar sesión"
+        className="p-2 rounded-md text-white/80 hover:bg-[#8f6b88] hover:text-white transition-colors">
+        <LogOut size={16} />
+      </button>
+    </form>
+  );
 
   return (
     <nav className="bg-[#7a5973] text-white shadow-md sticky top-0 z-50">
@@ -62,6 +77,7 @@ export function Navbar() {
                 </Link>
               );
             })}
+            <div className="ml-3 pl-3 border-l border-white/20">{cuenta}</div>
           </div>
         </div>
 
@@ -111,6 +127,7 @@ export function Navbar() {
                 </Link>
               );
             })}
+            <div className="px-3 pt-2 border-t border-white/10">{cuenta}</div>
           </div>
         </div>
       )}

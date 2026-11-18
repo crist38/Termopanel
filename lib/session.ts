@@ -5,9 +5,16 @@ export const SESSION_MAX_AGE = 60 * 60 * 8 // 8 horas
 
 const MIN_SECRET_LENGTH = 32
 
+import { isRol, type Rol } from './roles'
+
+export const SESSION_COOKIE = 'session'
+
 export interface SessionData {
-  uid: number
+  uid: number // id del usuario en la base propia
   email: string
+  nombre: string
+  rol: Rol
+  odooUid: number | null // usuario equivalente en Odoo, mientras se siga usando
 }
 
 async function getKey(): Promise<CryptoKey | null> {
@@ -70,8 +77,15 @@ export async function verifySessionToken(token: string | undefined): Promise<Ses
     const data = JSON.parse(new TextDecoder().decode(fromBase64Url(payload)))
     if (typeof data.uid !== 'number' || typeof data.exp !== 'number') return null
     if (data.exp <= Math.floor(Date.now() / 1000)) return null
+    if (!isRol(data.rol)) return null
 
-    return { uid: data.uid, email: data.email }
+    return {
+      uid: data.uid,
+      email: String(data.email ?? ''),
+      nombre: String(data.nombre ?? ''),
+      rol: data.rol,
+      odooUid: typeof data.odooUid === 'number' ? data.odooUid : null,
+    }
   } catch {
     return null
   }

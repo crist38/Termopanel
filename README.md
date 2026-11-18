@@ -2,7 +2,7 @@
 
 Aplicación web de PRO WINDOWS para cotizar, vender y fabricar termopaneles y cristales a medida. Calcula presupuestos según dimensiones y configuración de cristales, los guarda como ventas en el ERP Odoo, genera los PDF de presupuesto y de taller, y crea las órdenes de fabricación y de trabajo para los talleres.
 
-**Versión actual: 3.1**
+**Versión actual: 4.0**
 
 ## ✨ Características Principales
 
@@ -47,6 +47,9 @@ Aplicación web de PRO WINDOWS para cotizar, vender y fabricar termopaneles y cr
    # Firma de la cookie de sesión (obligatorio, mínimo 32 caracteres aleatorios)
    SESSION_SECRET="genera_una_cadena_aleatoria_larga"
 
+   # Base de datos propia (obligatorio): usuarios, clientes, proveedores y productos
+   DATABASE_URL="postgres://usuario:clave@servidor:5432/erp"
+
    # Odoo (Servidor - Mantener seguro)
    ODOO_URL="https://tu-empresa.odoo.com"       # sin slash final
    ODOO_DB="nombre_base_de_datos"
@@ -89,7 +92,15 @@ Aplicación web de PRO WINDOWS para cotizar, vender y fabricar termopaneles y cr
 6. **Firebase (opcional)**
    Si se usa, configura en la consola de Firebase (`Firestore > Reglas`) los permisos del documento `configuracion/termopaneles`.
 
-7. **Levantar el servidor de desarrollo**
+7. **Base de datos y primer administrador**
+   ```bash
+   npm run db:migrate                     # crea las tablas en DATABASE_URL
+   npm run crear-admin -- tu@correo.cl "Tu Nombre" una_clave_segura
+   npm run importar-odoo                  # opcional: copia usuarios, contactos y productos desde Odoo
+   ```
+   La importación se puede repetir: actualiza lo ya importado y no escribe en Odoo. Los usuarios importados quedan con rol Vendedor y sin contraseña; Administración les asigna rol y contraseña en **Usuarios** (`/admin/usuarios`). Si se cambia `lib/db/schema.ts`, se genera la migración con `npm run db:generate`.
+
+8. **Levantar el servidor de desarrollo**
    ```bash
    npm run dev
    ```
@@ -97,8 +108,18 @@ Aplicación web de PRO WINDOWS para cotizar, vender y fabricar termopaneles y cr
 
 ## 🔐 Flujo de Autenticación
 
-- La pantalla de login (correo y contraseña de Odoo) está **desactivada** mientras Odoo esté suspendido: la app abre directo en los cotizadores, sin iniciar sesión.
-- Las acciones del servidor que leen o escriben en Odoo siguen exigiendo sesión, así que responden "No autorizado" hasta que se restaure el login (`app/login`, `middleware.ts` y `app/actions/auth.ts` en el historial de git).
+- Cada persona entra en `/login` con el email y la contraseña guardados en la base propia (hash scrypt). La sesión es una cookie firmada que dura 8 horas.
+- `proxy.ts` exige sesión en toda la app y lleva a cada rol solo a sus secciones (reglas en `lib/roles.ts`). Las acciones del servidor revisan el rol con `requireRol`, y desactivar a un usuario corta su acceso de inmediato.
+
+| Rol | Secciones |
+| --- | --- |
+| Vendedor | Cotizadores, Cotizaciones, Fabricación, Reposiciones |
+| Taller | Fabricación, Reposiciones |
+| Técnico en terreno | Reposiciones |
+| Bodega | Ninguna todavía (llegan con bodega y compras) |
+| Administración | Todo, incluido Reportes, Configuración y Usuarios |
+
+- Mientras se siga usando Odoo, las acciones que escriben en Odoo solo funcionan para usuarios vinculados a un usuario de Odoo (lo hace `npm run importar-odoo`) y registran la venta a nombre de ese usuario.
 
 ## 🏭 Flujo de Odoo (Integración ERP)
 
@@ -138,6 +159,11 @@ Las obras completas (ventanas de PVC o de aluminio con sus termopaneles incluido
 6. **Taller PDF**: descarga las órdenes de trabajo de ambos talleres con el número de venta, incluyendo el dibujo a escala de las figuras.
 
 ## 📋 Changelog
+
+### v4.0 - Noviembre 2026
+- ✅ **Base de datos propia (PostgreSQL)** con usuarios, contactos (clientes y proveedores), categorías y productos, primer paso para reemplazar Odoo.
+- ✅ **Login propio con roles** (Vendedor, Taller, Bodega, Administración, Técnico en terreno) y página **Usuarios** para administrarlos.
+- ✅ **Importación desde Odoo** con `npm run importar-odoo`.
 
 ### v3.1 - Octubre 2026
 - ✅ **Botón Eliminar fila más visible**: El basurero de cada fila ahora se muestra en rojo sobre fondo rojo claro y pasa a rojo intenso con ícono blanco al pasar el mouse, en todas las tablas (Termopaneles, Monolíticos, Formas y Fabricación).
