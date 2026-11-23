@@ -54,26 +54,47 @@ const DEFAULT_CONFIG: TermopanelConfig = {
   parametrosCalculo: PARAMETROS_DEFAULT,
 };
 
-export async function getTermopanelConfig(): Promise<TermopanelConfig> {
-  // 1. Intentar cargar desde localStorage si existe
-  if (typeof window !== 'undefined') {
-    const local = localStorage.getItem('termopanel_config_local');
-    if (local) {
-      try {
-        const parsed = JSON.parse(local);
-        return {
-          ...DEFAULT_CONFIG,
-          ...parsed,
-          preciosSeparadores: parsed.preciosSeparadores?.length ? parsed.preciosSeparadores : PRECIOS_SEPARADORES_DEFAULT,
-        };
-      } catch {}
-    }
-  }
+const LOCAL_CONFIG_KEY = 'termopanel_config_local';
 
-  // 2. Si no hay Firebase API Key real configurada, devolver la configuración por defecto
+function firebaseDisponible(): boolean {
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-  if (!apiKey || apiKey.startsWith('AIzaSyDummyKey')) {
-    return DEFAULT_CONFIG;
+  return !!apiKey && !apiKey.startsWith('AIzaSyDummyKey');
+}
+
+/** Copia guardada en este navegador (respaldo si Firebase no responde o no está configurado). */
+function leerConfigLocal(): TermopanelConfig | null {
+  if (typeof window === 'undefined') return null;
+  const local = localStorage.getItem(LOCAL_CONFIG_KEY);
+  if (!local) return null;
+  try {
+    const parsed = JSON.parse(local);
+    return {
+      ...DEFAULT_CONFIG,
+      ...parsed,
+      parametrosCalculo: { ...PARAMETROS_DEFAULT, ...(parsed.parametrosCalculo ?? {}) },
+      preciosSeparadores: parsed.preciosSeparadores?.length ? parsed.preciosSeparadores : PRECIOS_SEPARADORES_DEFAULT,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function guardarConfigLocal(config: TermopanelConfig) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LOCAL_CONFIG_KEY, JSON.stringify(config));
+  } catch {}
+}
+
+/**
+ * Configuración de precios.
+ * Con Firebase configurado, el documento `configuracion/termopaneles` es la fuente de verdad:
+ * así un cambio de precio hecho en un equipo se ve en todos. La copia en localStorage
+ * solo se usa si Firebase no responde (o si no hay Firebase configurado).
+ */
+export async function getTermopanelConfig(): Promise<TermopanelConfig> {
+  if (!firebaseDisponible()) {
+    return leerConfigLocal() ?? DEFAULT_CONFIG;
   }
 
   try {
@@ -87,14 +108,14 @@ export async function getTermopanelConfig(): Promise<TermopanelConfig> {
         ...PARAMETROS_DEFAULT,
         ...rawParams,
       };
-      
+
       // Migrar costoGasArgon a costoPulido si corresponde
       if (parametrosCalculo.costoPulido === undefined && (rawParams as any).costoGasArgon !== undefined) {
         parametrosCalculo.costoPulido = (rawParams as any).costoGasArgon;
       }
 
       // Merge con defaults para que campos nuevos (preciosSeparadores, parametrosCalculo) no sean undefined
-      return {
+      const config: TermopanelConfig = {
         ...DEFAULT_CONFIG,
         ...data,
         parametrosCalculo,
@@ -102,31 +123,27 @@ export async function getTermopanelConfig(): Promise<TermopanelConfig> {
           ? data.preciosSeparadores
           : PRECIOS_SEPARADORES_DEFAULT,
       };
+      guardarConfigLocal(config);
+      return config;
     }
-    return DEFAULT_CONFIG;
+    return leerConfigLocal() ?? DEFAULT_CONFIG;
   } catch (error) {
-    console.warn('No se pudo conectar a Firebase Firestore. Usando configuración por defecto.');
-    return DEFAULT_CONFIG;
+    console.warn('No se pudo conectar a Firebase Firestore. Usando la última configuración guardada en este equipo.', error);
+    return leerConfigLocal() ?? DEFAULT_CONFIG;
   }
 }
 
 export async function saveTermopanelConfig(config: TermopanelConfig): Promise<void> {
-  // Guardar siempre en localStorage localmente
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('termopanel_config_local', JSON.stringify(config));
-  }
+  guardarConfigLocal(config);
 
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-  if (!apiKey || apiKey.startsWith('AIzaSyDummyKey')) {
+  if (!firebaseDisponible()) {
     return;
   }
 
-  try {
-    const docRef = doc(db, 'configuracion', 'termopaneles');
-    await setDoc(docRef, config);
-  } catch (error) {
-    console.warn('No se pudo guardar la configuración en Firebase Firestore.', error);
-  }
+  // Si falla, se lanza el error para que la pantalla de configuración avise
+  // (antes se decía "guardado" aunque Firebase no lo hubiera recibido).
+  const docRef = doc(db, 'configuracion', 'termopaneles');
+  await setDoc(docRef, config);
 }
 
 /**

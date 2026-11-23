@@ -11,6 +11,7 @@ import jsPDF from 'jspdf';
 import { Printer, Plus, Trash2, Cloud, ClipboardList, Triangle, ArrowUp, ArrowDown, ArrowUpDown, Scissors } from 'lucide-react';
 import { CORTE_IMPORT_KEY, GrupoCorte, PiezaCorte, CorteImport } from '@/lib/types/corte';
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
+import { guardarCotizacionFirestore, esErrorSinSesion, esIdFirestore } from '@/lib/cotizacionesFirestore';
 import { ClientSelector } from '@/components/ClientSelector';
 import { refsFueraDeNorma, confirmarFueraDeNorma } from '@/lib/utils/norma';
 
@@ -144,6 +145,7 @@ function CotizadorTermopanelContent() {
               const data = docSnap.data();
               setClientName(data.clientName || '');
               setClientRut(data.clientRut || '');
+              if (data.clientId) setClientId(data.clientId);
               setObra(data.obra || '');
               setFechaEntrega(data.fechaEntrega || '');
               setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
@@ -436,7 +438,7 @@ function CotizadorTermopanelContent() {
     if (!confirmarFueraDeNorma(refsFN())) return;
     setIsSyncingOdoo(true);
     try {
-      let odooRes;
+      let odooRes: { exito: boolean; cotizacionName?: string; error?: string };
       const isOdooId = editId && /^\d+$/.test(editId);
       if (isOdooId) {
         odooRes = await actualizarCotizacionEnOdoo({
@@ -451,6 +453,8 @@ function CotizadorTermopanelContent() {
           isMonolitico: false,
           autoConfirm: isConfirm
         });
+      } else if (esIdFirestore(editId)) {
+        odooRes = { exito: false };
       } else {
         odooRes = await guardarCotizacionEnOdoo({
           clientId,
@@ -465,8 +469,25 @@ function CotizadorTermopanelContent() {
         });
       }
 
+      // Odoo suspendido (sin sesión) o cotización que ya vive en Firebase: guardar en Firestore
+      let enFirebase = false;
+      if (esIdFirestore(editId) || (!odooRes.exito && esErrorSinSesion(odooRes.error))) {
+        enFirebase = true;
+        odooRes = await guardarCotizacionFirestore('presupuestos_termopaneles', {
+          clientId,
+          clientName,
+          clientRut,
+          obra,
+          fechaEntrega,
+          items,
+          totalNeto,
+        }, { id: esIdFirestore(editId) ? editId : undefined, confirmada: isConfirm });
+      }
+
       if (odooRes.exito) {
-        if (isOdooId) {
+        if (enFirebase) {
+          alert(`✅ Cotización ${odooRes.cotizacionName} guardada en Firebase (Odoo está suspendido). A continuación se descargará${isConfirm ? 'n los PDFs' : ' el Presupuesto PDF'}.`);
+        } else if (isOdooId) {
           if (isConfirm) {
             alert(`✅ ¡Listo! Cotización ${odooRes.cotizacionName} confirmada en Odoo con sus órdenes de fabricación. A continuación se descargarán los PDFs.`);
           } else {
@@ -520,11 +541,11 @@ function CotizadorTermopanelContent() {
           }
         ]);
 
-        if (isOdooId) {
+        if (isOdooId || esIdFirestore(editId)) {
           router.push('/cotizaciones');
         }
       } else {
-        alert(`Error desde Odoo: ${odooRes.error}`);
+        alert(`Error desde ${enFirebase ? 'Firebase' : 'Odoo'}: ${odooRes.error}`);
       }
     } catch (error) {
       console.error(error);

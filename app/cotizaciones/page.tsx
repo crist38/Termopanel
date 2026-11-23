@@ -10,6 +10,7 @@ import {
   confirmarCotizacionOdoo,
 } from "@/app/actions/odoo";
 import { ClientSelector } from "@/components/ClientSelector";
+import { CotizacionesFirebase } from "@/components/CotizacionesFirebase";
 import {
   Search,
   RefreshCw,
@@ -1070,6 +1071,7 @@ export default function CotizacionesPage() {
 
           {/* List content */}
           <div className="flex-1 overflow-y-auto">
+            <CotizacionesFirebase />
             {loading && (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <Loader2 className="w-8 h-8 text-[#7a5973] animate-spin" />
