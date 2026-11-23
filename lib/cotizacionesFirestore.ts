@@ -129,7 +129,34 @@ export interface CotizacionFirestore {
   totalNeto?: number;
   totalAbonado?: number;
   confirmada?: boolean;
+  eliminada?: boolean;
   createdAt?: Date;
+}
+
+/**
+ * Elimina (o restaura) una cotización. No se borra el documento: queda marcada
+ * como eliminada y se oculta de la lista, así se puede recuperar y su número
+ * no se vuelve a usar. Las reglas de Firestore no permiten borrar.
+ */
+export async function marcarEliminadaFirestore(
+  coleccion: ColeccionCotizacion,
+  id: string,
+  eliminada: boolean
+): Promise<{ exito: boolean; error?: string }> {
+  if (!firebaseConfigurado()) {
+    return { exito: false, error: 'Firebase no está configurado (faltan las variables NEXT_PUBLIC_FIREBASE_*).' };
+  }
+  try {
+    await setDoc(
+      doc(db, coleccion, id),
+      { eliminada, eliminadaAt: eliminada ? serverTimestamp() : null, updatedAt: serverTimestamp() },
+      { merge: true }
+    );
+    return { exito: true };
+  } catch (error: any) {
+    console.error('Error eliminando cotización en Firestore:', error);
+    return { exito: false, error: error?.message || 'No se pudo actualizar en Firebase' };
+  }
 }
 
 /** Últimas cotizaciones guardadas en Firestore, de las tres colecciones, más recientes primero. */
@@ -152,6 +179,7 @@ export async function listarCotizacionesFirestore(porColeccion = 30): Promise<Co
             ? data.abonos.reduce((acc: number, a: any) => acc + (Number(a?.monto) > 0 ? Number(a.monto) : 0), 0)
             : undefined,
           confirmada: data.confirmada,
+          eliminada: !!data.eliminada,
           createdAt: data.createdAt?.toDate?.(),
         } as CotizacionFirestore;
       });
