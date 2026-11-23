@@ -302,6 +302,9 @@ function CotizadorMonoliticoContent() {
     }
     
     const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
+    const totalUnidades = items.reduce((acc, item) => acc + item.cantidad, 0);
+    yPos += 7;
+    doc.text(`Total Cristales: ${totalUnidades}`, 14, yPos);
     yPos += 7;
     doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} m²`, 14, yPos);
 
@@ -407,6 +410,7 @@ function CotizadorMonoliticoContent() {
     if (items.length === 0) return;
     const pdf = new jsPDF();
     const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
+    const totalUnidades = items.reduce((acc, item) => acc + item.cantidad, 0);
 
     let logoBase64: string | null = null;
     try {
@@ -519,7 +523,7 @@ function CotizadorMonoliticoContent() {
     pdf.setFontSize(10);
     pdf.setFont("helvetica", "bold");
     pdf.setTextColor(0, 0, 0);
-    pdf.text(`Total a cortar: ${totalM2.toFixed(2)} m²`, 14, yPos);
+    pdf.text(`Total cristales: ${totalUnidades}   |   Total a cortar: ${totalM2.toFixed(2)} m²`, 14, yPos);
 
     const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
     pdf.save(`Orden_Corte_${finalName}_${sanitizedClientName}.pdf`);

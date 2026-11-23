@@ -582,6 +582,9 @@ function ShapesCADCotizadorContent() {
       const calc = calcularItem(item);
       return acc + calc.metrosCuadrados;
     }, 0);
+    const totalUnidades = items.reduce((acc, item) => acc + item.cantidad, 0);
+    doc.text(`Total Termopaneles: ${totalUnidades}`, 14, currentY);
+    currentY += 7;
     doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} m²`, 14, currentY);
 
     let yPos = currentY + 14;
@@ -715,6 +718,7 @@ function ShapesCADCotizadorContent() {
       const calc = calcularItem(item);
       return acc + calc.metrosCuadrados;
     }, 0);
+    const totalUnidades = items.reduce((acc, item) => acc + item.cantidad, 0);
 
     let logoBase64: string | null = null;
     try {
@@ -853,7 +857,7 @@ function ShapesCADCotizadorContent() {
     pdf.line(14, yPos, 196, yPos);
     yPos += 8;
     pdf.setFont("helvetica", "bold");
-    pdf.text(`Total a cortar: ${totalM2.toFixed(2)} m²`, 14, yPos);
+    pdf.text(`Total termopaneles: ${totalUnidades}   |   Total a cortar: ${totalM2.toFixed(2)} m²`, 14, yPos);
     
     // PAGE 2: TERMOPANELES
     pdf.addPage();
@@ -982,7 +986,7 @@ function ShapesCADCotizadorContent() {
     pdf.line(14, yPos, 196, yPos);
     yPos += 8;
     pdf.setFont("helvetica", "bold");
-    pdf.text(`Total a armar: ${totalM2.toFixed(2)} m²`, 14, yPos);
+    pdf.text(`Total termopaneles: ${totalUnidades}   |   Total a armar: ${totalM2.toFixed(2)} m²`, 14, yPos);
 
     const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
     pdf.save(`Ordenes_Trabajo_CAD_${finalName}_${sanitizedClientName}.pdf`);

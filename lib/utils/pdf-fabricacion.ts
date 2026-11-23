@@ -177,7 +177,7 @@ export async function imprimirOrdenesTaller(datos: DatosOrden) {
     ],
     36,
     [
-      `Total a cortar: ${totalM2.toFixed(2)} m² (${totalUnidades * 2} cristales)`,
+      `Total termopaneles: ${totalUnidades} (${totalUnidades * 2} cristales)   |   Total a cortar: ${totalM2.toFixed(2)} m²`,
       '* Las medidas de los cristales corresponden al termopanel completo. Ajustar descuentos según separador.',
     ]
   );
@@ -196,7 +196,7 @@ export async function imprimirOrdenesTaller(datos: DatosOrden) {
       { titulo: 'Color Sep.', x: 175, valor: m => m.separador.color, negrita: true },
     ],
     47,
-    [`Total a armar: ${totalM2.toFixed(2)} m² (${totalUnidades} termopanel${totalUnidades !== 1 ? 'es' : ''})`]
+    [`Total termopaneles: ${totalUnidades}   |   Total a armar: ${totalM2.toFixed(2)} m²`]
   );
 
   const cliente = datos.clientName ? datos.clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';

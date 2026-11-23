@@ -588,6 +588,9 @@ function CotizadorTermopanelContent() {
     }
     currentY += 7;
     const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
+    const totalUnidades = items.reduce((acc, item) => acc + item.cantidad, 0);
+    doc.text(`Total Termopaneles: ${totalUnidades}`, 14, currentY);
+    currentY += 7;
     doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} m²`, 14, currentY);
 
     // Encabezado de Tabla
@@ -710,6 +713,7 @@ function CotizadorTermopanelContent() {
     if (items.length === 0) return;
     const pdf = new jsPDF();
     const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
+    const totalUnidades = items.reduce((acc, item) => acc + item.cantidad, 0);
 
     // Cargar logo
     let logoBase64: string | null = null;
@@ -847,7 +851,7 @@ function CotizadorTermopanelContent() {
     pdf.setFontSize(10);
     pdf.setFont("helvetica", "bold");
     pdf.setTextColor(0, 0, 0);
-    pdf.text(`Total a cortar: ${(totalM2).toFixed(2)} m²`, 14, yPos);
+    pdf.text(`Total termopaneles: ${totalUnidades}   |   Total a cortar: ${totalM2.toFixed(2)} m²`, 14, yPos);
 
     // Nota al pie
     yPos += 8;
@@ -984,7 +988,7 @@ function CotizadorTermopanelContent() {
     pdf.setFontSize(10);
     pdf.setFont("helvetica", "bold");
     pdf.setTextColor(0, 0, 0);
-    pdf.text(`Total a armar: ${totalM2.toFixed(2)} m²`, 14, yPos);
+    pdf.text(`Total termopaneles: ${totalUnidades}   |   Total a armar: ${totalM2.toFixed(2)} m²`, 14, yPos);
 
     const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
     pdf.save(`Ordenes_Trabajo_${finalName}_${sanitizedClientName}.pdf`);

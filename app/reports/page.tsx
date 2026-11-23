@@ -35,6 +35,12 @@ function formatDatePdf(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+// Cantidad de piezas de una línea de Odoo (product_uom_qty son m², no unidades)
+function contarPiezas(name: string | false | null | undefined): number {
+  const m = (name || '').match(/cantidad:\s*(\d+)/i);
+  return m ? parseInt(m[1], 10) || 1 : 1;
+}
+
 function parseOdooLinePdf(line: any, index: number) {
   const name = line.name || '';
   let ref = `L${index + 1}`;
@@ -157,6 +163,9 @@ function ReportsDashboardContent() {
       let currentY = 46;
       const productLines = detail.order_line.filter((l: any) => l.display_type !== 'line_note' && l.display_type !== 'line_section');
       const totalM2 = productLines.reduce((acc: number, l: any) => acc + l.product_uom_qty, 0);
+      const totalUnidades = productLines.reduce((acc: number, l: any) => acc + contarPiezas(l.name), 0);
+      doc.text(`Total Termopaneles: ${totalUnidades}`, 14, currentY);
+      currentY += 7;
       doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} m²`, 14, currentY);
 
       let yPos = currentY + 14;
@@ -283,6 +292,7 @@ function ReportsDashboardContent() {
 
       const hasTermopaneles = parsedItems.some((i: any) => i.isTermopanel);
       const totalM2 = parsedItems.reduce((acc: number, i: any) => acc + ((i.ancho * i.alto) / 1000000) * i.cantidad, 0);
+      const totalUnidades = parsedItems.reduce((acc: number, i: any) => acc + i.cantidad, 0);
       const clientName = detail.partner_id?.[1] ?? 'Sin Cliente';
 
       let logoBase64: string | null = null;
@@ -330,7 +340,7 @@ function ReportsDashboardContent() {
       doc.setDrawColor(200, 200, 200); doc.line(14, yPos, 196, yPos);
       yPos += 8;
       doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-      doc.text(`Total a cortar: ${totalM2.toFixed(2)} m²`, 14, yPos);
+      doc.text(`Total ${hasTermopaneles ? 'termopaneles' : 'cristales'}: ${totalUnidades}   |   Total a cortar: ${totalM2.toFixed(2)} m²`, 14, yPos);
 
       // Página 2: Taller Termopaneles
       if (hasTermopaneles) {
@@ -371,7 +381,8 @@ function ReportsDashboardContent() {
         doc.setDrawColor(200, 200, 200); doc.line(14, yPos, 196, yPos);
         yPos += 8; doc.setFontSize(10); doc.setFont('helvetica', 'bold');
         const termoM2 = termoItems.reduce((acc: number, i: any) => acc + ((i.ancho * i.alto) / 1000000) * i.cantidad, 0);
-        doc.text(`Total a armar: ${termoM2.toFixed(2)} m²`, 14, yPos);
+        const termoUnidades = termoItems.reduce((acc: number, i: any) => acc + i.cantidad, 0);
+        doc.text(`Total termopaneles: ${termoUnidades}   |   Total a armar: ${termoM2.toFixed(2)} m²`, 14, yPos);
       }
 
       const sanitized = clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_');

@@ -99,6 +99,12 @@ function isDimPart(p: string) {
   return /^termopanel\s+\d/i.test(p) || /^dimensiones?:/i.test(p) || /^cristal monol/i.test(p);
 }
 
+// Cantidad de piezas de una línea de Odoo (product_uom_qty son m², no unidades)
+function contarPiezas(name: string | false | null | undefined): number {
+  const m = (name || "").match(/cantidad:\s*(\d+)/i);
+  return m ? parseInt(m[1], 10) || 1 : 1;
+}
+
 function parseOdooLine(line: OrderLine, index: number) {
   const name = line.name || "";
 
@@ -443,6 +449,9 @@ export default function CotizacionesPage() {
     // Calcular total m2 de las líneas que no son notas o secciones
     const productLines = detail.order_line.filter(line => line.display_type !== 'line_note' && line.display_type !== 'line_section');
     const totalM2 = productLines.reduce((acc, line) => acc + line.product_uom_qty, 0);
+    const totalUnidades = productLines.reduce((acc, line) => acc + contarPiezas(line.name), 0);
+    doc.text(`Total Termopaneles: ${totalUnidades}`, 14, currentY);
+    currentY += 7;
     doc.text(`Total Metros Cuadrados: ${totalM2.toFixed(2)} m²`, 14, currentY);
 
     // Encabezado de Tabla
@@ -694,6 +703,7 @@ export default function CotizacionesPage() {
 
     const hasTermopaneles = parsedItems.some(item => item.isTermopanel);
     const totalM2 = parsedItems.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
+    const totalUnidades = parsedItems.reduce((acc, item) => acc + item.cantidad, 0);
 
     // Load logo
     let logoBase64: string | null = null;
@@ -816,7 +826,7 @@ export default function CotizacionesPage() {
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0, 0, 0);
-    doc.text(`Total a cortar: ${totalM2.toFixed(2)} m²`, 14, yPos);
+    doc.text(`Total ${hasTermopaneles ? 'termopaneles' : 'cristales'}: ${totalUnidades}   |   Total a cortar: ${totalM2.toFixed(2)} m²`, 14, yPos);
 
     // Footnote
     yPos += 8;
@@ -943,7 +953,8 @@ export default function CotizacionesPage() {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0, 0, 0);
       const termopanelM2 = termopanelItems.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
-      doc.text(`Total a armar: ${termopanelM2.toFixed(2)} m²`, 14, yPos);
+      const termopanelUnidades = termopanelItems.reduce((acc, item) => acc + item.cantidad, 0);
+      doc.text(`Total termopaneles: ${termopanelUnidades}   |   Total a armar: ${termopanelM2.toFixed(2)} m²`, 14, yPos);
     }
 
     const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
