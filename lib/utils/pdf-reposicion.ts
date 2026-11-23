@@ -194,6 +194,7 @@ export async function imprimirOTReposicion(datos: DatosOT) {
   const txt = (c: Cristal | null) => (c ? `${c.tipo} ${c.espesor}mm` : '—');
 
   const cristales = filas.reduce((s, f) => s + f.cantidad * (f.termopanel ? 2 : 1), 0);
+  const unidades = termo.reduce((s, f) => s + f.cantidad, 0);
   paginaOT(
     pdf, datos, logo, 'Taller Corte Vidrio', [51, 65, 85], [248, 250, 252],
     [
@@ -206,11 +207,10 @@ export async function imprimirOTReposicion(datos: DatosOT) {
       { titulo: 'Cristal 2', x: 150, valor: f => txt(f.cristal2) },
     ],
     filas,
-    `Total a cortar: ${m2(filas).toFixed(2)} m² (${cristales} cristal${cristales !== 1 ? 'es' : ''})`
+    `${unidades > 0 ? `Total termopaneles: ${unidades}   |   ` : ''}Total cristales: ${cristales}   |   Total a cortar: ${m2(filas).toFixed(2)} m²`
   );
 
   if (termo.length > 0) {
-    const unidades = termo.reduce((s, f) => s + f.cantidad, 0);
     pdf.addPage();
     paginaOT(
       pdf, datos, logo, 'Taller Termopaneles', [15, 118, 110], [240, 253, 250],
@@ -225,7 +225,7 @@ export async function imprimirOTReposicion(datos: DatosOT) {
         { titulo: 'Color Sep.', x: 175, valor: f => f.separador?.color ?? '—', negrita: true },
       ],
       termo,
-      `Total a armar: ${m2(termo).toFixed(2)} m² (${unidades} termopanel${unidades !== 1 ? 'es' : ''})`
+      `Total termopaneles: ${unidades}   |   Total a armar: ${m2(termo).toFixed(2)} m²`
     );
   }
 
