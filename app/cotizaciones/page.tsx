@@ -11,6 +11,8 @@ import {
 } from "@/app/actions/odoo";
 import { ClientSelector } from "@/components/ClientSelector";
 import { CotizacionesFirebase } from "@/components/CotizacionesFirebase";
+import { leerAbonosOdoo, esErrorSinSesion, firebaseConfigurado } from "@/lib/cotizacionesFirestore";
+import { Abono, abonosValidos, totalAbonado, dibujarAbonosPDF } from "@/lib/abonos";
 import {
   Search,
   RefreshCw,
@@ -33,6 +35,7 @@ import {
   DollarSign,
   Layers,
   Printer,
+  CloudOff,
 } from "lucide-react";
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -236,6 +239,8 @@ export default function CotizacionesPage() {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Sin login no hay sesión de Odoo: se muestra un aviso en vez del error
+  const odooSuspendido = esErrorSinSesion(error ?? undefined);
 
   // Filtros
   const [search, setSearch] = useState("");
@@ -254,6 +259,10 @@ export default function CotizacionesPage() {
 
   // Confirmar orden y crear OTs
   const [confirming, setConfirming] = useState(false);
+
+  // Abonos del cliente (guardados en Firestore: abonos_odoo/{id})
+  const [abonosDetalle, setAbonosDetalle] = useState<Abono[]>([]);
+  const abonosPedidoRef = useRef<number | null>(null);
 
   // ─── Fetch list ────────────────────────────────────────────────────────────
   const fetchOrders = useCallback(async (s: string, st: string, p: number, sort: string) => {
@@ -347,6 +356,11 @@ export default function CotizacionesPage() {
     setDetail(null);
     setDetailLoading(true);
     setDetailError(null);
+    setAbonosDetalle([]);
+    abonosPedidoRef.current = id;
+    leerAbonosOdoo(id).then((a) => {
+      if (abonosPedidoRef.current === id) setAbonosDetalle(a);
+    });
     try {
       const res = await obtenerDetalleCotizacion(id);
       if (res.exito && res.order) {
@@ -512,6 +526,10 @@ export default function CotizacionesPage() {
     yPos += 6;
     doc.setFontSize(11);
     doc.text(`Total: $${total.toLocaleString('es-CL')}`, 140, yPos);
+
+    // Abonos guardados en Firestore (se vuelven a leer por si cambiaron)
+    const abonosPDF = await leerAbonosOdoo(detail.id);
+    yPos = dibujarAbonosPDF(doc, abonosPDF, total, yPos);
 
     // Verificar espacio para notas y firmas
     if (yPos > 200) {
@@ -1062,7 +1080,11 @@ export default function CotizacionesPage() {
           {/* Stats bar */}
           <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <span>
-              {loading ? "Cargando..." : `${total} cotización${total !== 1 ? "es" : ""} encontrada${total !== 1 ? "s" : ""}`}
+              {loading
+                ? "Cargando..."
+                : odooSuspendido
+                  ? "Odoo suspendido"
+                  : `${total} cotización${total !== 1 ? "es" : ""} encontrada${total !== 1 ? "s" : ""}`}
             </span>
             {totalPages > 1 && (
               <span>Página {page + 1} de {totalPages}</span>
@@ -1079,7 +1101,22 @@ export default function CotizacionesPage() {
               </div>
             )}
 
-            {!loading && error && (
+            {!loading && odooSuspendido && (
+              <div className="m-4 bg-slate-50 border border-slate-200 rounded-xl p-5 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm">
+                  <CloudOff size={16} className="text-slate-500" />
+                  Odoo está suspendido
+                </div>
+                <p className="text-xs text-slate-600">
+                  Las cotizaciones de Odoo no se pueden consultar mientras el login esté desactivado.
+                  {firebaseConfigurado()
+                    ? " Las cotizaciones nuevas se guardan en Firebase y aparecen en la lista de arriba."
+                    : " Las cotizaciones nuevas se guardan en Firebase; configura Firebase para verlas aquí."}
+                </p>
+              </div>
+            )}
+
+            {!loading && error && !odooSuspendido && (
               <div className="m-4 bg-red-50 border border-red-200 rounded-xl p-5 flex flex-col gap-2">
                 <div className="flex items-center gap-2 text-red-700 font-semibold text-sm">
                   <AlertTriangle size={16} />
@@ -1255,6 +1292,26 @@ export default function CotizacionesPage() {
                       <span>Total: <strong className="text-slate-700">{formatCLP(detail.amount_total)}</strong></span>
                     </div>
                   )}
+
+                  {/* Abonos del cliente */}
+                  {abonosValidos(abonosDetalle).length > 0 && (() => {
+                    const abonado = totalAbonado(abonosDetalle);
+                    const saldo = Math.max(detail.amount_total - abonado, 0);
+                    return (
+                      <div className="flex items-center gap-2 text-xs text-slate-500 -mt-2 px-1 flex-wrap">
+                        <span>
+                          Abonado ({abonosValidos(abonosDetalle).length}):{' '}
+                          <strong className="text-emerald-700">{formatCLP(abonado)}</strong>
+                        </span>
+                        <span>·</span>
+                        <span>
+                          Saldo pendiente:{' '}
+                          <strong className={saldo > 0 ? 'text-red-600' : 'text-emerald-700'}>{formatCLP(saldo)}</strong>
+                        </span>
+                        <span className="text-slate-400">— para modificarlos usa &quot;Editar cotización&quot;</span>
+                      </div>
+                    );
+                  })()}
 
                   {/* Action buttons */}
                   <div className="flex items-center justify-between gap-3 flex-wrap bg-slate-50 border border-slate-200 rounded-xl p-3.5">

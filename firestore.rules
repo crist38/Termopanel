@@ -35,6 +35,15 @@ service cloud.firestore {
         && request.resource.data.budgetNumber == resource.data.budgetNumber;
     }
 
+    // Abonos de cotizaciones que viven en Odoo (Odoo no tiene dónde guardarlos):
+    // lib/cotizacionesFirestore.ts → guardarAbonosOdoo / leerAbonosOdoo
+    match /abonos_odoo/{orderId} {
+      allow read: if true;
+      allow create, update: if orderId.matches('^[0-9]+$')
+        && request.resource.data.keys().hasOnly(['abonos', 'orderName', 'updatedAt'])
+        && request.resource.data.abonos is list;
+    }
+
     // Correlativos: solo pueden avanzar de a uno
     match /contadores/{coleccion} {
       allow read: if true;

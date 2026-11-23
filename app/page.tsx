@@ -8,12 +8,13 @@ import { db } from '@/lib/firebase';
 import { getTermopanelConfig, TermopanelConfig, getPrecioSeparadorPorMl, PRECIOS_SEPARADORES_DEFAULT } from '@/lib/configService';
 import { useSearchParams, useRouter } from 'next/navigation';
 import jsPDF from 'jspdf';
-import { Printer, Plus, Trash2, Cloud, ClipboardList, Triangle, ArrowUp, ArrowDown, ArrowUpDown, Scissors } from 'lucide-react';
+import { Printer, Plus, Trash2, Cloud, ClipboardList, Triangle, ArrowUp, ArrowDown, ArrowUpDown, Scissors, Wallet } from 'lucide-react';
 import { CORTE_IMPORT_KEY, GrupoCorte, PiezaCorte, CorteImport } from '@/lib/types/corte';
 import { guardarCotizacionEnOdoo, obtenerCotizacionParaEditar, actualizarCotizacionEnOdoo } from '@/app/actions/odoo';
-import { guardarCotizacionFirestore, esErrorSinSesion, esIdFirestore } from '@/lib/cotizacionesFirestore';
+import { guardarCotizacionFirestore, esErrorSinSesion, esIdFirestore, leerAbonosOdoo, guardarAbonosOdoo } from '@/lib/cotizacionesFirestore';
 import { ClientSelector } from '@/components/ClientSelector';
 import { refsFueraDeNorma, confirmarFueraDeNorma } from '@/lib/utils/norma';
+import { Abono, MEDIOS_PAGO, nuevoAbono, leerAbonos, totalAbonado, abonosValidos, dibujarAbonosPDF } from '@/lib/abonos';
 
 
 function CotizadorTermopanelContent() {
@@ -50,6 +51,7 @@ function CotizadorTermopanelContent() {
   const [clientId, setClientId] = useState<number | undefined>(undefined);
   const [budgetName, setBudgetName] = useState('Borrador');
   const [budgetDate, setBudgetDate] = useState('');
+  const [abonos, setAbonos] = useState<Abono[]>([]);
 
   // Estados para guardado automático (Auto-save)
   const [showDraftBanner, setShowDraftBanner] = useState(false);
@@ -131,6 +133,7 @@ function CotizadorTermopanelContent() {
               esPrecioManual: it.precioUnitario > 0
             }));
             setItems(loadedItems);
+            setAbonos(await leerAbonosOdoo(editId));
           } else {
             alert(`Error al cargar cotización de Odoo: ${res.error}`);
           }
@@ -149,6 +152,7 @@ function CotizadorTermopanelContent() {
               setObra(data.obra || '');
               setFechaEntrega(data.fechaEntrega || '');
               setBudgetName(data.budgetName || data.budgetNumber?.toString() || 'Borrador');
+              setAbonos(leerAbonos(data.abonos));
               const loadedItems = (data.items || []).map((item: any) => ({
                 ...item,
                 pulido: item.pulido !== undefined ? item.pulido : (item.gas || false),
@@ -229,13 +233,14 @@ function CotizadorTermopanelContent() {
         clientId,
         items,
         fechaEntrega,
+        abonos,
         timestamp: Date.now()
       };
       localStorage.setItem('termopanel_cotizacion_draft', JSON.stringify(draft));
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [clientName, clientRut, obra, clientId, items, editId, fechaEntrega]);
+  }, [clientName, clientRut, obra, clientId, items, editId, fechaEntrega, abonos]);
 
   const handleRestoreDraft = () => {
     if (!draftData) return;
@@ -244,6 +249,7 @@ function CotizadorTermopanelContent() {
     setObra(draftData.obra || '');
     setFechaEntrega(draftData.fechaEntrega || '');
     setClientId(draftData.clientId);
+    setAbonos(leerAbonos(draftData.abonos));
     if (draftData.items && draftData.items.length > 0) {
       setItems(draftData.items);
     }
@@ -385,6 +391,13 @@ function CotizadorTermopanelContent() {
   }
 
   const totalNeto = calcularTotal(items)
+  const totalConIvaUI = totalNeto + Math.round(totalNeto * 0.19)
+  const abonado = totalAbonado(abonos)
+  const saldoPendiente = totalConIvaUI - abonado
+
+  function updateAbono(id: string, field: keyof Abono, value: string | number) {
+    setAbonos(prev => prev.map(a => (a.id === id ? { ...a, [field]: value } : a)))
+  }
   const totalM2 = items.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
 
   const enviarACorte = () => {
@@ -438,7 +451,7 @@ function CotizadorTermopanelContent() {
     if (!confirmarFueraDeNorma(refsFN())) return;
     setIsSyncingOdoo(true);
     try {
-      let odooRes: { exito: boolean; cotizacionName?: string; error?: string };
+      let odooRes: { exito: boolean; cotizacionId?: number; cotizacionName?: string; error?: string };
       const isOdooId = editId && /^\d+$/.test(editId);
       if (isOdooId) {
         odooRes = await actualizarCotizacionEnOdoo({
@@ -481,10 +494,22 @@ function CotizadorTermopanelContent() {
           fechaEntrega,
           items,
           totalNeto,
+          abonos: abonosValidos(abonos),
         }, { id: esIdFirestore(editId) ? editId : undefined, confirmada: isConfirm });
       }
 
+      // Cotización guardada en Odoo: sus abonos van aparte en Firestore (abonos_odoo/{id})
+      let avisoAbonos = '';
+      if (odooRes.exito && !enFirebase) {
+        const orderId = isOdooId ? parseInt(editId) : odooRes.cotizacionId;
+        if (orderId && (abonosValidos(abonos).length > 0 || isOdooId)) {
+          const r = await guardarAbonosOdoo(orderId, odooRes.cotizacionName, abonosValidos(abonos));
+          if (!r.exito) avisoAbonos = `\n\n⚠️ Los abonos no se pudieron guardar: ${r.error}. Igual aparecerán en el PDF que se descarga ahora.`;
+        }
+      }
+
       if (odooRes.exito) {
+        if (avisoAbonos) alert(avisoAbonos.trim());
         if (enFirebase) {
           alert(`✅ Cotización ${odooRes.cotizacionName} guardada en Firebase (Odoo está suspendido). A continuación se descargará${isConfirm ? 'n los PDFs' : ' el Presupuesto PDF'}.`);
         } else if (isOdooId) {
@@ -519,6 +544,7 @@ function CotizadorTermopanelContent() {
         setObra('');
         setFechaEntrega('');
         setBudgetName('Borrador');
+        setAbonos([]);
         setItems([
           {
             id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
@@ -679,6 +705,8 @@ function CotizadorTermopanelContent() {
     yPos += 6;
     doc.setFontSize(11);
     doc.text(`Total: $${totalConIva.toLocaleString('es-CL')}`, 140, yPos);
+
+    yPos = dibujarAbonosPDF(doc, abonos, totalConIva, yPos);
 
 
 
@@ -1444,6 +1472,104 @@ function CotizadorTermopanelContent() {
           >
             <Printer size={16} /> Taller PDF
           </button>
+        </div>
+      </div>
+
+      {/* Abonos del cliente */}
+      <div className="mt-6 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <Wallet size={16} className="text-emerald-600" /> Abonos del cliente
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Quedan registrados en el Presupuesto PDF. Para actualizarlos, abre la cotización desde Cotizaciones, modifica los abonos y presiona &quot;Actualizar Cotización / PDF&quot;.
+            </p>
+          </div>
+          <button
+            onClick={() => setAbonos(prev => [...prev, nuevoAbono()])}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors shrink-0"
+          >
+            <Plus size={16} /> Agregar Abono
+          </button>
+        </div>
+
+        {abonos.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="text-[11px] uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="text-left font-semibold p-2 w-20">N°</th>
+                  <th className="text-left font-semibold p-2">Fecha</th>
+                  <th className="text-left font-semibold p-2">Medio de pago</th>
+                  <th className="text-right font-semibold p-2">Monto ($)</th>
+                  <th className="p-2 w-10"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {abonos.map((a, i) => (
+                  <tr key={a.id} className="border-t border-slate-100">
+                    <td className="p-2 text-slate-600 font-medium">Abono {i + 1}</td>
+                    <td className="p-2">
+                      <input
+                        type="date"
+                        value={a.fecha}
+                        onChange={(e) => updateAbono(a.id, 'fecha', e.target.value)}
+                        className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </td>
+                    <td className="p-2">
+                      <select
+                        value={a.medio}
+                        onChange={(e) => updateAbono(a.id, 'medio', e.target.value)}
+                        className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      >
+                        {(MEDIOS_PAGO.includes(a.medio) ? MEDIOS_PAGO : [...MEDIOS_PAGO, a.medio]).map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="p-2 text-right">
+                      <input
+                        type="number"
+                        min={0}
+                        value={a.monto || ''}
+                        onChange={(e) => updateAbono(a.id, 'monto', Math.max(0, Math.round(Number(e.target.value) || 0)))}
+                        placeholder="0"
+                        className="w-36 px-2 py-1.5 border border-slate-300 rounded-lg text-sm text-right font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </td>
+                    <td className="p-2 text-center">
+                      <button
+                        onClick={() => setAbonos(prev => prev.filter(x => x.id !== a.id))}
+                        className="text-slate-400 hover:text-red-600 transition-colors"
+                        title="Eliminar abono"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="mt-3 flex flex-wrap justify-end gap-6 border-t border-slate-100 pt-3 text-sm">
+          <div className="text-right">
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Total (con IVA)</p>
+            <p className="font-bold text-slate-800 font-mono">${totalConIvaUI.toLocaleString('es-CL')}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Total abonado</p>
+            <p className="font-bold text-emerald-700 font-mono">${abonado.toLocaleString('es-CL')}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Saldo pendiente</p>
+            <p className={`font-bold font-mono ${saldoPendiente > 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+              ${Math.max(saldoPendiente, 0).toLocaleString('es-CL')}
+            </p>
+          </div>
         </div>
       </div>
 

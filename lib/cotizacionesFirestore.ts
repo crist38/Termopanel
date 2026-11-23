@@ -11,6 +11,7 @@ import {
   setDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { leerAbonos, type Abono } from './abonos';
 
 /**
  * Cotizaciones guardadas en Firestore mientras Odoo está suspendido.
@@ -57,6 +58,8 @@ export interface DatosCotizacion {
   fechaEntrega?: string;
   items: unknown[];
   totalNeto: number;
+  /** Pagos a cuenta del cliente (solo termopaneles por ahora) */
+  abonos?: Abono[];
 }
 
 export interface ResultadoGuardado {
@@ -124,6 +127,7 @@ export interface CotizacionFirestore {
   clientName: string;
   obra?: string;
   totalNeto?: number;
+  totalAbonado?: number;
   confirmada?: boolean;
   createdAt?: Date;
 }
@@ -144,6 +148,9 @@ export async function listarCotizacionesFirestore(porColeccion = 30): Promise<Co
           clientName: data.clientName || '',
           obra: data.obra,
           totalNeto: data.totalNeto,
+          totalAbonado: Array.isArray(data.abonos)
+            ? data.abonos.reduce((acc: number, a: any) => acc + (Number(a?.monto) > 0 ? Number(a.monto) : 0), 0)
+            : undefined,
           confirmada: data.confirmada,
           createdAt: data.createdAt?.toDate?.(),
         } as CotizacionFirestore;
@@ -151,4 +158,40 @@ export async function listarCotizacionesFirestore(porColeccion = 30): Promise<Co
     })
   );
   return resultados.flat().sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+}
+
+/**
+ * Abonos de cotizaciones que viven en Odoo. Odoo no tiene dónde guardarlos,
+ * así que se guardan en Firestore en `abonos_odoo/{id de la orden}`.
+ */
+export async function leerAbonosOdoo(orderId: number | string): Promise<Abono[]> {
+  if (!firebaseConfigurado()) return [];
+  try {
+    const snap = await getDoc(doc(db, 'abonos_odoo', String(orderId)));
+    return snap.exists() ? leerAbonos(snap.data().abonos) : [];
+  } catch (error) {
+    console.error('Error leyendo abonos de Odoo en Firestore:', error);
+    return [];
+  }
+}
+
+export async function guardarAbonosOdoo(
+  orderId: number | string,
+  orderName: string | undefined,
+  abonos: Abono[]
+): Promise<{ exito: boolean; error?: string }> {
+  if (!firebaseConfigurado()) {
+    return { exito: false, error: 'Firebase no está configurado (faltan las variables NEXT_PUBLIC_FIREBASE_*).' };
+  }
+  try {
+    await setDoc(doc(db, 'abonos_odoo', String(orderId)), {
+      abonos: limpiar(abonos),
+      orderName: orderName || '',
+      updatedAt: serverTimestamp(),
+    });
+    return { exito: true };
+  } catch (error: any) {
+    console.error('Error guardando abonos de Odoo en Firestore:', error);
+    return { exito: false, error: error?.message || 'No se pudieron guardar los abonos en Firebase' };
+  }
 }

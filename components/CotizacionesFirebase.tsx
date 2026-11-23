@@ -85,6 +85,15 @@ export function CotizacionesFirebase() {
                 {typeof c.totalNeto === 'number' && (
                   <p className="text-xs font-semibold text-slate-700">${Math.round(c.totalNeto).toLocaleString('es-CL')}</p>
                 )}
+                {typeof c.totalNeto === 'number' && !!c.totalAbonado && (() => {
+                  const totalConIva = c.totalNeto + Math.round(c.totalNeto * 0.19);
+                  const saldo = Math.max(totalConIva - c.totalAbonado, 0);
+                  return (
+                    <p className={`text-[10px] font-semibold ${saldo > 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                      {saldo > 0 ? `Saldo $${Math.round(saldo).toLocaleString('es-CL')}` : 'Pagado'}
+                    </p>
+                  );
+                })()}
                 {c.createdAt && <p className="text-[10px] text-slate-400">{c.createdAt.toLocaleDateString('es-CL')}</p>}
               </div>
             </button>
