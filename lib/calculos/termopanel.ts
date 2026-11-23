@@ -84,7 +84,7 @@ export const PARAMETROS_DEFAULT: ParametrosCalculo = {
   factorVenta: 1.9584,
   costoPulido: 1300,
   costoManoDeObra: 1650,
-  costoTiraPalillaje: 30000,
+  costoTiraPalillaje: 16000,
   largoTiraPalillaje: 5000,
   costoManoObraPalillaje: 10000,
   recargoPorcentajeForma: 100,
@@ -204,11 +204,13 @@ export function calcularPrecioUnitario(
     const v = item.palillajeVerticales || 0
     const longMm = (h * item.ancho) + (v * item.alto)
     const largoTira = params.largoTiraPalillaje || 5000
-    const costoTira = params.costoTiraPalillaje || 30000
+    const costoTira = params.costoTiraPalillaje || 16000
     const manoObraPali = params.costoManoObraPalillaje || 10000
 
-    const tiras = Math.ceil(longMm / largoTira)
-    const costoPalillaje = (tiras * costoTira) + manoObraPali
+    // Se cobra solo el largo que lleva este termopanel: una tira alcanza para
+    // varios, así que no se cobra la tira entera (antes se redondeaba hacia arriba).
+    const costoPorMm = costoTira / largoTira
+    const costoPalillaje = (longMm * costoPorMm) + manoObraPali
     base += costoPalillaje
   }
 

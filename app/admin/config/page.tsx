@@ -501,7 +501,7 @@ export default function ConfigPage() {
                       value={config.parametrosCalculo?.costoTiraPalillaje || ''}
                       onChange={e => updateParamCalculo('costoTiraPalillaje', e.target.value)}
                       className="bg-transparent outline-none w-full text-slate-800 font-mono font-medium text-sm"
-                      placeholder="Ej: 30000"
+                      placeholder="Ej: 16000"
                     />
                   </div>
                   <p className="text-[11px] text-slate-400">Costo por tira entera de perfil de palillaje.</p>
