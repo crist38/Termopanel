@@ -15,6 +15,7 @@ import { guardarCotizacionFirestore, esErrorSinSesion, esIdFirestore, leerAbonos
 import { ClientSelector } from '@/components/ClientSelector';
 import { refsFueraDeNorma, confirmarFueraDeNorma } from '@/lib/utils/norma';
 import { Abono, MEDIOS_PAGO, nuevoAbono, leerAbonos, totalAbonado, abonosValidos, dibujarAbonosPDF } from '@/lib/abonos';
+import { ALTO_LINEA_PALILLAJE, dibujarPalillaje, palillajeDeItem, piePalillaje } from '@/lib/utils/palillaje-ot';
 
 
 function CotizadorTermopanelContent() {
@@ -982,7 +983,8 @@ function CotizadorTermopanelContent() {
       const labelVal = item.label || `V${index + 1}`;
       const splitLabel = pdf.splitTextToSize(labelVal, 28);
       
-      const rowHeight = Math.max(8, (splitLabel.length * 4) + 4);
+      const palillaje = palillajeDeItem(item);
+      const rowHeight = Math.max(8, (splitLabel.length * 4) + 4, palillaje ? 8 + ALTO_LINEA_PALILLAJE : 0);
 
       if (yPos + rowHeight > 275) {
         pdf.addPage();
@@ -1025,6 +1027,7 @@ function CotizadorTermopanelContent() {
       pdf.text(`${item.separador.espesor}`, 154, yPos);
       pdf.text(`${item.separador.color}`, 175, yPos);
       pdf.setFont("helvetica", "normal");
+      if (palillaje) dibujarPalillaje(pdf, palillaje, 47, yPos + 4.5);
 
       yPos += rowHeight;
     });
@@ -1037,7 +1040,7 @@ function CotizadorTermopanelContent() {
     pdf.setFontSize(10);
     pdf.setFont("helvetica", "bold");
     pdf.setTextColor(0, 0, 0);
-    pdf.text(`Total termopaneles: ${totalUnidades}   |   Total a armar: ${totalM2.toFixed(2)} m²`, 14, yPos);
+    pdf.text(`Total termopaneles: ${totalUnidades}   |   Total a armar: ${totalM2.toFixed(2)} m²${piePalillaje(items.map(i => ({ cantidad: i.cantidad, palillaje: palillajeDeItem(i) })))}`, 14, yPos);
 
     const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
     pdf.save(`Ordenes_Trabajo_${finalName}_${sanitizedClientName}.pdf`);

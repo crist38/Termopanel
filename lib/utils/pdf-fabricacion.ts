@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import { MedidaFabricacion, describirFigura } from '@/lib/types/fabricacion';
 import { drawShapeInPdf } from '@/lib/utils/pdf-figuras';
+import { ALTO_LINEA_PALILLAJE, dibujarPalillaje, palillajeDeItem, piePalillaje } from '@/lib/utils/palillaje-ot';
 
 // Recuadro máximo (mm) del dibujo de una figura bajo su fila
 const DIBUJO_W = 24;
@@ -44,7 +45,8 @@ function paginaTaller(
   colorFila: [number, number, number],
   columnas: Columna[],
   xExtras: number,
-  pie: string[]
+  pie: string[],
+  conPalillaje = false
 ) {
   if (logo) pdf.addImage(logo, 'PNG', 14, 10, 18, 18);
 
@@ -92,10 +94,14 @@ function paginaTaller(
     const conFigura = !!m.tipoFigura && m.tipoFigura !== 'rectangulo' && !!m.medidasFigura;
     const xDetalle = conFigura ? xExtras + DIBUJO_W + 4 : xExtras;
     const splitDetalle: string[] = detalle ? pdf.splitTextToSize(detalle, 196 - xDetalle - 2) : [];
+    // En Taller Termopaneles el palillaje va destacado sobre el detalle
+    const palillaje = conPalillaje ? palillajeDeItem(m) : null;
+    const extraPal = palillaje ? ALTO_LINEA_PALILLAJE : 0;
     const rowHeight = Math.max(
       8,
       splitLabel.length * 4 + 4,
-      splitDetalle.length > 0 ? 9 + splitDetalle.length * 3.6 : 0,
+      palillaje ? 9 + ALTO_LINEA_PALILLAJE : 0,
+      splitDetalle.length > 0 ? 9 + extraPal + splitDetalle.length * 3.6 : 0,
       conFigura ? DIBUJO_H + 10 : 0
     );
 
@@ -118,10 +124,12 @@ function paginaTaller(
     });
     pdf.setFont('helvetica', 'normal');
 
+    if (palillaje) dibujarPalillaje(pdf, palillaje, xDetalle, yPos + 4.5);
+
     if (splitDetalle.length > 0) {
       pdf.setFontSize(8);
       pdf.setTextColor(100, 100, 100);
-      pdf.text(splitDetalle, xDetalle, yPos + 4.5);
+      pdf.text(splitDetalle, xDetalle, yPos + 4.5 + extraPal);
       pdf.setTextColor(0, 0, 0);
     }
 
@@ -130,6 +138,8 @@ function paginaTaller(
       const w = (m.ancho || 1) * escala;
       const h = (m.alto || 1) * escala;
       drawShapeInPdf(pdf, m.tipoFigura!, xExtras + (DIBUJO_W - w) / 2, yPos + 2 + (DIBUJO_H - h) / 2, w, h, m.medidasFigura!);
+      pdf.setFontSize(9);
+      pdf.setTextColor(0, 0, 0);
     }
 
     yPos += rowHeight;
@@ -196,7 +206,8 @@ export async function imprimirOrdenesTaller(datos: DatosOrden) {
       { titulo: 'Color Sep.', x: 175, valor: m => m.separador.color, negrita: true },
     ],
     47,
-    [`Total termopaneles: ${totalUnidades}   |   Total a armar: ${totalM2.toFixed(2)} m²`]
+    [`Total termopaneles: ${totalUnidades}   |   Total a armar: ${totalM2.toFixed(2)} m²${piePalillaje(datos.medidas.map(m => ({ cantidad: m.cantidad, palillaje: palillajeDeItem(m) })))}`],
+    true
   );
 
   const cliente = datos.clientName ? datos.clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';

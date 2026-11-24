@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import jsPDF from 'jspdf';
+import { ALTO_LINEA_PALILLAJE, dibujarPalillaje, palillajeDeTexto, piePalillaje } from '@/lib/utils/palillaje-ot';
 import { obtenerDatosReportes, ReportStats } from '@/app/actions/reports';
 import { obtenerDetalleCotizacion } from '@/app/actions/odoo';
 import {
@@ -287,7 +288,7 @@ function ReportsDashboardContent() {
         if (refMatch) label = refMatch[1];
 
         const isTermopanel = name.toLowerCase().includes('termopanel') || hasCristal2 || hasSeparador || sep_espesor > 0;
-        return { label, cantidad, ancho, alto, cristal1: { tipo: cristal1_tipo, espesor: cristal1_espesor }, cristal2: hasCristal2 ? { tipo: cristal2_tipo, espesor: cristal2_espesor } : null, separador: hasSeparador ? { espesor: sep_espesor, color: sep_color } : null, isTermopanel };
+        return { label, cantidad, ancho, alto, cristal1: { tipo: cristal1_tipo, espesor: cristal1_espesor }, cristal2: hasCristal2 ? { tipo: cristal2_tipo, espesor: cristal2_espesor } : null, separador: hasSeparador ? { espesor: sep_espesor, color: sep_color } : null, palillaje: isTermopanel ? palillajeDeTexto(name) : null, isTermopanel };
       });
 
       const hasTermopaneles = parsedItems.some((i: any) => i.isTermopanel);
@@ -366,7 +367,7 @@ function ReportsDashboardContent() {
         const termoItems = parsedItems.filter((i: any) => i.isTermopanel);
         termoItems.forEach((item: any, index: number) => {
           const splitLabel = doc.splitTextToSize(item.label, 28);
-          const rowHeight = Math.max(8, (splitLabel.length * 4) + 4);
+          const rowHeight = Math.max(8, (splitLabel.length * 4) + 4, item.palillaje ? 8 + ALTO_LINEA_PALILLAJE : 0);
           if (yPos + rowHeight > 275) { doc.addPage(); yPos = 20; }
           if (index % 2 === 0) { doc.setFillColor(240, 253, 250); doc.rect(14, yPos - 5, 182, rowHeight, 'F'); }
           doc.setFontSize(9);
@@ -376,13 +377,14 @@ function ReportsDashboardContent() {
           if (item.cristal2) { doc.text(`${item.cristal2.tipo} ${item.cristal2.espesor}mm`, 121, yPos); } else { doc.text('—', 121, yPos); }
           if (item.separador) { doc.setFont('helvetica', 'bold'); doc.text(`${item.separador.espesor}`, 154, yPos); doc.text(`${item.separador.color}`, 175, yPos); doc.setFont('helvetica', 'normal'); }
           else { doc.text('—', 154, yPos); doc.text('—', 175, yPos); }
+          if (item.palillaje) dibujarPalillaje(doc, item.palillaje, 47, yPos + 4.5);
           yPos += rowHeight;
         });
         doc.setDrawColor(200, 200, 200); doc.line(14, yPos, 196, yPos);
         yPos += 8; doc.setFontSize(10); doc.setFont('helvetica', 'bold');
         const termoM2 = termoItems.reduce((acc: number, i: any) => acc + ((i.ancho * i.alto) / 1000000) * i.cantidad, 0);
         const termoUnidades = termoItems.reduce((acc: number, i: any) => acc + i.cantidad, 0);
-        doc.text(`Total termopaneles: ${termoUnidades}   |   Total a armar: ${termoM2.toFixed(2)} m²`, 14, yPos);
+        doc.text(`Total termopaneles: ${termoUnidades}   |   Total a armar: ${termoM2.toFixed(2)} m²${piePalillaje(termoItems)}`, 14, yPos);
       }
 
       const sanitized = clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_');

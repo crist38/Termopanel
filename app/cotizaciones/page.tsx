@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import jsPDF from "jspdf";
+import { ALTO_LINEA_PALILLAJE, dibujarPalillaje, palillajeDeTexto, piePalillaje } from "@/lib/utils/palillaje-ot";
 import {
   listarCotizacionesOdoo,
   obtenerDetalleCotizacion,
@@ -716,6 +717,7 @@ export default function CotizacionesPage() {
         cristal1: { tipo: cristal1_tipo, espesor: cristal1_espesor },
         cristal2: hasCristal2 ? { tipo: cristal2_tipo, espesor: cristal2_espesor } : null,
         separador: hasSeparador ? { espesor: sep_espesor, color: sep_color } : null,
+        palillaje: isTermopanel ? palillajeDeTexto(name) : null,
         isTermopanel,
       };
     });
@@ -907,7 +909,7 @@ export default function CotizacionesPage() {
       const termopanelItems = parsedItems.filter(item => item.isTermopanel);
       termopanelItems.forEach((item, index) => {
         const splitLabel = doc.splitTextToSize(item.label, 28);
-        const rowHeight = Math.max(8, (splitLabel.length * 4) + 4);
+        const rowHeight = Math.max(8, (splitLabel.length * 4) + 4, item.palillaje ? 8 + ALTO_LINEA_PALILLAJE : 0);
 
         if (yPos + rowHeight > 275) {
           doc.addPage();
@@ -959,6 +961,7 @@ export default function CotizacionesPage() {
           doc.text("—", 154, yPos);
           doc.text("—", 175, yPos);
         }
+        if (item.palillaje) dibujarPalillaje(doc, item.palillaje, 47, yPos + 4.5);
 
         yPos += rowHeight;
       });
@@ -973,7 +976,7 @@ export default function CotizacionesPage() {
       doc.setTextColor(0, 0, 0);
       const termopanelM2 = termopanelItems.reduce((acc, item) => acc + ((item.ancho * item.alto) / 1000000) * item.cantidad, 0);
       const termopanelUnidades = termopanelItems.reduce((acc, item) => acc + item.cantidad, 0);
-      doc.text(`Total termopaneles: ${termopanelUnidades}   |   Total a armar: ${termopanelM2.toFixed(2)} m²`, 14, yPos);
+      doc.text(`Total termopaneles: ${termopanelUnidades}   |   Total a armar: ${termopanelM2.toFixed(2)} m²${piePalillaje(termopanelItems)}`, 14, yPos);
     }
 
     const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';

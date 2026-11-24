@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import type { PiezaReposicion, ReposicionGuardada } from '@/lib/reposiciones';
+import { ALTO_LINEA_PALILLAJE, dibujarPalillaje, palillajeDeTexto, piePalillaje, type PalillajeOT } from '@/lib/utils/palillaje-ot';
 
 interface DatosOT {
   ticketRef: string;
@@ -20,6 +21,7 @@ interface FilaOT {
   cristal1: Cristal | null;
   cristal2: Cristal | null;
   separador: { espesor: number; color: string } | null;
+  palillaje: PalillajeOT | null;
 }
 
 interface Columna {
@@ -50,6 +52,7 @@ function filaDePieza(p: PiezaReposicion): FilaOT {
     cristal1: p.tipo === 'termopanel' ? cristal(/^cristal 1:/i) : cristal(/^cristal:/i),
     cristal2: p.tipo === 'termopanel' ? cristal(/^cristal 2:/i) : null,
     separador: sep ? { espesor: parseInt(sep[1], 10) || 0, color: (sep[2] || '').trim() || '—' } : null,
+    palillaje: p.tipo === 'termopanel' ? palillajeDeTexto(p.nombre) : null,
   };
 }
 
@@ -82,7 +85,8 @@ function paginaOT(
   colorFila: [number, number, number],
   columnas: Columna[],
   filas: FilaOT[],
-  pie: string
+  pie: string,
+  conPalillaje = false
 ) {
   const rep = datos.reposicion;
   if (logo) pdf.addImage(logo, 'PNG', 14, 10, 18, 18);
@@ -140,7 +144,8 @@ function paginaOT(
 
   filas.forEach((f, index) => {
     const splitRef = pdf.splitTextToSize(f.ref, columnas[1].x - columnas[0].x - 2);
-    const rowHeight = Math.max(8, splitRef.length * 4 + 4);
+    const palillaje = conPalillaje ? f.palillaje : null;
+    const rowHeight = Math.max(8, splitRef.length * 4 + 4, palillaje ? 8 + ALTO_LINEA_PALILLAJE : 0);
     if (yPos + rowHeight > 260) {
       pdf.addPage();
       yPos = 20;
@@ -157,6 +162,7 @@ function paginaOT(
       pdf.text(c.valor(f), c.x, yPos);
     });
     pdf.setFont('helvetica', 'normal');
+    if (palillaje) dibujarPalillaje(pdf, palillaje, columnas[1].x, yPos + 4.5);
     yPos += rowHeight;
   });
 
@@ -225,7 +231,8 @@ export async function imprimirOTReposicion(datos: DatosOT) {
         { titulo: 'Color Sep.', x: 175, valor: f => f.separador?.color ?? '—', negrita: true },
       ],
       termo,
-      `Total termopaneles: ${unidades}   |   Total a armar: ${m2(termo).toFixed(2)} m²`
+      `Total termopaneles: ${unidades}   |   Total a armar: ${m2(termo).toFixed(2)} m²${piePalillaje(termo)}`,
+      true
     );
   }
 

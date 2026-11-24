@@ -13,6 +13,7 @@ import { db } from '@/lib/firebase';
 import { ClientSelector } from '@/components/ClientSelector';
 import { refsFueraDeNorma, confirmarFueraDeNorma } from '@/lib/utils/norma';
 import { drawShapeInPdf } from '@/lib/utils/pdf-figuras';
+import { dibujarPalillaje, palillajeDeItem, piePalillaje } from '@/lib/utils/palillaje-ot';
 
 type ShapeType = 'triangulo' | 'trapecio' | 'arco' | 'medio_arco' | 'circulo' | 'personalizada';
 
@@ -1012,13 +1013,16 @@ function ShapesCADCotizadorContent() {
       pdf.text(extrasText, 74, yPos + 6); // Desplazado a la izquierda
       pdf.setTextColor(0, 0, 0);
 
+      const palillaje = palillajeDeItem(item);
+      if (palillaje) dibujarPalillaje(pdf, palillaje, 74, yPos + 10.5);
+
       yPos += rowHeight;
     });
 
     pdf.line(14, yPos, 196, yPos);
     yPos += 8;
     pdf.setFont("helvetica", "bold");
-    pdf.text(`Total termopaneles: ${totalUnidades}   |   Total a armar: ${totalM2.toFixed(2)} m²`, 14, yPos);
+    pdf.text(`Total termopaneles: ${totalUnidades}   |   Total a armar: ${totalM2.toFixed(2)} m²${piePalillaje(items.map(i => ({ cantidad: i.cantidad, palillaje: palillajeDeItem(i) })))}`, 14, yPos);
 
     const sanitizedClientName = clientName ? clientName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'Sin_Cliente';
     pdf.save(`Ordenes_Trabajo_CAD_${finalName}_${sanitizedClientName}.pdf`);
